@@ -1,0 +1,88 @@
+import { RiskLevel, RiskAssessmentData } from '../types/risk';
+
+export const MOCK_RISK_ASSESSMENTS: Record<RiskLevel, RiskAssessmentData> = {
+  low: {
+    level: 'low',
+    title: 'Low Urgency',
+    summary: 'Based on the information you shared, there are no immediate signs in this assessment that suggest urgent care.',
+    reasons: [
+      { id: 'r1', text: 'Mild symptom onset', detail: 'Symptoms started within the last 24 hours' },
+      { id: 'r2', text: 'Normal breathing reported', detail: 'No shortness of breath or chest tightness' },
+      { id: 'r3', text: 'Low discomfort level', detail: 'Pain scale rated below 4 / 10' },
+    ],
+    recommendationTitle: 'Continue monitoring symptoms',
+    recommendationDescription: 'Rest, stay well-hydrated, and seek medical advice if your symptoms worsen or do not improve over the next 48 hours.',
+    primaryActionLabel: 'Review interview answers',
+    primaryActionRoute: '/health-interview',
+    secondaryActionLabel: 'Return to chat',
+    informationConsidered: [
+      { label: 'Symptoms', value: 'Mild headache' },
+      { label: 'Duration', value: 'Today' },
+      { label: 'Temperature', value: 'Normal' },
+      { label: 'Pain Level', value: '2 / 10' },
+    ],
+  },
+  moderate: {
+    level: 'moderate',
+    title: 'Moderate Urgency',
+    summary: 'Your symptoms may benefit from medical evaluation, especially if they continue or worsen over the coming days.',
+    reasons: [
+      { id: 'r1', text: 'Symptoms lasting 3+ days', detail: 'Persistent fever and body ache' },
+      { id: 'r2', text: 'Moderate pain rating', detail: 'Discomfort rated 5 / 10' },
+    ],
+    recommendationTitle: 'Consider visiting a primary healthcare facility',
+    recommendationDescription: 'A routine evaluation at a nearby clinic or primary health center (PHC) can help clarify the underlying cause.',
+    primaryActionLabel: 'Find healthcare nearby',
+    primaryActionRoute: '/hospitals',
+    secondaryActionLabel: 'Review interview answers',
+    informationConsidered: [
+      { label: 'Symptoms', value: 'Fever, Body pain' },
+      { label: 'Duration', value: '2–3 days' },
+      { label: 'Temperature', value: '100.4°F' },
+      { label: 'Pain Level', value: '5 / 10' },
+    ],
+  },
+  high: {
+    level: 'high',
+    title: 'High Urgency',
+    summary: 'Your symptoms require medical evaluation.',
+    reasons: [
+      { id: 'r1', text: 'Fever for 5 days', detail: 'Sustained temperature above 101°F' },
+      { id: 'r2', text: 'Existing diabetes', detail: 'Higher risk of secondary complications' },
+      { id: 'r3', text: 'Age 65', detail: 'Higher vulnerability to persistent fever' },
+    ],
+    recommendationTitle: 'Visit a nearby healthcare facility today',
+    recommendationDescription: 'We recommend having a doctor evaluate your symptoms today to prevent potential complications.',
+    primaryActionLabel: 'Find healthcare nearby',
+    primaryActionRoute: '/hospitals',
+    secondaryActionLabel: 'Review interview answers',
+    informationConsidered: [
+      { label: 'Symptoms', value: 'Fever, Fatigue' },
+      { label: 'Duration', value: '4–7 days (5 days)' },
+      { label: 'Temperature', value: '102°F' },
+      { label: 'Condition', value: 'Diabetes' },
+      { label: 'Age', value: '65' },
+    ],
+  },
+  emergency: {
+    level: 'emergency',
+    title: 'Emergency Urgency',
+    summary: 'Your answers indicate that you may need urgent medical attention.',
+    reasons: [
+      { id: 'r1', text: 'Difficulty breathing reported', detail: 'Shortness of breath or chest tightness' },
+      { id: 'r2', text: 'Severe pain scale (9/10)', detail: 'High distress reported' },
+      { id: 'r3', text: 'High fever with rapid onset', detail: 'Temperature exceeding 103°F' },
+    ],
+    recommendationTitle: 'Seek immediate emergency care',
+    recommendationDescription: 'Please go to the nearest emergency department or call emergency services right away.',
+    primaryActionLabel: 'Find emergency care nearby',
+    primaryActionRoute: '/hospitals',
+    secondaryActionLabel: 'Review interview answers',
+    informationConsidered: [
+      { label: 'Symptoms', value: 'Fever, Difficulty breathing' },
+      { label: 'Duration', value: 'Today' },
+      { label: 'Temperature', value: '103.5°F' },
+      { label: 'Pain Level', value: '9 / 10' },
+    ],
+  },
+};

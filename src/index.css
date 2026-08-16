@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-surface-bg: #FAFAF9;
+  --color-surface-card: #FFFFFF;
+  --color-surface-elevated: #F5F5F4;
+  --color-surface-muted: #E7E5E4;
+  --color-surface-border: #E7E5E4;
+  --color-content-primary: #1C1917;
+  --color-content-secondary: #44403C;
+  --color-content-muted: #78716C;
+  --color-content-disabled: #A8A29E;
+}
+
+html.dark,
+body.dark,
+.dark {
+  --color-surface-bg: #0F172A !important;
+  --color-surface-card: #1E293B !important;
+  --color-surface-elevated: #334155 !important;
+  --color-surface-muted: #334155 !important;
+  --color-surface-border: #334155 !important;
+  --color-content-primary: #F8FAFC !important;
+  --color-content-secondary: #CBD5E1 !important;
+  --color-content-muted: #94A3B8 !important;
+  --color-content-disabled: #64748B !important;
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-surface-bg);
+  color: var(--color-content-primary);
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body.dark {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+}
+
+/* Enhanced Scroll Reveal Animations */
+.reveal {
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.reveal-fade-up {
+  transform: translateY(48px);
+}
+
+.reveal-fade-down {
+  transform: translateY(-48px);
+}
+
+.reveal-fade-left {
+  transform: translateX(48px);
+}
+
+.reveal-fade-right {
+  transform: translateX(-48px);
+}
+
+.reveal-zoom-in {
+  transform: scale(0.9);
+}
+
+.reveal.is-revealed {
+  opacity: 1 !important;
+  transform: translateY(0) translateX(0) scale(1) !important;
+}
+
+.reveal-delay-100 {
+  transition-delay: 100ms;
+}
+.reveal-delay-200 {
+  transition-delay: 200ms;
+}
+.reveal-delay-300 {
+  transition-delay: 300ms;
+}
+.reveal-delay-400 {
+  transition-delay: 400ms;
+}
+.reveal-delay-500 {
+  transition-delay: 500ms;
+}
+
+/* Audio Waveform Animations */
+@keyframes waveBar {
+  0%, 100% {
+    height: 4px;
+  }
+  50% {
+    height: 16px;
+  }
+}
+
+.animate-wave-bar-1 {
+  animation: waveBar 1.2s ease-in-out infinite;
+}
+.animate-wave-bar-2 {
+  animation: waveBar 1.2s ease-in-out infinite 0.2s;
+}
+.animate-wave-bar-3 {
+  animation: waveBar 1.2s ease-in-out infinite 0.4s;
+}
+.animate-wave-bar-4 {
+  animation: waveBar 1.2s ease-in-out infinite 0.6s;
+}
+
+@keyframes spinSlow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spinSlow 12s linear infinite;
+}
