@@ -1,11 +1,9 @@
 import { InterviewQuestionData } from '../types/health';
-import { MOCK_INTERVIEW_QUESTIONS } from '../data/mockInterview';
+import { interviewApi } from './api';
 
 export const interviewService = {
-  getQuestions(answers: Record<string, unknown> = {}): InterviewQuestionData[] {
-    return MOCK_INTERVIEW_QUESTIONS.filter((q) =>
-      q.showIf ? q.showIf(answers) : true
-    );
+  async sendAnswer(userMessage: string, language: string = 'en', sessionId?: number) {
+    return await interviewApi.sendAnswer(userMessage, language, sessionId);
   },
 
   isAnswerValid(question: InterviewQuestionData, answer: unknown): boolean {

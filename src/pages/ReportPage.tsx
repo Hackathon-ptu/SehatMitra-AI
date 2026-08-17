@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ReportState } from '../types/report';
-import { MOCK_REPORT_RESULT } from '../data/mockReport';
+import { ReportState, ReportResultData } from '../types/report';
 import { STORAGE_KEY_LANGUAGE, AVAILABLE_LANGUAGES } from '../data/languageData';
 import { ReportHeader } from '../components/report/ReportHeader';
 import { ReportIntro } from '../components/report/ReportIntro';
@@ -17,12 +16,14 @@ import { SafetyDisclaimer } from '../components/risk/SafetyDisclaimer';
 import { ScrollReveal } from '../components/common/ScrollReveal';
 import { Button } from '../components/common/Button';
 import { UploadCloud } from 'lucide-react';
+import { reportService } from '../services/reportService';
 
 export const ReportPage: React.FC = () => {
   const [state, setState] = useState<ReportState>('idle');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [languageName, setLanguageName] = useState<string>('English');
+  const [reportResult, setReportResult] = useState<ReportResultData | null>(null);
 
   const navigate = useNavigate();
 
@@ -44,16 +45,24 @@ export const ReportPage: React.FC = () => {
     setState('file-selected');
   };
 
-  const handleExplainReport = () => {
+  const handleExplainReport = async () => {
+    if (!selectedFile) return;
     setState('processing');
-    setTimeout(() => {
+    try {
+      const result = await reportService.explainReport(selectedFile);
+      setReportResult(result);
       setState('success');
-    }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err?.message || 'Failed to explain medical report.');
+      setState('error');
+    }
   };
 
   const handleReset = () => {
     setSelectedFile(null);
     setErrorMsg(null);
+    setReportResult(null);
     setState('idle');
   };
 
@@ -99,22 +108,22 @@ export const ReportPage: React.FC = () => {
           />
         )}
 
-        {state === 'success' && (
+        {state === 'success' && reportResult && (
           <div className="w-full max-w-3xl mx-auto flex flex-col gap-8 my-auto text-left">
             
             {/* Overview Summary */}
             <ScrollReveal>
-              <ReportOverview data={MOCK_REPORT_RESULT} />
+              <ReportOverview data={reportResult} />
             </ScrollReveal>
 
             {/* Results Worth Discussing */}
-            {MOCK_REPORT_RESULT.attentionItems.length > 0 && (
+            {reportResult.attentionItems.length > 0 && (
               <ScrollReveal delay={100} className="flex flex-col gap-4">
                 <h3 className="text-base font-bold text-content-primary tracking-tight">
                   Results worth discussing
                 </h3>
                 <div className="flex flex-col gap-4">
-                  {MOCK_REPORT_RESULT.attentionItems.map((item) => (
+                  {reportResult.attentionItems.map((item) => (
                     <ExplanationBlock key={item.id} item={item} />
                   ))}
                 </div>
@@ -122,13 +131,13 @@ export const ReportPage: React.FC = () => {
             )}
 
             {/* Within Reported Range */}
-            {MOCK_REPORT_RESULT.normalItems.length > 0 && (
+            {reportResult.normalItems.length > 0 && (
               <ScrollReveal delay={200} className="flex flex-col gap-3">
                 <h3 className="text-base font-bold text-content-primary tracking-tight">
                   Within reported reference range
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {MOCK_REPORT_RESULT.normalItems.map((item) => (
+                  {reportResult.normalItems.map((item) => (
                     <LabValue key={item.id} item={item} />
                   ))}
                 </div>
@@ -137,12 +146,12 @@ export const ReportPage: React.FC = () => {
 
             {/* What to discuss with doctor */}
             <ScrollReveal delay={200}>
-              <DoctorDiscussion points={MOCK_REPORT_RESULT.doctorDiscussionPoints} />
+              <DoctorDiscussion points={reportResult.doctorDiscussionPoints} />
             </ScrollReveal>
 
             {/* Safety Disclaimer */}
             <ScrollReveal delay={300} className="pt-2">
-              <SafetyDisclaimer message={MOCK_REPORT_RESULT.summaryText ? undefined : undefined} />
+              <SafetyDisclaimer message={reportResult.summaryText ? undefined : undefined} />
             </ScrollReveal>
 
             {/* Explain another report CTA */}

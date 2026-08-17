@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Hospital } from '../types/hospital';
 import { RiskLevel } from '../types/risk';
-import { getRecommendedHospitals } from '../data/mockHospitals';
+import { hospitalService } from '../services/hospitalService';
 import { STORAGE_KEY_LANGUAGE, AVAILABLE_LANGUAGES } from '../data/languageData';
 import { HospitalHeader } from '../components/hospital/HospitalHeader';
 import { LocationContext } from '../components/hospital/LocationContext';
@@ -16,11 +16,20 @@ import { cn } from '../utils/cn';
 
 export const HospitalPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [activeRisk, setActiveRisk] = useState<RiskLevel>('high');
+  const [activeRisk, setActiveRisk] = useState<RiskLevel>('moderate');
   const [languageName, setLanguageName] = useState<string>('English');
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
+  const [hospitalsData, setHospitalsData] = useState<{ primary: Hospital; others: Hospital[] } | null>(null);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Read risk level from storage
+    const savedRisk = localStorage.getItem('risk_level') as RiskLevel;
+    if (savedRisk) {
+      setActiveRisk(savedRisk);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -33,14 +42,46 @@ export const HospitalPage: React.FC = () => {
       setLanguageName('English');
     }
 
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 800);
+    const fetchHospitals = async (lat: number, lon: number, risk: RiskLevel) => {
+      setIsLoading(true);
+      try {
+        const data = await hospitalService.getNearby(lat, lon, risk);
+        setHospitalsData(data);
+      } catch (err) {
+        console.error('Failed to fetch hospitals from backend', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    return () => clearTimeout(timer);
-  }, []);
+    // Geolocation API
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          fetchHospitals(position.coords.latitude, position.coords.longitude, activeRisk);
+        },
+        (error) => {
+          console.warn('Geolocation blocked or failed. Using New Delhi fallback.', error);
+          fetchHospitals(28.6139, 77.2090, activeRisk);
+        }
+      );
+    } else {
+      fetchHospitals(28.6139, 77.2090, activeRisk);
+    }
+  }, [activeRisk]);
 
-  const { primary, others } = getRecommendedHospitals(activeRisk);
+  const primary = hospitalsData?.primary || {
+    id: 'placeholder-primary',
+    name: 'Loading facility...',
+    distance: '0 km',
+    distanceValue: 0,
+    type: 'government',
+    category: 'phc',
+    emergencyAvailable: false,
+    address: '',
+  };
+
+  const others = hospitalsData?.others || [];
 
   const getRiskBanner = () => {
     switch (activeRisk) {
