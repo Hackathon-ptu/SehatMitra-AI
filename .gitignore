@@ -27,3 +27,16 @@ dist-ssr/
 # System generated temporary logs
 .system_generated/
 scratch/
+
+# Python environment
+venv/
+.venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.vscode/
