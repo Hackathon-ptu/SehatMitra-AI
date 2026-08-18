@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { RiskLevel } from '../types/risk';
 import { MOCK_RISK_ASSESSMENTS } from '../data/mockRisk';
 import { STORAGE_KEY_LANGUAGE, AVAILABLE_LANGUAGES } from '../data/languageData';
@@ -15,7 +15,11 @@ import { cn } from '../utils/cn';
 
 export const RiskAssessmentPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [activeLevel, setActiveLevel] = useState<RiskLevel>('high');
+  const location = useLocation();
+  
+  // Try to load assessment from location state, fallback to mock based on level
+  const passedAssessment = location.state?.assessment;
+  const [activeLevel, setActiveLevel] = useState<RiskLevel>(passedAssessment?.level || 'high');
   const [languageName, setLanguageName] = useState<string>('English');
   const navigate = useNavigate();
 
@@ -37,7 +41,14 @@ export const RiskAssessmentPage: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const assessment = MOCK_RISK_ASSESSMENTS[activeLevel];
+  const assessment = passedAssessment || MOCK_RISK_ASSESSMENTS[activeLevel];
+
+  // Store the active risk level in localStorage for the hospital page
+  useEffect(() => {
+    if (assessment?.level) {
+      localStorage.setItem('risk_level', assessment.level);
+    }
+  }, [assessment]);
 
   return (
     <div className="min-h-screen flex flex-col bg-surface-bg text-content-primary transition-colors">

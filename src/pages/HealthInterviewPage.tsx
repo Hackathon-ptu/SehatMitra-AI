@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MOCK_INTERVIEW_QUESTIONS, MOCK_ACKNOWLEDGEMENTS } from '../data/mockInterview';
 import { STORAGE_KEY_LANGUAGE, AVAILABLE_LANGUAGES } from '../data/languageData';
 import { InterviewAnswerItem } from '../types/health';
 import { InterviewHeader } from '../components/health/InterviewHeader';
@@ -9,14 +8,19 @@ import { InterviewQuestion } from '../components/health/InterviewQuestion';
 import { InterviewNavigation } from '../components/health/InterviewNavigation';
 import { InterviewReview } from '../components/health/InterviewReview';
 import { InterviewComplete } from '../components/health/InterviewComplete';
+import { interviewService } from '../services/interviewService';
+import { riskService } from '../services/riskService';
 
 export const HealthInterviewPage: React.FC = () => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, unknown>>({});
+  const [sessionId, setSessionId] = useState<number | undefined>(undefined);
+  const [currentQuestionText, setCurrentQuestionText] = useState<string>('Please describe your symptoms to start the health interview.');
+  const [userResponse, setUserResponse] = useState<string>('');
   const [languageName, setLanguageName] = useState<string>('English');
-  const [acknowledgement, setAcknowledgement] = useState<string | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [assessmentData, setAssessmentData] = useState<any>(null);
+  const [history, setHistory] = useState<{ question: string; answer: string }[]>([]);
 
   const navigate = useNavigate();
 
@@ -33,40 +37,37 @@ export const HealthInterviewPage: React.FC = () => {
     }
   }, []);
 
-  // Filter dynamic active questions based on showIf conditions
-  const activeQuestions = MOCK_INTERVIEW_QUESTIONS.filter((q) =>
-    q.showIf ? q.showIf(answers) : true
-  );
-
-  const currentQuestion = activeQuestions[currentIndex] || activeQuestions[0];
-  const currentAnswer = answers[currentQuestion?.id];
-
-  // Answer validation check
-  const isAnswerValid = () => {
-    if (!currentQuestion?.required) return true;
-    if (currentAnswer === undefined || currentAnswer === null || currentAnswer === '') return false;
-    if (Array.isArray(currentAnswer) && currentAnswer.length === 0) return false;
-    return true;
-  };
-
   const handleUpdateAnswer = (val: unknown) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [currentQuestion.id]: val,
-    }));
+    setUserResponse(val as string);
   };
 
-  const handleNext = () => {
-    if (currentIndex < activeQuestions.length - 1) {
-      // Occasional conversational acknowledgement
-      if (currentIndex % 2 === 1) {
-        const ackText = MOCK_ACKNOWLEDGEMENTS[currentIndex % MOCK_ACKNOWLEDGEMENTS.length];
-        setAcknowledgement(ackText);
-        setTimeout(() => setAcknowledgement(null), 3000);
+  const handleNext = async () => {
+    if (!userResponse.trim()) return;
+
+    setIsThinking(true);
+    try {
+      const code = localStorage.getItem(STORAGE_KEY_LANGUAGE) || 'en';
+      const res = await interviewService.sendAnswer(userResponse, code, sessionId);
+      
+      setSessionId(res.session_id);
+      const newHistory = [...history, { question: currentQuestionText, answer: userResponse }];
+      setHistory(newHistory);
+      
+      const symptoms = res.collected_symptoms || {};
+
+      if (res.is_completed) {
+        setIsCompleted(true);
+        // Automatically trigger riskApi.assessRisk
+        const assessment = await riskService.getAssessment(res.session_id, symptoms);
+        setAssessmentData(assessment);
+      } else {
+        setCurrentQuestionText(res.next_question);
+        setUserResponse('');
       }
-      setCurrentIndex((prev) => prev + 1);
-    } else {
-      setIsCompleted(true);
+    } catch (err) {
+      console.error('Failed to send interview response', err);
+    } finally {
+      setIsThinking(false);
     }
   };
 
@@ -75,32 +76,31 @@ export const HealthInterviewPage: React.FC = () => {
       setIsReviewing(false);
       return;
     }
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
+    if (history.length > 0) {
+      const prev = history[history.length - 1];
+      setCurrentQuestionText(prev.question);
+      setUserResponse(prev.answer);
+      setHistory((prevHistory) => prevHistory.slice(0, -1));
     } else {
       navigate('/chat');
     }
   };
 
-  // Convert answers map to display items for review screen
+  // Convert history answers to display items for review screen
   const getFormattedAnswers = (): InterviewAnswerItem[] => {
-    return activeQuestions.map((q) => {
-      const rawVal = answers[q.id];
-      let display = '';
-      if (Array.isArray(rawVal)) {
-        display = rawVal.join(', ');
-      } else if (typeof rawVal === 'object' && rawVal !== null) {
-        display = JSON.stringify(rawVal);
-      } else {
-        display = String(rawVal || 'Not answered');
-      }
-      return {
-        questionId: q.id,
-        questionText: q.question,
-        value: rawVal,
-        displayText: display,
-      };
-    });
+    return history.map((item, idx) => ({
+      questionId: `q-${idx}`,
+      questionText: item.question,
+      value: item.answer,
+      displayText: item.answer,
+    }));
+  };
+
+  const currentQuestion = {
+    id: 'symptom_input',
+    question: currentQuestionText,
+    type: 'text' as const,
+    required: true,
   };
 
   return (
@@ -114,13 +114,9 @@ export const HealthInterviewPage: React.FC = () => {
         {isReviewing ? (
           <InterviewReview
             answers={getFormattedAnswers()}
-            onEditQuestion={(id) => {
-              const idx = activeQuestions.findIndex((q) => q.id === id);
-              if (idx !== -1) {
-                setCurrentIndex(idx);
-                setIsReviewing(false);
-                setIsCompleted(false);
-              }
+            onEditQuestion={() => {
+              setIsReviewing(false);
+              setIsCompleted(false);
             }}
             onFinishReview={() => {
               setIsReviewing(false);
@@ -129,30 +125,36 @@ export const HealthInterviewPage: React.FC = () => {
           />
         ) : isCompleted ? (
           <InterviewComplete
-            onContinueToAssessment={() => navigate('/risk-assessment')}
+            onContinueToAssessment={() => {
+              navigate('/risk-assessment', {
+                state: { sessionId, assessment: assessmentData },
+              });
+            }}
             onReviewAnswers={() => setIsReviewing(true)}
           />
         ) : (
-          <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto my-auto">
+          <div className="flex-1 flex flex-col w-full max-w-2xl mx-auto my-auto justify-center">
             <InterviewProgress
-              currentStep={currentIndex + 1}
-              totalSteps={activeQuestions.length}
+              currentStep={history.length + 1}
+              totalSteps={history.length + 2}
             />
 
             <InterviewQuestion
               question={currentQuestion}
-              value={currentAnswer}
+              value={userResponse}
               onChange={handleUpdateAnswer}
-              acknowledgement={acknowledgement}
+              acknowledgement={isThinking ? 'Processing answer...' : null}
             />
 
-            <InterviewNavigation
-              onPrevious={handlePrevious}
-              onContinue={handleNext}
-              canPrevious={true}
-              canContinue={isAnswerValid()}
-              isLastStep={currentIndex === activeQuestions.length - 1}
-            />
+            <div className="mt-6 flex justify-end">
+              <InterviewNavigation
+                onPrevious={handlePrevious}
+                onContinue={handleNext}
+                canPrevious={true}
+                canContinue={!!userResponse.trim() && !isThinking}
+                isLastStep={false}
+              />
+            </div>
           </div>
         )}
       </main>

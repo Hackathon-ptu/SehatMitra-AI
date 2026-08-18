@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChatMessage, ConversationItem, VoiceState } from '../types/chat';
-import { MOCK_CONVERSATIONS, getMockAiResponse } from '../data/mockChat';
+import { MOCK_CONVERSATIONS } from '../data/mockChat';
+import { chatService } from '../services/chatService';
 import { STORAGE_KEY_LANGUAGE, AVAILABLE_LANGUAGES } from '../data/languageData';
 import { ChatLayout } from '../components/chat/ChatLayout';
 
@@ -40,8 +41,8 @@ export const ChatPage: React.FC = () => {
     setMessages([]);
   };
 
-  // Core send message handler (with simulated AI response)
-  const handleSendMessage = (text: string) => {
+  // Core send message handler (with backend AI response)
+  const handleSendMessage = async (text: string) => {
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
       sender: 'user',
@@ -52,23 +53,22 @@ export const ChatPage: React.FC = () => {
     setMessages((prev) => [...prev, userMsg]);
     setIsThinking(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      const aiReplyText = getMockAiResponse(text);
-      const aiMsg: ChatMessage = {
-        id: `ai-${Date.now()}`,
-        sender: 'ai',
-        content: aiReplyText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        senderName: 'SehatMitra AI',
-      };
+    try {
+      const code = localStorage.getItem(STORAGE_KEY_LANGUAGE) || 'en';
+      // If we don't have an active sessionId, we can pass undefined.
+      // We can also extract the active conversation's session ID if we store it.
+      const currentSessionId = activeId && activeId.startsWith('conv-sess-') 
+        ? Number(activeId.replace('conv-sess-', ''))
+        : undefined;
 
+      const aiMsg = await chatService.sendMessage(text, code, currentSessionId);
+      
       setMessages((prev) => [...prev, aiMsg]);
       setIsThinking(false);
 
       // Update active title if starting a new conversation
       if (!activeId) {
-        const newConvId = `conv-${Date.now()}`;
+        const newConvId = `conv-sess-${aiMsg.sessionId || Date.now()}`;
         const newConvTitle = text.slice(0, 24) + (text.length > 24 ? '...' : '');
         const newConv: ConversationItem = {
           id: newConvId,
@@ -78,8 +78,16 @@ export const ChatPage: React.FC = () => {
         };
         setConversations((prev) => [newConv, ...prev]);
         setActiveId(newConvId);
+      } else {
+        // Update existing conversation messages
+        setConversations((prev) =>
+          prev.map((c) => (c.id === activeId ? { ...c, messages: [...c.messages, userMsg, aiMsg] } : c))
+        );
       }
-    }, 800);
+    } catch (err) {
+      console.error(err);
+      setIsThinking(false);
+    }
   };
 
   // Voice recording mock cycle

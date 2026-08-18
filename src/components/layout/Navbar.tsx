@@ -10,12 +10,16 @@ import {
   FileText, 
   Palette,
   Menu, 
-  X 
+  X,
+  LogOut,
+  User as UserIcon
 } from 'lucide-react';
 import { NavItem, PageMode } from '../../types/navigation';
 import { IconButton } from '../common/IconButton';
 import { Button } from '../common/Button';
 import { cn } from '../../utils/cn';
+import { useAuth } from '../../context/AuthContext';
+import { Badge } from '../common/Badge';
 
 export interface NavbarProps {
   pageMode?: PageMode;
@@ -31,9 +35,10 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Design System', path: '/design-system', icon: <Palette className="w-4 h-4 text-brand-600" /> },
 ];
 
-export const Navbar: React.FC<NavbarProps> = ({ pageMode = 'marketing' }) => {
+export const Navbar: React.FC<NavbarProps> = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { isAuthenticated, user, logout, showAuthModal } = useAuth();
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -91,12 +96,38 @@ export const Navbar: React.FC<NavbarProps> = ({ pageMode = 'marketing' }) => {
             </Button>
           </Link>
 
-          {pageMode === 'marketing' && (
-            <Link to="/chat">
-              <Button variant="primary" size="sm">
-                Start Health Assistant
+          {/* Authentication section */}
+          {isAuthenticated ? (
+            <div className="flex items-center gap-3">
+              <Badge variant="teal" size="md" icon={<UserIcon className="w-3.5 h-3.5" />}>
+                {user?.email || 'Logged In'}
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={logout}
+                leftIcon={<LogOut className="w-4 h-4 text-red-600" />}
+              >
+                Logout
               </Button>
-            </Link>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => showAuthModal('login')}
+              >
+                Login
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => showAuthModal('signup')}
+              >
+                Sign Up
+              </Button>
+            </div>
           )}
         </div>
 
@@ -146,11 +177,26 @@ export const Navbar: React.FC<NavbarProps> = ({ pageMode = 'marketing' }) => {
           })}
           
           <div className="mt-4 pt-4 border-t border-surface-border flex flex-col gap-2">
-            <Link to="/chat" onClick={closeMobileMenu} className="w-full">
-              <Button variant="primary" size="md" className="w-full">
-                Start Health Assistant
-              </Button>
-            </Link>
+            {isAuthenticated ? (
+              <div className="flex flex-col gap-2 w-full">
+                <div className="flex items-center justify-center p-2 rounded bg-brand-50/50 border border-brand-100 text-xs font-bold text-brand-800">
+                  <UserIcon className="w-4 h-4 mr-1.5 text-brand-600" />
+                  {user?.email}
+                </div>
+                <Button variant="outline" size="md" onClick={() => { logout(); closeMobileMenu(); }} className="w-full">
+                  Logout
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 w-full">
+                <Button variant="outline" size="md" onClick={() => { showAuthModal('login'); closeMobileMenu(); }} className="w-full">
+                  Login
+                </Button>
+                <Button variant="primary" size="md" onClick={() => { showAuthModal('signup'); closeMobileMenu(); }} className="w-full">
+                  Sign Up
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       )}
