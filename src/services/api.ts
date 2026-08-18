@@ -29,16 +29,23 @@ apiClient.interceptors.request.use(
 // Auth API endpoints
 export const authApi = {
   async signup(data: any) {
-    const response = await apiClient.post('/auth/signup', data);
+    const signupData = {
+      email: data.email,
+      password: data.password,
+      full_name: data.full_name,
+      phone_number: data.phone_number || null,
+      role: data.role || "patient",
+    };
+    const response = await apiClient.post('/auth/signup', signupData);
     return response.data;
   },
 
   async login(formData: Record<string, string>) {
-    // Backend uses OAuth2PasswordRequestForm which parses application/x-www-form-urlencoded
+    // Backend uses OAuth2PasswordRequestForm or JSON login
+    // Ensure request is sent as application/x-www-form-urlencoded with username (mapped from email) and password
     const params = new URLSearchParams();
-    Object.keys(formData).forEach((key) => {
-      params.append(key, formData[key]);
-    });
+    params.append('username', formData.email || formData.username || '');
+    params.append('password', formData.password || '');
 
     const response = await apiClient.post('/auth/login', params, {
       headers: {
