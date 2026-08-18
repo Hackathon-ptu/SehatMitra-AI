@@ -9,14 +9,11 @@ router = APIRouter()
 
 @router.post("/", response_model=InterviewResponse)
 async def interview(request: InterviewRequest, db: Session = Depends(get_db)):
-    if request.session_id:
+    session_rec = None
+    if request.session_id and request.session_id != 0:
         session_rec = db.query(HealthInterviewSession).filter(HealthInterviewSession.id == request.session_id).first()
-        if not session_rec:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Health interview session not found"
-            )
-    else:
+    
+    if not session_rec:
         session_rec = HealthInterviewSession(
             language=request.language,
             conversation_history=[],
@@ -29,17 +26,22 @@ async def interview(request: InterviewRequest, db: Session = Depends(get_db)):
     ai_response = await AIService.process_health_interview(
         session_id=session_rec.id,
         user_message=request.user_message,
-        language=request.language
+        language=request.language,
+        existing_collected_data=session_rec.collected_data
     )
 
-    history = session_rec.conversation_history or []
+    from sqlalchemy.orm.attributes import flag_modified
+
+    history = list(session_rec.conversation_history or [])
     history.append({"sender": "user", "text": request.user_message})
     history.append({"sender": "ai", "text": ai_response["next_question"]})
     session_rec.conversation_history = history
+    flag_modified(session_rec, "conversation_history")
 
-    collected_data = session_rec.collected_data or {}
+    collected_data = dict(session_rec.collected_data or {})
     collected_data.update(ai_response["collected_symptoms"])
     session_rec.collected_data = collected_data
+    flag_modified(session_rec, "collected_data")
 
     db.commit()
     db.refresh(session_rec)
