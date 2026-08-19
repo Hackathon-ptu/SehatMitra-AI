@@ -1,4 +1,72 @@
 from typing import Optional, Dict, Any
+import json
+from google import genai
+from google.genai import types
+from app.core.config import settings
+
+def get_gemini_client():
+    if not settings.GEMINI_API_KEY:
+        return None
+    return genai.Client(api_key=settings.GEMINI_API_KEY)
+
+async def analyze_medical_report_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
+    """
+    Extracts clinical biomarkers and plain-language summary from medical lab reports.
+    """
+    client = get_gemini_client()
+    
+    # Agar API key nahi milti toh fallback data return karega
+    if not client:
+        return {
+            "extracted_data": {
+                "Hemoglobin (Hb)": {"value": 12.0, "unit": "g/dL", "reference_range": "12.0 - 15.5", "status": "normal"},
+                "WBC Count": {"value": 6500, "unit": "/mcL", "reference_range": "4500 - 11000", "status": "normal"}
+            },
+            "explanation": "Gemini API key is not configured. Showing baseline data.",
+            "status": "mock_success"
+        }
+
+    prompt = """
+    You are an expert clinical medical lab report parser for SehatMitra.
+    Analyze the provided medical report / lab test image.
+    
+    Extract all test parameters and return ONLY valid JSON in this exact structure:
+    {
+      "extracted_data": {
+        "Parameter Name": {
+          "value": 0.0,
+          "unit": "unit_string",
+          "reference_range": "range_string",
+          "status": "normal" | "low" | "high" | "critical"
+        }
+      },
+      "explanation": "A simple 2-3 sentence patient-friendly explanation in Hindi-English mixed or simple language explaining what these numbers mean for their health."
+    }
+    Return ONLY JSON without markdown backticks.
+    """
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                prompt
+            ]
+        )
+        
+        raw_text = response.text.strip()
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+            
+        return json.loads(raw_text.strip())
+    except Exception as e:
+        return {
+            "extracted_data": {},
+            "explanation": f"Failed to analyze report: {str(e)}",
+            "status": "error"
+        }
 
 class AIService:
     @staticmethod
