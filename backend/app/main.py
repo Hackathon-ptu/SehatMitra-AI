@@ -24,10 +24,14 @@ app.add_middleware(
 @app.on_event("startup")
 def init_tables():
     try:
-        # Agar models package exist karta hai toh load karein
-        import app.models
-    except Exception:
-        pass
+        from app.models.user import User
+        from app.models.appointment import Appointment
+        from app.models.interview import HealthInterviewSession
+        from app.models.risk import RiskAssessment
+        from app.models.report import MedicalReport
+        from app.models.history import ConsultationHistory, ReportHistory
+    except Exception as e:
+        print(f"Error importing models: {e}")
     # Base metadata se registered tables SQLite/PostgreSQL me ban jayenge
     Base.metadata.create_all(bind=engine)
 

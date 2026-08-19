@@ -104,7 +104,15 @@ class AIService:
         return symptoms
 
     @staticmethod
-    async def process_health_interview(session_id: Optional[int], user_message: str, language: str = "hi", existing_collected_data: Optional[dict] = None) -> dict:
+    async def process_health_interview(
+        session_id: Optional[int], 
+        user_message: str, 
+        language: str = "hi", 
+        existing_collected_data: Optional[dict] = None,
+        language_code: str = "hi-IN",
+        language_name: str = "Hindi",
+        language_native_name: str = "हिन्दी"
+    ) -> dict:
         state = existing_collected_data or {}
         step = state.get("step", 1)
         prev_symptoms = state.get("detected_symptoms", [])
@@ -115,25 +123,65 @@ class AIService:
         is_completed = False
         next_question = ""
         
-        if step == 1:
-            next_question = "कितने दिनों से यह समस्या है और क्या सांस लेने में कठिनाई या बुखार है?"
-            step = 2
-        else:
-            msg_lower = user_message.lower()
-            duration_kw = ["day", "din", "week", "hafte", "se", "for", "since", "hour", "ghant", "month", "mahine", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
-            has_duration = any(kw in msg_lower for kw in duration_kw)
-            has_fever_or_breathing = "fever" in combined_symptoms or "cough/respiratory" in combined_symptoms
+        client = get_gemini_client()
+        if client:
+            prompt = f"""
+            You are a helpful clinical medical assistant for SehatMitra, aiding a doctor to interview a patient from rural India.
+            Here is the conversation history and currently extracted symptoms: {combined_symptoms}.
+            The patient's current response: "{user_message}".
             
-            if has_duration and has_fever_or_breathing:
-                next_question = "धन्यवाद। आपके लक्षणों का विश्लेषण पूरा हो गया है। कृपया रिस्क असेसमेंट देखें।"
-                is_completed = True
+            We are at interview step: {step} of 3.
+            If step is 3 or we have successfully gathered the duration of symptoms and presence of fever or respiratory distress, mark is_completed as true.
+            Otherwise, generate the next short, empathetic follow-up clinical question.
+            
+            CRITICAL LOCALIZATION INSTRUCTION:
+            The patient has chosen: {language_name} ({language_native_name}).
+            You MUST respond entirely and strictly in {language_name} ({language_native_name}) with correct native script.
+            Do NOT respond in English or Hindi unless they were explicitly chosen.
+            Translate and adapt all clinical questions, empathetic guidance, and triage explanations directly into natural, easily understandable {language_name}.
+            
+            Return ONLY a valid JSON string without markdown blocks matching this exact schema:
+            {{
+              "next_question": "string containing next localized question",
+              "is_completed": true | false
+            }}
+            """
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=[prompt]
+                )
+                raw_text = response.text.strip()
+                if raw_text.startswith("```json"):
+                    raw_text = raw_text[7:]
+                if raw_text.endswith("```"):
+                    raw_text = raw_text[:-3]
+                parsed = json.loads(raw_text.strip())
+                next_question = parsed.get("next_question", "")
+                is_completed = parsed.get("is_completed", False)
+            except Exception as e:
+                print(f"Gemini error in interview: {e}")
+                
+        if not next_question:
+            if step == 1:
+                next_question = "कितने दिनों से यह समस्या है और क्या सांस लेने में कठिनाई या बुखार है?"
+                step = 2
             else:
-                if step >= 3:
+                msg_lower = user_message.lower()
+                duration_kw = ["day", "din", "week", "hafte", "se", "for", "since", "hour", "ghant", "month", "mahine", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+                has_duration = any(kw in msg_lower for kw in duration_kw)
+                has_fever_or_breathing = "fever" in combined_symptoms or "cough/respiratory" in combined_symptoms
+                
+                if has_duration and has_fever_or_breathing:
                     next_question = "धन्यवाद। आपके लक्षणों का विश्लेषण पूरा हो गया है। कृपया रिस्क असेसमेंट देखें।"
                     is_completed = True
                 else:
-                    next_question = "कृपया बताएं कितने दिनों से लक्षण हैं और क्या बुखार या सांस की तकलीफ है?"
-                    step += 1
+                    if step >= 3:
+                        next_question = "धन्यवाद। आपके लक्षणों का विश्लेषण पूरा हो गया है। कृपया रिस्क असेसमेंट देखें।"
+                        is_completed = True
+                    else:
+                        next_question = "कृपया बताएं कितने दिनों से लक्षण हैं और क्या बुखार या सांस की तकलीफ है?"
+                        step += 1
         
         collected_symptoms = {
             "step": step,

@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { healthService } from '../services/api';
+import { healthService, bhashiniService } from '../services/api';
 import { Mic, MicOff, Send, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
+import { BHASHINI_LANGUAGES } from '../constants/languages';
 
-export const HealthChat = () => {
-  const [messages, setMessages] = useState([
-    {
-      id: 'welcome',
-      sender: 'bot',
-      text: 'नमस्ते! मैं सेहतमित्र हूँ। आज आप कैसा महसूस कर रहे हैं? कृपया अपने लक्षणों के बारे में विस्तार से बताएं। (जैसे: "मुझे दो दिनों से तेज़ बुखार है और सूखी खाँसी है।")',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ]);
+export const HealthChat = ({ languageCode = 'hi-IN' }) => {
+  const selectedLangConfig = BHASHINI_LANGUAGES.find(l => l.code === languageCode) || BHASHINI_LANGUAGES[0];
+  const bhashiniCode = selectedLangConfig.bhashiniCode;
+
+  const [messages, setMessages] = useState([]);
   const [sessionId, setSessionId] = useState(null);
   const [userInput, setUserInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,14 +18,36 @@ export const HealthChat = () => {
 
   const messagesEndRef = useRef(null);
 
-  // Initialize Web Speech API Recognition
+  // Synchronize initial greeting based on the selected languageCode
+  useEffect(() => {
+    let welcomeText = 'नमस्ते! मैं सेहतमित्र हूँ। आज आप कैसा महसूस कर रहे हैं? कृपया अपने लक्षणों के बारे में विस्तार से बताएं। (जैसे: "मुझे दो दिनों से तेज़ बुखार है और सूखी खाँसी है।")';
+    if (bhashiniCode === 'en') {
+      welcomeText = 'Hello! I am SehatMitra. How are you feeling today? Please describe your symptoms in detail. (e.g. "I have had a high fever and dry cough for two days.")';
+    } else if (bhashiniCode !== 'hi') {
+      welcomeText = `Namaste! [SehatMitra - ${selectedLangConfig.name}]. Please describe your symptoms here.`;
+    }
+
+    setMessages([
+      {
+        id: 'welcome',
+        sender: 'bot',
+        text: welcomeText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }
+    ]);
+    setSessionId(null);
+    setIsCompleted(false);
+    setRiskData(null);
+  }, [languageCode]);
+
+  // Initialize Web Speech API Recognition dynamically when languageCode updates
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const rec = new SpeechRecognition();
       rec.continuous = false;
       rec.interimResults = false;
-      rec.lang = 'hi-IN';
+      rec.lang = languageCode;
 
       rec.onstart = () => {
         setIsListening(true);
@@ -50,6 +69,78 @@ export const HealthChat = () => {
 
       setRecognition(rec);
     }
+  }, [languageCode]);
+
+  // Speech Synthesis (TTS) Helper Function with Bhashini fallback
+  const speakText = async (msg) => {
+    try {
+      // 1. Try Bhashini synthesis first
+      const data = await bhashiniService.synthesizeSpeech(msg.text, bhashiniCode);
+      if (data && data.audio_base64) {
+        const audio = new Audio(`data:audio/wav;base64,${data.audio_base64}`);
+        audio.onended = () => setSpeakingMsgId(null);
+        audio.play();
+        return audio;
+      }
+    } catch (e) {
+      console.warn("Bhashini TTS failed, falling back to Web Speech API", e);
+    }
+
+    // 2. Fall back to standard browser synthesis
+    if (!window.speechSynthesis) return null;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(msg.text);
+    utterance.lang = languageCode;
+    utterance.rate = 0.95;
+    utterance.pitch = 1.0;
+    const voices = window.speechSynthesis.getVoices();
+    const voice = voices.find((v) => v.lang.includes(bhashiniCode) || v.lang.toLowerCase().includes(bhashiniCode));
+    if (voice) {
+      utterance.voice = voice;
+    }
+    window.speechSynthesis.speak(utterance);
+    return null;
+  };
+
+  const [activeAudioElement, setActiveAudioElement] = useState(null);
+
+  const stopSpeaking = () => {
+    if (activeAudioElement) {
+      activeAudioElement.pause();
+      setActiveAudioElement(null);
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
+  // State to track currently playing message
+  const [speakingMsgId, setSpeakingMsgId] = useState(null);
+
+  const togglePlaySpeech = async (msg) => {
+    if (speakingMsgId === msg.id) {
+      stopSpeaking();
+      setSpeakingMsgId(null);
+    } else {
+      setSpeakingMsgId(msg.id);
+      const audioObj = await speakText(msg);
+      if (audioObj) {
+        setActiveAudioElement(audioObj);
+      }
+    }
+  };
+
+  // Clean speaking state when synthesis finishes
+  useEffect(() => {
+    if (window.speechSynthesis) {
+      const handleEnd = () => setSpeakingMsgId(null);
+      window.speechSynthesis.addEventListener('end', handleEnd);
+      return () => {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.removeEventListener('end', handleEnd);
+        }
+      };
+    }
   }, []);
 
   // Auto scroll to bottom of chat
@@ -59,7 +150,7 @@ export const HealthChat = () => {
 
   const toggleSpeech = () => {
     if (!recognition) {
-      alert('Speech recognition is not supported in this browser.');
+      alert('Speech recognition is not supported in this browser for this language.');
       return;
     }
     if (isListening) {
@@ -90,7 +181,10 @@ export const HealthChat = () => {
       const response = await healthService.sendInterviewMessage({
         session_id: sessionId,
         user_message: userText,
-        language: 'hi',
+        language: bhashiniCode,
+        language_code: selectedLangConfig.code,
+        language_name: selectedLangConfig.name,
+        language_native_name: selectedLangConfig.nativeName,
       });
 
       setSessionId(response.session_id);
@@ -118,7 +212,9 @@ export const HealthChat = () => {
       const errorMsg = {
         id: `err-${Date.now()}`,
         sender: 'bot',
-        text: 'माफ़ कीजियेगा, नेटवर्क में कुछ तकनीकी त्रुटि आ गई है। कृपया पुनः प्रयास करें।',
+        text: bhashiniCode === 'en' 
+          ? 'Sorry, a network connection error has occurred. Please try again.' 
+          : 'माफ़ कीजियेगा, नेटवर्क में कुछ तकनीकी त्रुटि आ गई है। कृपया पुनः प्रयास करें।',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -128,11 +224,18 @@ export const HealthChat = () => {
   };
 
   const resetChat = () => {
+    let welcomeText = 'नमस्ते! मैं सेहतमित्र हूँ। आज आप कैसा महसूस कर रहे हैं? कृपया अपने लक्षणों के बारे में विस्तार से बताएं। (जैसे: "मुझे दो दिनों से तेज़ बुखार है और सूखी खाँसी है।")';
+    if (bhashiniCode === 'en') {
+      welcomeText = 'Hello! I am SehatMitra. How are you feeling today? Please describe your symptoms in detail. (e.g. "I have had a high fever and dry cough for two days.")';
+    } else if (bhashiniCode !== 'hi') {
+      welcomeText = `Namaste! [SehatMitra - ${selectedLangConfig.name}]. Please describe your symptoms here.`;
+    }
+
     setMessages([
       {
         id: 'welcome',
         sender: 'bot',
-        text: 'नमस्ते! मैं सेहतमित्र हूँ। आज आप कैसा महसूस कर रहे हैं? कृपया अपने लक्षणों के बारे में विस्तार से बताएं। (जैसे: "मुझे दो दिनों से तेज़ बुखार है और सूखी खाँसी है।")',
+        text: welcomeText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -149,14 +252,14 @@ export const HealthChat = () => {
         return {
           bg: 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-950 dark:text-red-200',
           badge: 'bg-red-500 text-white',
-          label: 'Critical / Emergency (आपातकालीन स्थिति)',
+          label: bhashiniCode === 'en' ? 'Critical / Emergency' : 'Critical / Emergency (आपातकालीन स्थिति)',
         };
       case 'moderate':
       case 'amber':
         return {
           bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 text-amber-950 dark:text-amber-200',
           badge: 'bg-amber-500 text-white',
-          label: 'Moderate Risk (सामान्य जोखिम)',
+          label: bhashiniCode === 'en' ? 'Moderate Risk' : 'Moderate Risk (सामान्य जोखिम)',
         };
       case 'low':
       case 'green':
@@ -164,7 +267,7 @@ export const HealthChat = () => {
         return {
           bg: 'bg-green-50 dark:bg-green-950/40 border-green-500 text-green-950 dark:text-green-200',
           badge: 'bg-green-500 text-white',
-          label: 'Low Risk (कम जोखिम)',
+          label: bhashiniCode === 'en' ? 'Low Risk' : 'Low Risk (कम जोखिम)',
         };
     }
   };
@@ -182,8 +285,12 @@ export const HealthChat = () => {
               SM
             </div>
             <div className="text-left">
-              <h2 className="font-bold text-base leading-tight">लक्षण परामर्श (Symptom Chat)</h2>
-              <span className="text-[11px] text-white/80">AI संचालित प्राथमिक जांच सहायक</span>
+              <h2 className="font-bold text-base leading-tight">
+                {bhashiniCode === 'en' ? 'Symptom Chat' : 'लक्षण परामर्श (Symptom Chat)'}
+              </h2>
+              <span className="text-[11px] text-white/80">
+                {bhashiniCode === 'en' ? 'AI Powered Triage Assistant' : 'AI संचालित प्राथमिक जांच सहायक'}
+              </span>
             </div>
           </div>
           <button
@@ -192,7 +299,7 @@ export const HealthChat = () => {
             title="Chat Reset करें"
           >
             <RefreshCw className="w-4 h-4" />
-            <span className="hidden sm:inline">रीसेट करें</span>
+            <span className="hidden sm:inline">{bhashiniCode === 'en' ? 'Reset' : 'रीसेट करें'}</span>
           </button>
         </div>
 
@@ -204,20 +311,37 @@ export const HealthChat = () => {
               className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4.5 py-3 text-sm shadow-sm leading-relaxed ${
+                className={`max-w-[80%] rounded-2xl px-4.5 py-3 text-sm shadow-sm leading-relaxed relative group ${
                   msg.sender === 'user'
                     ? 'bg-brand-600 text-white rounded-tr-none'
                     : 'bg-surface-card text-content-primary border border-surface-border rounded-tl-none'
                 }`}
               >
                 <p className="text-left whitespace-pre-wrap">{msg.text}</p>
-                <span
-                  className={`block text-[10px] text-right mt-1.5 font-medium ${
-                    msg.sender === 'user' ? 'text-white/70' : 'text-content-muted'
-                  }`}
-                >
-                  {msg.timestamp}
-                </span>
+                <div className="flex items-center justify-between gap-4 mt-1.5 border-t border-surface-border/20 pt-1">
+                  {msg.sender === 'bot' ? (
+                    <button
+                      onClick={() => togglePlaySpeech(msg)}
+                      className="text-[10px] flex items-center gap-1 font-bold text-brand-600 hover:text-brand-700"
+                    >
+                      {speakingMsgId === msg.id ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping mr-0.5" />
+                          <span>Stop</span>
+                        </>
+                      ) : (
+                        <span>🔊 Speak</span>
+                      )}
+                    </button>
+                  ) : <div />}
+                  <span
+                    className={`block text-[10px] font-medium ${
+                      msg.sender === 'user' ? 'text-white/70' : 'text-content-muted'
+                    }`}
+                  >
+                    {msg.timestamp}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
@@ -228,7 +352,9 @@ export const HealthChat = () => {
                 <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: '0ms' }} />
                 <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: '150ms' }} />
                 <span className="w-2 h-2 rounded-full bg-brand-600 animate-bounce" style={{ animationDelay: '300ms' }} />
-                <span className="text-xs font-semibold ml-1">सोच रहा हूँ...</span>
+                <span className="text-xs font-semibold ml-1">
+                  {bhashiniCode === 'en' ? 'Thinking...' : 'सोच रहा हूँ...'}
+                </span>
               </div>
             </div>
           )}
@@ -247,7 +373,7 @@ export const HealthChat = () => {
                   ? 'bg-red-500 text-white animate-pulse'
                   : 'bg-surface-elevated text-content-secondary hover:text-brand-600 hover:bg-brand-50 border border-surface-border'
               }`}
-              title={isListening ? 'बोलना बंद करें' : 'हिंदी में बोलें (Hindi Voice Input)'}
+              title={isListening ? 'Stop' : `Voice Input (${selectedLangConfig.name})`}
             >
               {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
@@ -258,9 +384,11 @@ export const HealthChat = () => {
               disabled={loading || isCompleted}
               placeholder={
                 isListening
-                  ? 'सुन रहा हूँ... बोलिए'
+                  ? 'Listening...'
                   : isCompleted
-                  ? 'परामर्श पूर्ण हो चुका है।'
+                  ? 'Completed.'
+                  : bhashiniCode === 'en'
+                  ? 'Type your symptoms here...'
                   : 'यहाँ अपने लक्षण लिखें...'
               }
               className="flex-1 bg-transparent border-0 text-sm text-content-primary placeholder:text-content-disabled focus:outline-none py-2 px-1"
@@ -279,7 +407,7 @@ export const HealthChat = () => {
           </div>
           {isListening && (
             <p className="text-[11px] text-red-500 font-semibold mt-2 animate-pulse text-left">
-              🎙️ हिंदी वॉइस इनपुट सक्रिय है। कृपया माइक के सामने बोलें।
+              🎙️ Speak now (बोलें)... ({selectedLangConfig.name})
             </p>
           )}
         </form>
@@ -296,14 +424,18 @@ export const HealthChat = () => {
           </div>
 
           <div className="flex flex-col gap-1">
-            <h3 className="text-lg font-bold">प्राथमिक स्वास्थ्य रिस्क रिपोर्ट</h3>
-            <span className="text-xs text-content-muted">तैयार किया गया समय: अभी</span>
+            <h3 className="text-lg font-bold">
+              {bhashiniCode === 'en' ? 'Primary Health Risk Report' : 'प्राथमिक स्वास्थ्य रिस्क रिपोर्ट'}
+            </h3>
+            <span className="text-xs text-content-muted">
+              {bhashiniCode === 'en' ? 'Generated Time: Now' : 'तैयार किया गया समय: अभी'}
+            </span>
           </div>
 
           <div className="space-y-3.5 border-t border-surface-border pt-4">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-1">
-                मूल्यांकन के मुख्य कारण (Reasons)
+                {bhashiniCode === 'en' ? 'Reasons' : 'मूल्यांकन के मुख्य कारण (Reasons)'}
               </span>
               <ul className="list-disc pl-5 text-sm space-y-1">
                 {riskData.reasons?.map((reason, idx) => (
@@ -314,7 +446,7 @@ export const HealthChat = () => {
 
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-1">
-                सलाह व अनुशंसित कार्रवाई (Recommendation)
+                {bhashiniCode === 'en' ? 'Recommendation' : 'सलाह व अनुशंसित कार्रवाई (Recommendation)'}
               </span>
               <p className="text-sm font-semibold leading-relaxed">{riskData.recommendation}</p>
             </div>

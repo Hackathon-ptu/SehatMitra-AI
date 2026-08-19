@@ -27,7 +27,10 @@ async def interview(request: InterviewRequest, db: Session = Depends(get_db)):
         session_id=session_rec.id,
         user_message=request.user_message,
         language=request.language,
-        existing_collected_data=session_rec.collected_data
+        existing_collected_data=session_rec.collected_data,
+        language_code=request.language_code,
+        language_name=request.language_name,
+        language_native_name=request.language_native_name
     )
 
     from sqlalchemy.orm.attributes import flag_modified

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { authApi } from '../../services/api';
+import { authService } from '../../services/api';
 import { X, Mail, Lock, User, Phone, Briefcase, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '../common/Button';
 
@@ -39,7 +39,7 @@ export const AuthModal: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const data = await authApi.login({
+      const data = await authService.login({
         email: loginEmail,
         password: loginPassword,
       });
@@ -65,7 +65,7 @@ export const AuthModal: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      await authApi.signup({
+      await authService.signup({
         full_name: fullName,
         email: signupEmail,
         password: signupPassword,
@@ -74,7 +74,7 @@ export const AuthModal: React.FC = () => {
       });
 
       // Automatically login after successful signup
-      const data = await authApi.login({
+      const data = await authService.login({
         email: signupEmail,
         password: signupPassword,
       });

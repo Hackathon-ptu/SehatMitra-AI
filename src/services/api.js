@@ -60,11 +60,14 @@ export const authService = {
 };
 
 export const healthService = {
-  async sendInterviewMessage({ session_id, user_message, language }) {
+  async sendInterviewMessage({ session_id, user_message, language, language_code, language_name, language_native_name }) {
     const response = await apiClient.post('/health-interview/', {
       session_id: session_id || null,
       user_message,
       language: language || 'hi',
+      language_code,
+      language_name,
+      language_native_name
     });
     return response.data;
   },
@@ -101,6 +104,35 @@ export const reportService = {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+    });
+    return response.data;
+  },
+};
+
+export const historyService = {
+  async getConsultations() {
+    const response = await apiClient.get('/history/consultations');
+    return response.data;
+  },
+  async getReports() {
+    const response = await apiClient.get('/history/reports');
+    return response.data;
+  },
+};
+
+export const bhashiniService = {
+  async transcribeAudio(audioBase64, languageCode) {
+    const response = await apiClient.post('/bhashini/asr', {
+      audio_base64: audioBase64,
+      language_code: languageCode,
+    });
+    return response.data;
+  },
+  async synthesizeSpeech(text, languageCode, gender = 'female') {
+    const response = await apiClient.post('/bhashini/tts', {
+      text,
+      language_code: languageCode,
+      gender,
     });
     return response.data;
   },
