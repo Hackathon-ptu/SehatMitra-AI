@@ -28,7 +28,7 @@ export const LanguageSelectorModal = ({ isOpen, onClose, onSelectLanguage }) => 
             सेहतमित्र ऐप का उपयोग करने के लिए अपनी पसंदीदा भाषा का चयन करें:
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {BHASHINI_LANGUAGES.map((lang) => (
+            {BHASHINI_LANGUAGES.filter((l) => ['hi-IN', 'en-IN', 'pa-IN', 'te-IN'].includes(l.code)).map((lang) => (
               <button
                 key={lang.code}
                 onClick={() => onSelectLanguage(lang.code)}

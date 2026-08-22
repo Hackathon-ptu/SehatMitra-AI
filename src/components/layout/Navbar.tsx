@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { NavLink, Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Heart, 
   Globe, 
@@ -8,37 +8,60 @@ import {
   ShieldAlert, 
   Building2, 
   FileText, 
-  Palette,
   Menu, 
   X,
-  LogOut,
-  User as UserIcon
+  User as UserIcon,
+  Activity
 } from 'lucide-react';
 import { NavItem, PageMode } from '../../types/navigation';
 import { IconButton } from '../common/IconButton';
 import { Button } from '../common/Button';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { Badge } from '../common/Badge';
+import { MedicalProfileModal } from '../profile/MedicalProfileModal';
 
 export interface NavbarProps {
   pageMode?: PageMode;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: 'Overview', path: '/' },
-  { label: 'AI Chat', path: '/chat', icon: <MessageSquare className="w-4 h-4" /> },
-  { label: 'Health Interview', path: '/health-interview', icon: <ClipboardList className="w-4 h-4" /> },
-  { label: 'Risk Assessment', path: '/risk-assessment', icon: <ShieldAlert className="w-4 h-4" /> },
-  { label: 'Hospitals', path: '/hospitals', icon: <Building2 className="w-4 h-4" /> },
-  { label: 'Report Explanation', path: '/report', icon: <FileText className="w-4 h-4" /> },
-  { label: 'Design System', path: '/design-system', icon: <Palette className="w-4 h-4 text-brand-600" /> },
-];
-
 export const Navbar: React.FC<NavbarProps> = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const location = useLocation();
-  const { isAuthenticated, user, logout, showAuthModal } = useAuth();
+  const navigate = useNavigate();
+  const { isAuthenticated, user, showAuthModal } = useAuth();
+  const { t } = useLanguage();
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  const NAV_ITEMS: NavItem[] = [
+    { label: t('nav_home') || 'Overview', path: '/' },
+    { label: t('nav_chat') || 'AI Chat', path: '/chat', icon: <MessageSquare className="w-4 h-4" /> },
+    { label: t('nav_interview') || 'Health Interview', path: '/health-interview', icon: <ClipboardList className="w-4 h-4" /> },
+    { label: t('nav_triage') || 'Risk Assessment', path: '/risk-assessment', icon: <ShieldAlert className="w-4 h-4" /> },
+    { label: t('nav_hospitals') || 'Hospitals', path: '/hospitals', icon: <Building2 className="w-4 h-4" /> },
+    { label: t('nav_reports') || 'Report Explanation', path: '/report', icon: <FileText className="w-4 h-4" /> },
+    { label: t('nav_asha') || 'ASHA Portal', path: '/asha-portal', icon: <Activity className="w-4 h-4" /> },
+  ];
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
   const closeMobileMenu = () => setMobileMenuOpen(false);
@@ -86,6 +109,25 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
         {/* Right Action Controls */}
         <div className="hidden lg:flex items-center gap-3">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-sos'))}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-full shadow-lg shadow-red-500/30 animate-pulse transition-all"
+            type="button"
+          >
+            <ShieldAlert className="w-4 h-4 animate-bounce" />
+            <span>SOS / 108</span>
+          </button>
+
+          {deferredPrompt && (
+            <button
+              onClick={handleInstallClick}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs rounded-full shadow-md transition-all"
+              type="button"
+            >
+              📲 Install App
+            </button>
+          )}
+
           <Link to="/language">
             <Button
               variant="outline"
@@ -99,17 +141,17 @@ export const Navbar: React.FC<NavbarProps> = () => {
           {/* Authentication section */}
           {isAuthenticated ? (
             <div className="flex items-center gap-3">
-              <Badge variant="teal" size="md" icon={<UserIcon className="w-3.5 h-3.5" />}>
-                {user?.email || 'Logged In'}
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={logout}
-                leftIcon={<LogOut className="w-4 h-4 text-red-600" />}
+              <button 
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('set-active-tab', { detail: 'profile' }));
+                  navigate('/');
+                }}
+                className="cursor-pointer hover:opacity-90 transition-opacity flex items-center"
               >
-                Logout
-              </Button>
+                <Badge variant="teal" size="md" icon={<UserIcon className="w-3.5 h-3.5" />}>
+                  {user?.email || 'Logged In'}
+                </Badge>
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-2">
@@ -118,14 +160,14 @@ export const Navbar: React.FC<NavbarProps> = () => {
                 size="sm"
                 onClick={() => showAuthModal('login')}
               >
-                Login
+                {t('login')}
               </Button>
               <Button
                 variant="primary"
                 size="sm"
                 onClick={() => showAuthModal('signup')}
               >
-                Sign Up
+                {t('signup')}
               </Button>
             </div>
           )}
@@ -133,6 +175,14 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
         {/* Mobile Menu Toggle Button */}
         <div className="flex items-center gap-2 lg:hidden">
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('open-sos'))}
+            className="flex items-center gap-1 px-2.5 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded-full shadow-lg animate-pulse transition-all mr-1"
+            type="button"
+          >
+            <span>SOS / 108</span>
+          </button>
+
           <Link to="/language" onClick={closeMobileMenu}>
             <IconButton aria-label="Change Language" variant="ghost" size="sm">
               <Globe className="w-5 h-5 text-brand-600" />
@@ -177,29 +227,43 @@ export const Navbar: React.FC<NavbarProps> = () => {
           })}
           
           <div className="mt-4 pt-4 border-t border-surface-border flex flex-col gap-2">
+            {deferredPrompt && (
+              <button
+                onClick={() => { handleInstallClick(); closeMobileMenu(); }}
+                className="py-2 mb-2 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold rounded-lg shadow-md transition-all text-center flex items-center justify-center gap-1.5 active:scale-[0.99] w-full"
+                type="button"
+              >
+                📲 Install SehatMitra App
+              </button>
+            )}
             {isAuthenticated ? (
               <div className="flex flex-col gap-2 w-full">
-                <div className="flex items-center justify-center p-2 rounded bg-brand-50/50 border border-brand-100 text-xs font-bold text-brand-800">
+                <button 
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('set-active-tab', { detail: 'profile' }));
+                    navigate('/');
+                    closeMobileMenu();
+                  }}
+                  className="flex items-center justify-center p-2 rounded bg-brand-50/50 border border-brand-100 text-xs font-bold text-brand-800 cursor-pointer hover:bg-brand-50 transition-colors w-full"
+                >
                   <UserIcon className="w-4 h-4 mr-1.5 text-brand-600" />
                   {user?.email}
-                </div>
-                <Button variant="outline" size="md" onClick={() => { logout(); closeMobileMenu(); }} className="w-full">
-                  Logout
-                </Button>
+                </button>
               </div>
             ) : (
               <div className="flex flex-col gap-2 w-full">
                 <Button variant="outline" size="md" onClick={() => { showAuthModal('login'); closeMobileMenu(); }} className="w-full">
-                  Login
+                  {t('login')}
                 </Button>
                 <Button variant="primary" size="md" onClick={() => { showAuthModal('signup'); closeMobileMenu(); }} className="w-full">
-                  Sign Up
+                  {t('signup')}
                 </Button>
               </div>
             )}
           </div>
         </div>
       )}
+      <MedicalProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} />
     </header>
   );
 };

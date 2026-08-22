@@ -1,22 +1,61 @@
 import React, { useState, useEffect } from 'react';
 import { HealthChat } from './components/HealthChat';
-import { ReportAnalyzer } from './components/ReportAnalyzer';
+import { LabReportAnalyzer } from './components/reports/LabReportAnalyzer';
 import { HospitalLocator } from './components/HospitalLocator';
 import { HistoryDashboard } from './components/HistoryDashboard';
+import { TriageAssistant } from './components/triage/TriageAssistant';
+import { AshaDashboard } from './components/dashboard/AshaDashboard';
+import { ProfilePage } from './components/profile/ProfilePage';
 import { AuthModal } from './components/auth/AuthModal';
 import { LanguageSelectorModal } from './components/LanguageSelectorModal';
 import { useAuth } from './context/AuthContext';
+import { useLanguage } from './context/LanguageContext';
 import { BHASHINI_LANGUAGES } from './constants/languages';
-import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, Globe, LogOut, User as UserIcon } from 'lucide-react';
+import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, Globe, LogOut, User as UserIcon, Sun, Moon, Mic, Activity } from 'lucide-react';
+import { UI_TRANSLATIONS } from './constants/translations';
+import { EmergencySOSModal } from './components/EmergencySOSModal';
+import { OfflineBanner } from './components/common/OfflineBanner';
 
 export const App = () => {
   const [activeTab, setActiveTab] = useState('chat');
   const { isAuthenticated, user, logout, showAuthModal } = useAuth();
+  const [isSosOpen, setIsSosOpen] = useState(false);
+
+  useEffect(() => {
+    const handleSetTab = (e: any) => {
+      if (e.detail) {
+        setActiveTab(e.detail);
+      }
+    };
+    window.addEventListener('set-active-tab', handleSetTab);
+    return () => window.removeEventListener('set-active-tab', handleSetTab);
+  }, []);
+
+  useEffect(() => {
+    const handleOpenSos = () => setIsSosOpen(true);
+    window.addEventListener('open-sos', handleOpenSos);
+    return () => window.removeEventListener('open-sos', handleOpenSos);
+  }, []);
   
-  // Load initial language from localStorage or default to hi-IN
-  const [selectedLanguage, setSelectedLanguage] = useState(() => {
-    return localStorage.getItem('preferred_lang') || localStorage.getItem('language') || 'hi-IN';
+  // Theme Engine
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('theme') || 'light';
   });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
+  const { language: selectedLanguage, setLanguage, t: translate } = useLanguage();
 
   const [isLangModalOpen, setIsLangModalOpen] = useState(false);
 
@@ -28,40 +67,76 @@ export const App = () => {
   }, []);
 
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const lang = e.target.value;
-    setSelectedLanguage(lang);
-    localStorage.setItem('language', lang);
-    localStorage.setItem('preferred_lang', lang);
+    const lang = e.target.value as any;
+    setLanguage(lang);
   };
 
   const handleSelectLanguageFromModal = (langCode: string) => {
-    setSelectedLanguage(langCode);
-    localStorage.setItem('language', langCode);
-    localStorage.setItem('preferred_lang', langCode);
+    setLanguage(langCode as any);
     setIsLangModalOpen(false);
+  };
+
+  const t = {
+    chatTab: translate('nav_chat') || translate('chatTab'),
+    triageTab: translate('nav_voice') || translate('triageTab'),
+    reportTab: translate('nav_reports') || translate('reportTab'),
+    locatorTab: translate('nav_hospitals') || translate('locatorTab'),
+    historyTab: translate('nav_history') || translate('historyTab'),
+    ashaTab: translate('nav_asha') || translate('ashaTab'),
+    profileTab: translate('nav_profile') || translate('profileTab'),
+    welcome: translate('welcome') || (UI_TRANSLATIONS as any)[selectedLanguage]?.welcome,
+    chatPlaceholder: translate('chatPlaceholder') || (UI_TRANSLATIONS as any)[selectedLanguage]?.chatPlaceholder,
+    sendBtn: translate('sendBtn') || (UI_TRANSLATIONS as any)[selectedLanguage]?.sendBtn,
+    listening: translate('listening') || (UI_TRANSLATIONS as any)[selectedLanguage]?.listening,
+    sosTitle: translate('sosTitle') || (UI_TRANSLATIONS as any)[selectedLanguage]?.sosTitle,
+    callAmbulance: translate('callAmbulance') || (UI_TRANSLATIONS as any)[selectedLanguage]?.callAmbulance,
+    contactAlert: translate('contactAlert') || (UI_TRANSLATIONS as any)[selectedLanguage]?.contactAlert,
+    reportTitle: translate('reportTitle') || (UI_TRANSLATIONS as any)[selectedLanguage]?.reportTitle,
+    reportDesc: translate('reportDesc') || (UI_TRANSLATIONS as any)[selectedLanguage]?.reportDesc,
+    uploadBtn: translate('uploadBtn') || (UI_TRANSLATIONS as any)[selectedLanguage]?.uploadBtn,
+    analyzeBtn: translate('analyzeBtn') || (UI_TRANSLATIONS as any)[selectedLanguage]?.analyzeBtn,
+    uploadAnother: translate('uploadAnother') || (UI_TRANSLATIONS as any)[selectedLanguage]?.uploadAnother,
+    reportSummary: translate('reportSummary') || (UI_TRANSLATIONS as any)[selectedLanguage]?.reportSummary,
+    biomarkers: translate('biomarkers') || (UI_TRANSLATIONS as any)[selectedLanguage]?.biomarkers,
+    pdfDownload: translate('pdfDownload') || (UI_TRANSLATIONS as any)[selectedLanguage]?.pdfDownload
   };
 
   const tabs = [
     {
       id: 'chat',
-      label: 'Symptom Chat (AI परामर्श)',
+      label: t.chatTab || 'Symptom Chat',
       icon: <MessageSquare className="w-4 h-4" />,
     },
     {
+      id: 'triage',
+      label: t.triageTab || 'Voice Triage',
+      icon: <Mic className="w-4 h-4" />,
+    },
+    {
       id: 'report',
-      label: 'Lab Report OCR (जांच रिपोर्ट)',
+      label: t.reportTab || 'Report Analyzer',
       icon: <FileSpreadsheet className="w-4 h-4" />,
     },
     {
       id: 'hospitals',
-      label: 'Find Hospitals (अस्पताल खोजें)',
+      label: t.locatorTab || 'Hospital Locator',
       icon: <MapPin className="w-4 h-4" />,
     },
     {
       id: 'history',
-      label: 'Health History (इतिहास)',
+      label: t.historyTab || 'Health History',
       icon: <History className="w-4 h-4" />,
     },
+    {
+      id: 'asha',
+      label: t.ashaTab || 'ASHA Portal',
+      icon: <Activity className="w-4 h-4" />,
+    },
+    ...(isAuthenticated ? [{
+      id: 'profile',
+      label: t.profileTab || 'My Profile',
+      icon: <UserIcon className="w-4 h-4" />,
+    }] : [])
   ];
 
   return (
@@ -93,7 +168,7 @@ export const App = () => {
                 onChange={handleLanguageChange}
                 className="bg-transparent border-none text-xs font-bold text-content-primary focus:outline-none focus:ring-0 cursor-pointer max-w-[120px] sm:max-w-none"
               >
-                {BHASHINI_LANGUAGES.map((lang) => (
+                {BHASHINI_LANGUAGES.filter((l: any) => ['hi-IN', 'en-IN', 'pa-IN', 'te-IN'].includes(l.code)).map((lang: any) => (
                   <option key={lang.code} value={lang.code} className="bg-surface-card text-content-primary">
                     {lang.nativeName} ({lang.name})
                   </option>
@@ -101,19 +176,44 @@ export const App = () => {
               </select>
             </div>
 
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 bg-surface-elevated border border-surface-border rounded-lg hover:bg-surface-border text-content-primary transition-all duration-200 flex items-center justify-center shrink-0"
+              aria-label="Toggle Theme"
+            >
+              {theme === 'light' ? (
+                <Moon className="w-4 h-4 text-brand-600 fill-brand-600/10" />
+              ) : (
+                <Sun className="w-4 h-4 text-amber-500 fill-amber-500/10" />
+              )}
+            </button>
+
             {/* Authentication Action Controls */}
             {isAuthenticated ? (
-              <div className="flex items-center gap-2">
-                <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-50 border border-brand-200 text-xs font-bold text-brand-700">
-                  <UserIcon className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[100px]">{user?.email}</span>
+              <div className="flex items-center gap-3">
+                <div className="hidden md:flex flex-col text-right">
+                  <span className="text-xs font-extrabold text-content-primary">{user?.full_name || user?.email}</span>
+                  {user?.patient_id && (
+                    <span className="text-[10px] text-brand-600 font-mono font-bold tracking-wider">ID: {user.patient_id}</span>
+                  )}
                 </div>
+                {user?.role === 'patient' && (
+                  <button
+                    onClick={() => setActiveTab('profile')}
+                    className="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                    title="View / Edit Health Profile"
+                  >
+                    <UserIcon className="w-3.5 h-3.5" />
+                    <span>{translate('profileTab') || 'My Profile'}</span>
+                  </button>
+                )}
                 <button
                   onClick={logout}
                   className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Logout</span>
+                  <span className="hidden sm:inline">{translate('logout')}</span>
                 </button>
               </div>
             ) : (
@@ -122,19 +222,20 @@ export const App = () => {
                   onClick={() => showAuthModal('login')}
                   className="px-3 py-1.5 bg-surface-elevated hover:bg-surface-border text-content-primary border border-surface-border rounded-lg text-xs font-bold transition-all"
                 >
-                  Login
+                  {translate('login')}
                 </button>
                 <button
                   onClick={() => showAuthModal('signup')}
                   className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all"
                 >
-                  Sign Up
+                  {translate('signup')}
                 </button>
               </div>
             )}
           </div>
         </div>
       </header>
+      <OfflineBanner />
 
       {/* Navigation tabs */}
       <div className="border-b border-surface-border bg-surface-card">
@@ -171,9 +272,12 @@ export const App = () => {
       <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="transition-all duration-300">
           {activeTab === 'chat' && <HealthChat languageCode={selectedLanguage} />}
-          {activeTab === 'report' && <ReportAnalyzer />}
+          {activeTab === 'triage' && <TriageAssistant />}
+          {activeTab === 'report' && <LabReportAnalyzer languageCode={selectedLanguage} />}
           {activeTab === 'hospitals' && <HospitalLocator />}
           {activeTab === 'history' && isAuthenticated && <HistoryDashboard />}
+          {activeTab === 'asha' && <AshaDashboard />}
+          {activeTab === 'profile' && isAuthenticated && <ProfilePage />}
         </div>
       </main>
 
@@ -192,6 +296,12 @@ export const App = () => {
         isOpen={isLangModalOpen}
         onClose={() => setIsLangModalOpen(false)}
         onSelectLanguage={handleSelectLanguageFromModal}
+      />
+
+      <EmergencySOSModal
+        isOpen={isSosOpen}
+        onClose={() => setIsSosOpen(false)}
+        selectedLanguage={selectedLanguage}
       />
     </div>
   );

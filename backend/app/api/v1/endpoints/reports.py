@@ -9,7 +9,7 @@ from typing import Optional
 
 router = APIRouter()
 
-@router.post("/")
+@router.post("/analyze")
 async def upload_and_analyze_report(
     file: UploadFile = File(...),
     language: Optional[str] = None,

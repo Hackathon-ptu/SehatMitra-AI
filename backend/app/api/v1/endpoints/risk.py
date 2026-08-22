@@ -25,9 +25,19 @@ async def evaluate_risk(
             detail="Session ID not found"
         )
         
+    patient_history = None
+    if current_user:
+        patient_history = {
+            "age": current_user.age,
+            "gender": current_user.gender,
+            "chronic_conditions": current_user.chronic_conditions or [],
+            "allergies": current_user.allergies or []
+        }
+
     ai_risk = await AIService.evaluate_risk(
         session_id=request.session_id,
-        symptoms_data=request.symptoms_data
+        symptoms_data=request.symptoms_data,
+        patient_history=patient_history
     )
     
     assessment = RiskAssessment(

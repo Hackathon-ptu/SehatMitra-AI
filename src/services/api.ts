@@ -64,6 +64,100 @@ export const authApi = {
   },
 };
 
+export const authService = {
+  async sendOTP(email: string, phone: string) {
+    const response = await apiClient.post('/auth/send-otp', { email, phone });
+    return response.data;
+  },
+
+  async verifyAndRegister(data: any) {
+    const response = await apiClient.post('/auth/verify-and-register', {
+      email: data.email,
+      otp_code: data.otp_code,
+      password: data.password,
+      full_name: data.full_name,
+      phone: data.phone,
+      username: data.username,
+    });
+    if (response.data?.access_token) {
+      localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+  },
+
+  async signup(data: any) {
+    return authApi.signup(data);
+  },
+
+  async login(data: any) {
+    const params = new URLSearchParams();
+    params.append('username', data.identifier || data.email || data.username || '');
+    params.append('password', data.password || '');
+
+    const response = await apiClient.post('/auth/login', params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+
+    if (response.data?.access_token) {
+      localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+  },
+
+  async getMe() {
+    const response = await apiClient.get('/auth/me');
+    return response.data;
+  },
+
+  async updateProfile(profileData: any) {
+    const response = await apiClient.post('/auth/profile', profileData);
+    return response.data;
+  },
+
+  async suggestUsernames(baseName: string, email: string) {
+    const response = await apiClient.get('/auth/suggest-usernames', {
+      params: { base_name: baseName, email }
+    });
+    return response.data;
+  },
+
+  async forgotPassword(identifier: string) {
+    const response = await apiClient.post('/auth/forgot-password', { identifier });
+    return response.data;
+  },
+
+  async resetPassword(email: string, otp_code: string, new_password: string) {
+    const response = await apiClient.post('/auth/reset-password', { email, otp_code, new_password });
+    return response.data;
+  },
+
+  async verifyPassword(password: string) {
+    const response = await apiClient.post('/auth/verify-password', { password });
+    return response.data;
+  },
+
+  logout() {
+    localStorage.removeItem('token');
+  },
+};
+
+export const healthService = {
+  async sendInterviewMessage(data: any) {
+    const response = await apiClient.post('/health-interview/', data);
+    return response.data;
+  },
+  async assessRisk(riskPayload: any) {
+    const response = await apiClient.post('/risk/', riskPayload);
+    return response.data;
+  },
+  async getTriageChatResponse(payload: any) {
+    const response = await apiClient.post('/triage/', payload);
+    return response.data;
+  },
+};
+
 // Chat API endpoints
 export const chatApi = {
   async sendMessage(message: string, language: string = 'en', sessionId?: number) {
@@ -116,10 +210,11 @@ export const hospitalApi = {
 // Medical Report API endpoints
 export const reportApi = {
   async uploadReport(file: File) {
+    const activeLang = localStorage.getItem('preferred_lang') || localStorage.getItem('language') || 'hi-IN';
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await apiClient.post('/report/', formData, {
+    const response = await apiClient.post(`/report/?language=${activeLang}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
