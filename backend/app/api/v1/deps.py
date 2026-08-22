@@ -35,3 +35,35 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credentials_exception
     return user
+
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from typing import Optional
+
+security_optional = HTTPBearer(auto_error=False)
+
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    if not credentials:
+        return None
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+        sub: str = payload.get("sub")
+        if sub is None:
+            return None
+    except jwt.PyJWTError:
+        return None
+        
+    user = None
+    if "@" in sub:
+        user = db.query(User).filter(User.email == sub).first()
+    else:
+        try:
+            user_id = int(sub)
+            user = db.query(User).filter(User.id == user_id).first()
+        except ValueError:
+            user = db.query(User).filter(User.email == sub).first()
+            
+    return user

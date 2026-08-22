@@ -48,3 +48,16 @@ __pycache__/
 venv/
 node_modules/
 dist/
+
+# Virtual environment & dependencies
+venv/
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+
+# Environment secrets
+.env
+backend/.env
+frontend/.env
+*.env.local

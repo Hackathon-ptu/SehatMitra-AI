@@ -263,6 +263,9 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
           clinical_reasons: response.reasons
         });
       }
+      if (response.is_interview_complete !== undefined) {
+        setIsCompleted(response.is_interview_complete);
+      }
 
       const normalizedRisk = response.risk_level?.toLowerCase();
       if (normalizedRisk === 'emergency' || normalizedRisk === 'high') {
@@ -474,76 +477,93 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
       </div>
 
       {/* Right Column: Triage Result Card or Placeholder */}
-      {riskData && (
-        riskData.risk_level === 'initial' || riskData.risk_level === 'none' ? (
-          <div className="w-full lg:w-[400px] border border-dashed border-surface-border bg-surface-card rounded-2xl p-8 flex flex-col items-center justify-center text-center gap-4 shadow-md h-fit self-start">
-            <div className="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-brand-600 animate-pulse" />
+      {!isCompleted ? (
+        <div className="w-full lg:w-[400px] border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg h-fit self-start">
+          <div className="flex items-center gap-2">
+            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-wider text-blue-500">
+              {t('clinical_intake_in_progress') || 'Clinical Intake in Progress'}
+            </span>
+          </div>
+          <h3 className="text-lg font-bold">
+            {t('clinical_intake_in_progress') || 'Clinical Intake in Progress'}
+          </h3>
+          <p className="text-sm text-content-secondary leading-relaxed">
+            {t('answering_triage_questions') || "Answering doctor's triage questions... Please answer the follow-up question on the left."}
+          </p>
+          
+          <div className="border-t border-surface-border pt-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-2">
+              {t('clinical_progress') || 'Clinical Progress'}
+            </span>
+            <p className="text-xs text-content-secondary mb-2">
+              {t('conversational_turns') || 'Conversational turns'}: {messages.filter(m => m.sender === 'user').length} / 4
+            </p>
+            {riskData && riskData.reasons && riskData.reasons.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {riskData.reasons.map((reason, idx) => (
+                  <span key={idx} className="px-2 py-0.5 bg-brand-50 text-brand-700 text-xs rounded border border-brand-100 font-medium">
+                    {reason}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        riskData && riskStyles && (
+          <div className={`w-full lg:w-[400px] border-2 rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg}`}>
+            <div className="flex items-center justify-between">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${riskStyles.badge}`}>
+                {riskStyles.label}
+              </span>
+              <Sparkles className="w-5 h-5 text-brand-600" />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <h3 className="text-base font-bold text-content-primary">
-                {t('risk_report_placeholder_title') || 'Awaiting Symptoms'}
+
+            <div className="flex flex-col gap-1">
+              <h3 className="text-lg font-bold">
+                {t('primary_health_risk_report') || 'Primary Health Risk Report'}
               </h3>
-              <p className="text-xs text-content-muted leading-relaxed max-w-[280px]">
-                {t('risk_report_placeholder_desc') || 'Describe your symptoms in the chat to generate your health risk assessment.'}
-              </p>
+              <span className="text-xs text-content-muted">
+                {t('generated_just_now') || 'Generated: Just now'}
+              </span>
+            </div>
+
+            <div className="space-y-3.5 border-t border-surface-border pt-4">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-1">
+                  {t('reasons_title') || 'Reasons'}
+                </span>
+                <ul className="list-disc pl-5 text-sm space-y-1">
+                  {riskData.reasons?.map((reason, idx) => (
+                    <li key={idx}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-1">
+                  {t('recommendation_title') || 'Recommendation'}
+                </span>
+                <p className="text-sm font-semibold leading-relaxed">{riskData.recommendation}</p>
+              </div>
+
+              {riskData.disclaimer && (
+                <div className="p-3 rounded-lg bg-surface-card border border-surface-border flex gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <p className="text-[10px] text-content-secondary leading-normal">{riskData.disclaimer}</p>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleDownloadSlip}
+                className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2"
+              >
+                📄 {t('download_doctor_slip') || 'Download Doctor Slip (PDF)'}
+              </button>
             </div>
           </div>
-        ) : (
-          riskStyles && (
-            <div className={`w-full lg:w-[400px] border-2 rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg}`}>
-              <div className="flex items-center justify-between">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${riskStyles.badge}`}>
-                  {riskStyles.label}
-                </span>
-                <Sparkles className="w-5 h-5 text-brand-600" />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <h3 className="text-lg font-bold">
-                  {t('primary_health_risk_report') || 'Primary Health Risk Report'}
-                </h3>
-                <span className="text-xs text-content-muted">
-                  {t('generated_just_now') || 'Generated: Just now'}
-                </span>
-              </div>
-
-              <div className="space-y-3.5 border-t border-surface-border pt-4">
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-1">
-                    {t('reasons_title') || 'Reasons'}
-                  </span>
-                  <ul className="list-disc pl-5 text-sm space-y-1">
-                    {riskData.reasons?.map((reason, idx) => (
-                      <li key={idx}>{reason}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-1">
-                    {t('recommendation_title') || 'Recommendation'}
-                  </span>
-                  <p className="text-sm font-semibold leading-relaxed">{riskData.recommendation}</p>
-                </div>
-
-                {riskData.disclaimer && (
-                  <div className="p-3 rounded-lg bg-surface-card border border-surface-border flex gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                    <p className="text-[10px] text-content-secondary leading-normal">{riskData.disclaimer}</p>
-                  </div>
-                )}
-
-                <button
-                  type="button"
-                  onClick={handleDownloadSlip}
-                  className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2"
-                >
-                  📄 {t('download_doctor_slip') || 'Download Doctor Slip (PDF)'}
-                </button>
-              </div>
-            </div>
-          )
         )
       )}
     </div>
