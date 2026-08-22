@@ -8,7 +8,7 @@ from sqlalchemy import pool
 from alembic import context
 
 # Project root path add karo taaki app imports chal sakein
-sys.path.insert(0, dirname(dirname(abspath(__file__))))
+sys.path.insert(0, dirname(dirname(dirname(abspath(__file__)))) + "/backend")
 
 from app.core.config import settings
 from app.models import Base

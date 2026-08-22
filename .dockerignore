@@ -2,6 +2,12 @@ node_modules
 dist
 .git
 .env
-backend/.env
-backend/venv
-backend/__pycache__
+.env.*
+venv
+__pycache__
+*.pyc
+.vscode
+.idea
+**/node_modules
+**/__pycache__
+**/venv
