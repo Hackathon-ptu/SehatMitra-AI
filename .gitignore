@@ -40,3 +40,11 @@ __pycache__/
 *.pyd
 .env
 .vscode/
+
+.env
+backend/.env
+sehatmitra.db
+__pycache__/
+venv/
+node_modules/
+dist/

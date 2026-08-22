@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  sehatmitra-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./sehatmitra.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: always

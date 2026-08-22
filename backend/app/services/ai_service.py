@@ -1,4 +1,103 @@
 from typing import Optional, Dict, Any
+import json
+from app.core.config import settings
+
+def get_gemini_client():
+    if not settings.GEMINI_API_KEY:
+        return None
+    try:
+        from google import genai
+        return genai.Client(api_key=settings.GEMINI_API_KEY)
+    except ImportError:
+        try:
+            import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=settings.GEMINI_API_KEY)
+            return legacy_genai
+        except ImportError:
+            raise RuntimeError("Google GenAI SDK is not installed. Run `pip install google-genai`.")
+
+async def analyze_medical_report_image(image_bytes: bytes, mime_type: str = "image/jpeg", language: Optional[str] = None) -> dict:
+    """
+    Extracts clinical biomarkers and plain-language summary from medical lab reports.
+    """
+    client = get_gemini_client()
+    
+    # Agar API key nahi milti toh fallback data return karega
+    if not client:
+        return {
+            "extracted_data": {
+                "Hemoglobin (Hb)": {"value": 12.0, "unit": "g/dL", "reference_range": "12.0 - 15.5", "status": "normal"},
+                "WBC Count": {"value": 6500, "unit": "/mcL", "reference_range": "4500 - 11000", "status": "normal"}
+            },
+            "explanation": "Gemini API key is not configured. Showing baseline data.",
+            "status": "mock_success"
+        }
+
+    lang_name = "Hindi/English"
+    if language:
+        lang_map = {
+            "hi": "Hindi",
+            "hi-IN": "Hindi",
+            "en": "English",
+            "en-IN": "English",
+            "pa": "Punjabi",
+            "pa-IN": "Punjabi",
+            "bn": "Bengali",
+            "bn-IN": "Bengali",
+            "ta": "Tamil",
+            "ta-IN": "Tamil"
+        }
+        lang_name = lang_map.get(language, "Hindi/English")
+
+    prompt = f"""
+    You are an expert clinical medical lab report parser for SehatMitra.
+    Analyze the provided medical report / lab test image.
+    
+    Extract all test parameters and return ONLY valid JSON in this exact structure:
+    {{
+      "extracted_data": {{
+        "Parameter Name": {{
+          "value": 0.0,
+          "unit": "unit_string",
+          "reference_range": "range_string",
+          "status": "normal" | "low" | "high" | "critical"
+        }}
+      }},
+      "explanation": "A simple 2-3 sentence patient-friendly explanation in {lang_name} explaining what these numbers mean for their health."
+    }}
+    Return ONLY JSON without markdown backticks.
+    """
+    try:
+        if hasattr(client, "models"):
+            from google.genai import types
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    prompt
+                ]
+            )
+            raw_text = response.text.strip()
+        else:
+            model = client.GenerativeModel(settings.GEMINI_MODEL)
+            response = model.generate_content([
+                {"mime_type": mime_type, "data": image_bytes},
+                prompt
+            ])
+            raw_text = response.text.strip()
+        
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+            
+        return json.loads(raw_text.strip())
+    except Exception as e:
+        return {
+            "extracted_data": {},
+            "explanation": f"Failed to analyze report: {str(e)}",
+            "status": "error"
+        }
 
 class AIService:
     @staticmethod
@@ -36,7 +135,16 @@ class AIService:
         return symptoms
 
     @staticmethod
-    async def process_health_interview(session_id: Optional[int], user_message: str, language: str = "hi", existing_collected_data: Optional[dict] = None) -> dict:
+    async def process_health_interview(
+        session_id: Optional[int], 
+        user_message: str, 
+        language: str = "hi", 
+        existing_collected_data: Optional[dict] = None,
+        language_code: str = "hi-IN",
+        language_name: str = "Hindi",
+        language_native_name: str = "हिन्दी",
+        patient_history: Optional[dict] = None
+    ) -> dict:
         state = existing_collected_data or {}
         step = state.get("step", 1)
         prev_symptoms = state.get("detected_symptoms", [])
@@ -47,25 +155,83 @@ class AIService:
         is_completed = False
         next_question = ""
         
-        if step == 1:
-            next_question = "कितने दिनों से यह समस्या है और क्या सांस लेने में कठिनाई या बुखार है?"
-            step = 2
-        else:
-            msg_lower = user_message.lower()
-            duration_kw = ["day", "din", "week", "hafte", "se", "for", "since", "hour", "ghant", "month", "mahine", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
-            has_duration = any(kw in msg_lower for kw in duration_kw)
-            has_fever_or_breathing = "fever" in combined_symptoms or "cough/respiratory" in combined_symptoms
+        client = get_gemini_client()
+        if client:
+            history_context = ""
+            if patient_history:
+                history_context = f"""
+                Patient Medical Profile Context:
+                - Age: {patient_history.get('age', 'N/A')}
+                - Gender: {patient_history.get('gender', 'N/A')}
+                - Pre-existing Chronic Conditions: {', '.join(patient_history.get('chronic_conditions', []))}
+                - Known Allergies: {', '.join(patient_history.get('allergies', []))}
+                Please adapt all follow-up questions and symptom analysis taking this medical context into consideration.
+                """
+
+            prompt = f"""
+            You are a helpful clinical medical assistant for SehatMitra, aiding a doctor to interview a patient from rural India.
+            {history_context}
+            Here is the conversation history and currently extracted symptoms: {combined_symptoms}.
+            The patient's current response: "{user_message}".
             
-            if has_duration and has_fever_or_breathing:
-                next_question = "धन्यवाद। आपके लक्षणों का विश्लेषण पूरा हो गया है। कृपया रिस्क असेसमेंट देखें।"
-                is_completed = True
+            We are at interview step: {step} of 3.
+            If step is 3 or we have successfully gathered the duration of symptoms and presence of fever or respiratory distress, mark is_completed as true.
+            Otherwise, generate the next short, empathetic follow-up clinical question.
+            
+            CRITICAL LOCALIZATION INSTRUCTION:
+            The patient has chosen: {language_name} ({language_native_name}).
+            You MUST respond entirely and strictly in {language_name} ({language_native_name}) with correct native script.
+            Do NOT respond in English or Hindi unless they were explicitly chosen.
+            Translate and adapt all clinical questions, empathetic guidance, and triage explanations directly into natural, easily understandable {language_name}.
+            
+            Return ONLY a valid JSON string without markdown blocks matching this exact schema:
+            {{
+              "next_question": "string containing next localized question",
+              "is_completed": true | false
+            }}
+            """
+            try:
+                if hasattr(client, "models"):
+                    response = client.models.generate_content(
+                        model=settings.GEMINI_MODEL,
+                        contents=[prompt]
+                    )
+                    raw_text = response.text.strip()
+                else:
+                    model = client.GenerativeModel(settings.GEMINI_MODEL)
+                    response = model.generate_content([prompt])
+                    raw_text = response.text.strip()
+                
+                if raw_text.startswith("```json"):
+                    raw_text = raw_text[7:]
+                if raw_text.endswith("```"):
+                    raw_text = raw_text[:-3]
+                parsed = json.loads(raw_text.strip())
+                next_question = parsed.get("next_question", "")
+                is_completed = parsed.get("is_completed", False)
+            except Exception as e:
+                print(f"Gemini error in interview: {e}")
+                
+        if not next_question:
+            if step == 1:
+                next_question = "कितने दिनों से यह समस्या है और क्या सांस लेने में कठिनाई या बुखार है?"
+                step = 2
             else:
-                if step >= 3:
+                msg_lower = user_message.lower()
+                duration_kw = ["day", "din", "week", "hafte", "se", "for", "since", "hour", "ghant", "month", "mahine", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+                has_duration = any(kw in msg_lower for kw in duration_kw)
+                has_fever_or_breathing = "fever" in combined_symptoms or "cough/respiratory" in combined_symptoms
+                
+                if has_duration and has_fever_or_breathing:
                     next_question = "धन्यवाद। आपके लक्षणों का विश्लेषण पूरा हो गया है। कृपया रिस्क असेसमेंट देखें।"
                     is_completed = True
                 else:
-                    next_question = "कृपया बताएं कितने दिनों से लक्षण हैं और क्या बुखार या सांस की तकलीफ है?"
-                    step += 1
+                    if step >= 3:
+                        next_question = "धन्यवाद। आपके लक्षणों का विश्लेषण पूरा हो गया है। कृपया रिस्क असेसमेंट देखें।"
+                        is_completed = True
+                    else:
+                        next_question = "कृपया बताएं कितने दिनों से लक्षण हैं और क्या बुखार या सांस की तकलीफ है?"
+                        step += 1
         
         collected_symptoms = {
             "step": step,
@@ -82,18 +248,67 @@ class AIService:
         }
 
     @staticmethod
-    async def evaluate_risk(session_id: int, symptoms_data: dict) -> dict:
-        # Mock implementation for IBM Granite risk classification (low, moderate, high, emergency)
+    async def evaluate_risk(session_id: int, symptoms_data: dict, patient_history: Optional[dict] = None) -> dict:
         detected = symptoms_data.get("detected_symptoms", [])
-        
-        if any(s in detected for s in ["chest pain", "difficulty breathing", "severe bleeding"]):
+        history_context = ""
+        if patient_history:
+            history_context = f"""
+            Patient Medical Profile Context:
+            - Age: {patient_history.get('age', 'N/A')}
+            - Gender: {patient_history.get('gender', 'N/A')}
+            - Pre-existing Chronic Conditions: {', '.join(patient_history.get('chronic_conditions', []))}
+            - Known Allergies: {', '.join(patient_history.get('allergies', []))}
+            """
+            
+        client = get_gemini_client()
+        if client:
+            prompt = f"""
+            You are an expert clinical triage assistant for SehatMitra.
+            Analyze the following patient history and symptoms:
+            {history_context}
+            Detected Symptoms: {detected}
+            User Input Summary: {symptoms_data.get('user_input_summary', '')}
+            
+            Classify the risk level as one of: "low", "moderate", "high", or "emergency".
+            Provide a localized list of clinical reasons (Hindi or Hindi-English mixed, or patient's language), a patient-friendly recommendation, and a medical disclaimer.
+            
+            Return ONLY a valid JSON string matching this exact schema:
+            {{
+              "risk_level": "low" | "moderate" | "high" | "emergency",
+              "reasons": ["reason 1", "reason 2"],
+              "recommendation": "string recommending next steps",
+              "disclaimer": "string with medical disclaimer"
+            }}
+            """
+            try:
+                if hasattr(client, "models"):
+                    response = client.models.generate_content(
+                        model=settings.GEMINI_MODEL,
+                        contents=[prompt]
+                    )
+                    raw_text = response.text.strip()
+                else:
+                    model = client.GenerativeModel(settings.GEMINI_MODEL)
+                    response = model.generate_content([prompt])
+                    raw_text = response.text.strip()
+                
+                if raw_text.startswith("```json"):
+                    raw_text = raw_text[7:]
+                if raw_text.endswith("```"):
+                    raw_text = raw_text[:-3]
+                return json.loads(raw_text.strip())
+            except Exception as e:
+                print(f"Gemini error in risk evaluation: {e}")
+
+        # Fallback Mock
+        if any(s in detected for s in ["chest pain", "difficulty breathing", "severe bleeding"]) or (patient_history and any(c in ["heart disease", "asthma", "diabetes"] for c in patient_history.get("chronic_conditions", [])) and "cough/respiratory" in detected):
             risk_level = "emergency"
-            reasons = ["Critical symptoms indicating severe distress (difficulty breathing/chest pain)."]
+            reasons = ["Critical symptoms indicating severe distress or high risk due to chronic comorbidity (asthma/diabetes/heart disease)."]
             recommendation = "Please seek immediate medical attention or call emergency services."
             disclaimer = "Emergency: This is an AI-generated warning. Do not delay professional help."
         else:
             risk_level = "moderate"
-            reasons = ["Common symptoms detected including cough and fatigue without critical indicators."]
+            reasons = ["Common symptoms detected without critical indicators."]
             recommendation = "Consult a general practitioner within 24-48 hours and rest."
             disclaimer = "This risk assessment is provided for educational and guidance purposes only."
 
