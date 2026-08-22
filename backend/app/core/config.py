@@ -18,8 +18,10 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     EMAILS_FROM_NAME: str = "SehatMitra-AI"
 
-    # Gemini API Key (.env se automatically load hogi)
-    GEMINI_API_KEY: Optional[str] = None
+    # Groq & Gemini API Configurations
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-1.5-flash"
 
     # Bhashini Configurations

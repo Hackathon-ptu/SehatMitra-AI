@@ -63,129 +63,63 @@ class TriageService:
         CLINICAL RULES:
         1. GREETINGS & SMALL TALK: If the patient greets you (e.g., "hi", "how are you", "namaste") or asks general questions without providing medical symptoms yet:
            - Welcome them warmly, state you are their SehatMitra health assistant, and ask what symptoms they are feeling today.
-           - Set "is_interview_complete" to false.
-           - Set "risk_level" to "assessing".
-           - Set "provisional_diagnosis" to "Awaiting symptom description" (translated to {lang_name}).
-           - Keep "clinical_reasons", "recommendations", and "red_flags" empty or default.
+           - Set "state" to "interviewing".
+           - Set "next_question" to a welcoming follow-up question in the patient's language.
         2. MEDICAL INTERVIEW (Multi-turn):
-           - When a symptom is mentioned (e.g. "chest pain", "fever", "headache"), DO NOT jump to conclusions immediately unless it is an obvious emergency.
-           - Like a real physician, ask 1 to 2 sharp, targeted clinical questions in your `doctor_message` (e.g., onset duration, pain type/radiation, fever temperature, breathing difficulty, existing medical history) to gather complete information.
-           - Set "is_interview_complete" to false.
-           - Set "risk_level" to "assessing".
-           - Set "provisional_diagnosis" to "Under clinical evaluation" (translated to {lang_name}).
+           - When a symptom is mentioned, ask 1 to 2 sharp, targeted clinical questions in your `next_question` to gather complete information (duration, onset, pain type).
+           - Set "state" to "interviewing".
         3. EMERGENCY DETECTION:
-           - If red-flags appear (crushing chest pain + left arm/jaw radiation, severe dyspnea, sudden paralysis, altered mental status, active heavy bleeding), immediately set `risk_level` to "emergency" and `is_interview_complete` to true. Explain the urgency calmly in `doctor_message`, and recommend calling 108.
+           - If red-flags appear (crushing chest pain, severe dyspnea, heavy bleeding), immediately set "state" to "emergency". Provide immediate guidance to call 108.
         4. DIAGNOSIS & COMPLETION:
-           - Only when you have enough clinical details to form a reasonable assessment, set "is_interview_complete" to true and determine the "risk_level" (emergency, high, moderate, low).
-        5. LANGUAGE: Always reply in the exact language used by the patient ({lang_name}). You MUST generate ALL conversational and report text fields (doctor_message, provisional_diagnosis, clinical_reasons, recommendations, red_flags) strictly in {lang_name} using the native script.
+           - Once you have enough clinical details, set "state" to "completed".
+        5. LANGUAGE: Always reply in the exact language used by the patient ({lang_name}). You MUST generate ALL conversational and report text fields (next_question, summary, recommended_action, differential_diagnosis, red_flags) strictly in {lang_name} using the native script.
 
         STRICT JSON OUTPUT SCHEMA:
         {{
-          "doctor_message": "Empathetic conversational response and focused follow-up question(s) in patient's language.",
-          "is_interview_complete": false,
-          "risk_level": "emergency" | "high" | "moderate" | "low" | "assessing",
-          "provisional_diagnosis": "Clear medical term or 'Under clinical evaluation' in user's language",
-          "clinical_reasons": ["Symptom 1 observed", "Clinical factor 2"],
-          "recommendations": "Actionable home care advice or urgency instruction",
-          "red_flags": ["Critical sign 1", "Critical sign 2"]
+          "state": "interviewing" | "completed" | "emergency",
+          "next_question": "Conversational follow-up question in patient's language (or null if completed/emergency)",
+          "differential_diagnosis": ["Primary suspected condition in patient's language", "Secondary suspected condition in patient's language"],
+          "red_flags": ["Critical sign 1 in patient's language", "Critical sign 2 in patient's language"],
+          "summary": "Clinical summary of symptoms in patient's language",
+          "recommended_action": "Actionable home care advice or emergency instruction in patient's language"
         }}
         """
         
-        # Check Gemini Client
-        client = get_gemini_client()
-        if client:
-            try:
-                if hasattr(client, "models"):
-                    response = client.models.generate_content(
-                        model=settings.GEMINI_MODEL,
-                        contents=[prompt]
-                    )
-                    raw_text = response.text.strip()
-                else:
-                    model = client.GenerativeModel(settings.GEMINI_MODEL)
-                    response = model.generate_content([prompt])
-                    raw_text = response.text.strip()
-                
-                parsed_res = extract_json_from_llm(raw_text)
-                diagnosis = parsed_res.get("provisional_diagnosis", "Under clinical evaluation")
-                doc_msg = parsed_res.get("doctor_message", "")
-                recs = parsed_res.get("recommendations", "")
-                reasons = parsed_res.get("clinical_reasons", [])
-                rflags = parsed_res.get("red_flags", [])
-                
-                return {
-                    "risk_level": parsed_res.get("risk_level", "assessing"),
-                    "primary_diagnosis": diagnosis,
-                    "reasons": reasons,
-                    "remedies": [recs] if isinstance(recs, str) else recs,
-                    "red_flags": rflags,
-                    "recommendation": recs,
-                    "disclaimer": "This is an AI-assisted triage evaluation, not a definitive diagnosis.",
-                    "doctor_reply": doc_msg,
-                    "doctor_message": doc_msg,
-                    "is_interview_complete": parsed_res.get("is_interview_complete", False)
-                }
-            except Exception as e:
-                print(f"Gemini error in triage service: {e}")
-
-        # Check local Ollama
-        import httpx
-
         try:
-            ollama_url = "http://localhost:11434/api/generate"
-
-            # Try granite3-dense:8b first, then llama3.1:8b
-            models_to_try = ["granite3-dense:8b", "llama3.1:8b"]
-            for model_name in models_to_try:
-                try:
-                    payload = {
-                        "model": model_name,
-                        "prompt": prompt,
-                        "format": "json",
-                        "stream": False,
-                        "options": {
-                            "num_predict": 220,
-                            "temperature": 0.2
-                        }
-                    }
-                    print(f"[Ollama] Attempting assessment with model: {model_name} (timeout: 30s)")
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        res = await client.post(ollama_url, json=payload)
-                        if res.status_code == 200:
-                            ollama_json = res.json()
-                            response_str = ollama_json.get("response", "").strip()
-                            print(f"[Ollama] Success with {model_name}. Raw output: {response_str}")
-                            parsed_res = extract_json_from_llm(response_str)
-                            diagnosis = parsed_res.get("provisional_diagnosis", "Under clinical evaluation")
-                            doc_msg = parsed_res.get("doctor_message", "")
-                            recs = parsed_res.get("recommendations", "")
-                            reasons = parsed_res.get("clinical_reasons", [])
-                            rflags = parsed_res.get("red_flags", [])
-                            print(f"[OLLAMA SUCCESS] Diagnosis: {diagnosis} | Reply: {doc_msg}")
-                            
-                            return {
-                                "risk_level": parsed_res.get("risk_level", "assessing"),
-                                "primary_diagnosis": diagnosis,
-                                "reasons": reasons,
-                                "remedies": [recs] if isinstance(recs, str) else recs,
-                                "red_flags": rflags,
-                                "recommendation": recs,
-                                "disclaimer": "This is an AI-assisted triage evaluation, not a definitive diagnosis.",
-                                "doctor_reply": doc_msg,
-                                "doctor_message": doc_msg,
-                                "is_interview_complete": parsed_res.get("is_interview_complete", False)
-                            }
-                        else:
-                            print(f"[Ollama] Model {model_name} returned status: {res.status_code}")
-                except Exception as inner_e:
-                    print(f"[Ollama] Model {model_name} failed: {inner_e}")
+            from app.services.inference_service import inference_manager
+            res = await inference_manager.get_triage_decision(prompt)
             
-            raise Exception("All local Ollama models (granite3-dense:8b, llama3.1:8b) failed or timed out.")
+            # Determine risk level from state/red_flags
+            risk_level = "low"
+            if res.state == "emergency":
+                risk_level = "emergency"
+            elif res.red_flags:
+                risk_level = "high"
+            elif res.state == "completed":
+                risk_level = "moderate"
+                
+            primary_diag = res.differential_diagnosis[0] if res.differential_diagnosis else "Under clinical evaluation"
+            if is_hi and primary_diag == "Under clinical evaluation":
+                primary_diag = "चिकित्सीय मूल्यांकन के अंतर्गत"
+            
+            # Build reasons and remedies lists
+            reasons = [res.summary] if res.summary else ["Symptom evaluation completed."]
+            remedies = [res.recommended_action] if res.recommended_action else []
+            
+            return {
+                "risk_level": risk_level,
+                "primary_diagnosis": primary_diag,
+                "reasons": reasons,
+                "remedies": remedies,
+                "red_flags": res.red_flags or [],
+                "recommendation": res.recommended_action or "Consult nearby healthcare facility.",
+                "disclaimer": "This is an AI-assisted triage evaluation, not a definitive diagnosis.",
+                "doctor_reply": res.next_question or res.summary or "",
+                "doctor_message": res.next_question or res.summary or "",
+                "is_interview_complete": res.state in ["completed", "emergency"]
+            }
         except Exception as e:
-            import traceback
-            print(f"[Ollama Exception] Triage API call failed: {e}")
-            traceback.print_exc()
-            print("[Triage Fallback] Falling back to clinical rule-based triage system...")
+            print(f"[TriageService] ClinicalInferenceManager execution failed: {e}. Falling back to defensive clinical rule-based triage.")
                 
         # Defensive Fallback Clinical Rule-based System
         detected_lower = [str(val).lower() for val in detected]

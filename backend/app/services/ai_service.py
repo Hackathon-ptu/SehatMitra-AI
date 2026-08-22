@@ -155,8 +155,9 @@ class AIService:
         is_completed = False
         next_question = ""
         
-        client = get_gemini_client()
-        if client:
+        try:
+            from app.services.inference_service import inference_manager
+            
             history_context = ""
             if patient_history:
                 history_context = f"""
@@ -175,8 +176,8 @@ class AIService:
             The patient's current response: "{user_message}".
             
             We are at interview step: {step} of 3.
-            If step is 3 or we have successfully gathered the duration of symptoms and presence of fever or respiratory distress, mark is_completed as true.
-            Otherwise, generate the next short, empathetic follow-up clinical question.
+            If step is 3 or we have successfully gathered the duration of symptoms and presence of fever or respiratory distress, set state to "completed".
+            Otherwise, set state to "interviewing" and generate the next short, empathetic follow-up clinical question.
             
             CRITICAL LOCALIZATION INSTRUCTION:
             The patient has chosen: {language_name} ({language_native_name}).
@@ -184,33 +185,29 @@ class AIService:
             Do NOT respond in English or Hindi unless they were explicitly chosen.
             Translate and adapt all clinical questions, empathetic guidance, and triage explanations directly into natural, easily understandable {language_name}.
             
-            Return ONLY a valid JSON string without markdown blocks matching this exact schema:
+            STRICT JSON OUTPUT SCHEMA:
             {{
-              "next_question": "string containing next localized question",
-              "is_completed": true | false
+              "state": "interviewing" | "completed" | "emergency",
+              "next_question": "string containing next localized question (or null if completed/emergency)",
+              "differential_diagnosis": ["suspected condition 1 in {language_name}", "suspected condition 2 in {language_name}"],
+              "red_flags": ["Critical sign 1 in {language_name}", "Critical sign 2 in {language_name}"],
+              "summary": "Brief clinical summary of patient status in {language_name}",
+              "recommended_action": "Actionable home care advice or emergency instruction in {language_name}"
             }}
             """
-            try:
-                if hasattr(client, "models"):
-                    response = client.models.generate_content(
-                        model=settings.GEMINI_MODEL,
-                        contents=[prompt]
-                    )
-                    raw_text = response.text.strip()
+            
+            res = await inference_manager.get_triage_decision(prompt)
+            next_question = res.next_question
+            is_completed = res.state in ["completed", "emergency"]
+            
+            # Map differential_diagnosis and summary to state summary if completed
+            if is_completed and not next_question:
+                if language.startswith("hi"):
+                    next_question = "धन्यवाद। आपके लक्षणों का विश्लेषण पूरा हो गया है। कृपया रिस्क असेसमेंट देखें।"
                 else:
-                    model = client.GenerativeModel(settings.GEMINI_MODEL)
-                    response = model.generate_content([prompt])
-                    raw_text = response.text.strip()
-                
-                if raw_text.startswith("```json"):
-                    raw_text = raw_text[7:]
-                if raw_text.endswith("```"):
-                    raw_text = raw_text[:-3]
-                parsed = json.loads(raw_text.strip())
-                next_question = parsed.get("next_question", "")
-                is_completed = parsed.get("is_completed", False)
-            except Exception as e:
-                print(f"Gemini error in interview: {e}")
+                    next_question = "Thank you. Your symptom analysis is complete. Please view the risk assessment."
+        except Exception as e:
+            print(f"ClinicalInferenceManager error in interview: {e}")
                 
         if not next_question:
             if step == 1:
