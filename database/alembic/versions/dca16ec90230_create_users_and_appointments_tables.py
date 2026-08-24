@@ -29,7 +29,7 @@ def upgrade() -> None:
     sa.Column('phone_number', sa.String(), nullable=True),
     sa.Column('role', sa.Enum('PATIENT', 'DOCTOR', 'ADMIN', name='userrole'), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
@@ -41,7 +41,7 @@ def upgrade() -> None:
     sa.Column('appointment_date', sa.DateTime(), nullable=False),
     sa.Column('reason', sa.Text(), nullable=True),
     sa.Column('status', sa.Enum('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', name='appointmentstatus'), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['patient_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
