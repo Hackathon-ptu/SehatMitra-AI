@@ -1,8 +1,8 @@
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, Union, List
 
 class ReportResponse(BaseModel):
     filename: str
-    extracted_data: Dict[str, Any]
+    extracted_data: Union[Dict[str, Any], List[Any]]
     explanation: str
     status: str

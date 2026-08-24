@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 class ConsultationHistoryResponse(BaseModel):
     id: int
@@ -19,7 +19,7 @@ class ReportHistoryResponse(BaseModel):
     id: int
     user_id: int
     filename: str
-    extracted_data: Optional[dict[str, Any]] = None
+    extracted_data: Optional[Union[dict[str, Any], list[Any]]] = None
     explanation: Optional[str] = None
     created_at: datetime
 

@@ -153,12 +153,14 @@ export const hospitalService = {
 };
 
 export const reportService = {
-  async uploadReport(file) {
-    const activeLang = localStorage.getItem('preferred_lang') || localStorage.getItem('language') || 'hi-IN';
+  async uploadReport(file, language) {
+    const activeLang = language || localStorage.getItem('preferred_lang') || localStorage.getItem('language') || 'hi-IN';
+    const langCode = activeLang.split('-')[0];
     const formData = new FormData();
     formData.append('file', file);
+    formData.append('language', langCode);
 
-    const response = await apiClient.post(`/report/?language=${activeLang}`, formData, {
+    const response = await apiClient.post(`/reports/analyze`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

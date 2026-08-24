@@ -47,45 +47,16 @@ class TriageService:
             - Known Allergies: {', '.join(patient_history.get('allergies', []))}
             """
  
-        prompt = f"""
-        You are SehatMitra-AI, an empathetic, clinical anamnesis assistant for rural healthcare.
+        system_prompt = f"""
+        You are SehatMitra-AI, a clinical triage assistant.
+        - If the user sends a pure greeting ("hi", "hello", "namaste") on turn 1: Greet warmly and ask for their chief complaint.
+        - If the user mentions ANY symptom (e.g. pain, fever, cough), regardless of turn number: Proceed with the OPQRST clinical intake (Onset, Provocation, Quality, Region, Severity, Timing). Ask ONLY ONE clarifying question at a time.
+        - Maintain state = "interviewing" until you have sufficient clinical history (at least 3-4 probing questions answered), then transition to state = "completed".
 
         PATIENT CLINICAL DATA:
-        - Exact Symptoms / Latest Message: "{user_input_summary}"
         - Patient Age: {age}
         - Patient Preferred Language: {lang_name}
-        - Dialogue History:
-        {history_str}
         {history_context}
-
-        RULES FOR STATE DETERMINATION:
-        1. GREETING / INITIAL CONTACT ("hi", "hello", "namaste", "help" or empty input):
-           - ALWAYS set state = "interviewing"
-           - red_flags = []
-           - next_question = "Namaste! I am SehatMitra. Please describe what symptoms or health concerns you are experiencing today."
-
-        2. ONGOING INTAKE (Patient reports mild to moderate symptoms like fever, headache, cough, stomach ache):
-           - Set state = "interviewing"
-           - Ask ONLY ONE focused follow-up question following the OPQRST framework (Onset, Provocation, Quality, Region, Severity, Timing).
-           - Keep state = "interviewing" for the first 3-4 symptom probing turns to build a robust assessment.
-
-        3. MEDICAL EMERGENCY (ONLY when patient explicitly reports: crushing chest pain radiating to arm/jaw, acute severe shortness of breath, sudden facial drooping/slurred speech, uncontrolled severe bleeding, or loss of consciousness):
-           - Set state = "emergency"
-           - Populate red_flags with specific clinical findings.
-           - Set recommended_action = "Call 108 or proceed to the nearest emergency department immediately."
-
-        4. COMPLETED (Transition state to completed ONLY when):
-           - The patient has provided onset, location, severity, and associated symptoms, OR
-           - The patient explicitly says "that's all", "no other symptoms", "nothing else", OR
-           - You have sufficient clinical data to formulate a confident differential triage (at least 3-4 turns).
-           - Set state = "completed"
-           - Provide summary, differential_diagnosis, and recommended next steps.
-
-        CRITICAL OUTPUT RULE:
-        - When state = "interviewing", you MUST set summary = null (or keep it as internal scratchpad only) so the frontend does not confuse it for the final discharge summary.
-
-        CRITICAL LOCALIZATION INSTRUCTION:
-        Always reply in the exact language used by the patient ({lang_name}). You MUST generate ALL conversational and report text fields (next_question, summary, recommended_action, differential_diagnosis, red_flags) strictly in {lang_name} using the native script. For greetings, translate the greeting message into the chosen language ({lang_name}) using the native script (e.g. for Hindi, translate 'Namaste! I am SehatMitra...' to Hindi).
 
         STRICT JSON OUTPUT SCHEMA:
         {{
@@ -96,11 +67,14 @@ class TriageService:
           "summary": "Clinical summary of symptoms in patient's language ({lang_name}) or null if state is interviewing",
           "recommended_action": "Actionable home care advice or emergency instruction in patient's language ({lang_name})"
         }}
+        
+        CRITICAL LOCALIZATION INSTRUCTION:
+        Always reply in the exact language used by the patient ({lang_name}). You MUST generate ALL conversational and report text fields (next_question, summary, recommended_action, differential_diagnosis, red_flags) strictly in {lang_name} using the native script. For greetings, translate the greeting message into the chosen language ({lang_name}) using the native script (e.g. for Hindi, translate 'Namaste! I am SehatMitra...' to Hindi).
         """
         
         try:
             from app.services.inference_service import inference_manager
-            res = await inference_manager.get_triage_decision(prompt)
+            res = await inference_manager.get_triage_decision(system_prompt=system_prompt, chat_history=dialogue_history)
             
             # Determine risk level from state/red_flags
             risk_level = "low"

@@ -37,37 +37,109 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
 
   const handleDownloadSlip = () => {
     if (!analysisResult) return;
-    const patientProfile = user || {
-      patient_id: "GUEST-001",
-      full_name: "Anonymous Patient",
-      age: "N/A",
-      gender: "N/A",
-      blood_group: "N/A",
-      village_town: "N/A",
-      district: "N/A",
-      chronic_conditions: [],
-      allergies: []
-    };
 
-    const symptoms = Object.entries(analysisResult.extracted_data || {})
-      .map(([param, val]) => `${param}: ${val.value} ${val.unit} (${val.status})`)
-      .join('; ');
-    const hasCritical = Object.values(analysisResult.extracted_data || {}).some(v => v.status?.toLowerCase() === 'critical');
-    const hasHigh = Object.values(analysisResult.extracted_data || {}).some(v => v.status?.toLowerCase() === 'high');
-    const riskTier = hasCritical ? 'Emergency' : hasHigh ? 'High' : 'Moderate';
+    const biomarkers = Object.entries(analysisResult.extracted_data || {}).map(([name, val]) => ({
+      name,
+      value: val.value,
+      unit: val.unit,
+      reference_range: val.reference_range,
+      status: val.status
+    }));
 
-    const consultationData = {
-      risk_tier: riskTier,
-      symptoms: symptoms || "Medical report analyzer session",
-      recommendation: analysisResult.explanation
-    };
-    generateConsultationSlip(patientProfile, consultationData, { name: isHindi ? 'Hindi' : 'English' });
+    const slipHtml = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>SehatMitra-AI Consultation Slip - ${user?.full_name || 'Patient'}</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 30px; color: #1e293b; line-height: 1.5; }
+          .header { border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+          .title { font-size: 22px; font-weight: bold; color: #065f46; margin: 0; }
+          .badge { background: #d1fae5; color: #065f46; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+          .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: #f8fafc; padding: 14px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 20px; font-size: 13px; }
+          .summary-card { background: #f0fdf4; border-left: 4px solid #059669; padding: 14px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; }
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+          th { background: #f1f5f9; text-align: left; padding: 8px 10px; border-bottom: 1px solid #cbd5e1; color: #475569; }
+          td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+          .status-badge { padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+          .status-normal { background: #dcfce7; color: #166534; }
+          .status-low { background: #fef3c7; color: #92400e; }
+          .status-high { background: #fee2e2; color: #991b1b; }
+          .footer { margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 12px; font-size: 11px; color: #64748b; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1 class="title">SehatMitra-AI Clinical Triage & Lab Slip</h1>
+            <div style="font-size: 12px; color: #64748b;">Rural Digital Health Infrastructure • AI Pathological Review</div>
+          </div>
+          <div class="badge">TRIAGE SUMMARY</div>
+        </div>
+
+        <div class="meta-grid">
+          <div><strong>Patient Name:</strong> ${user?.full_name || 'Patient'}</div>
+          <div><strong>Record Type:</strong> Diagnostic Document</div>
+          <div><strong>Test / Exam Date:</strong> Recent</div>
+          <div><strong>Generated On:</strong> ${new Date().toLocaleString()}</div>
+        </div>
+
+        <div class="summary-card">
+          <strong style="color: #065f46;">Clinical Summary:</strong>
+          <p style="margin: 6px 0 0 0;">${analysisResult.explanation}</p>
+        </div>
+
+        <h3 style="font-size: 14px; margin-bottom: 8px;">Key Findings & Measurable Parameters:</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Parameter / Finding</th>
+              <th>Observed Value</th>
+              <th>Unit</th>
+              <th>Reference / Norm</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(biomarkers || []).map(b => `
+              <tr>
+                <td><strong>${b.name}</strong></td>
+                <td>${b.value}</td>
+                <td>${b.unit || '-'}</td>
+                <td>${b.reference_range || '-'}</td>
+                <td><span class="status-badge status-${(b.status || 'normal').toLowerCase()}">${(b.status || 'NORMAL').toUpperCase()}</span></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="footer">
+          * This summary is prepared by SehatMitra-AI as a digital decision-support aid. Always consult a verified medical practitioner for prescription and formal diagnosis.
+        </div>
+      </body>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(slipHtml);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    }
   };
 
   const validateAndSetFile = (selectedFile: File) => {
-    const validTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (!validTypes.includes(selectedFile.type)) {
-      setErrorMsg(isHindi ? 'कृपया केवल JPG, PNG या PDF फाइल ही अपलोड करें।' : 'Please upload only JPG, PNG, or PDF files.');
+    const validExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'tiff', 'tif', 'bmp', 'dcm', 'dicom'];
+    const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase() || '';
+    
+    if (!validExtensions.includes(fileExtension)) {
+      setErrorMsg(isHindi 
+        ? 'कृपया केवल JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP या DICOM फाइल ही अपलोड करें।'
+        : 'Please upload only JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, or DICOM files.'
+      );
       return;
     }
     setErrorMsg(null);
@@ -109,7 +181,28 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
           'Content-Type': 'multipart/form-data',
         },
       });
-      setAnalysisResult(res.data);
+      
+      const backendData = res.data;
+      const extracted_data: Record<string, BiomarkerValue> = {};
+      if (Array.isArray(backendData.biomarkers)) {
+        backendData.biomarkers.forEach((bm: any) => {
+          if (bm && bm.name) {
+            extracted_data[bm.name] = {
+              value: bm.value,
+              unit: bm.unit || '',
+              reference_range: bm.reference_range || '',
+              status: bm.status || 'normal'
+            };
+          }
+        });
+      }
+
+      const mappedResult: AnalysisResult = {
+        filename: file.name,
+        extracted_data,
+        explanation: backendData.patient_summary || 'Report analyzed successfully.'
+      };
+      setAnalysisResult(mappedResult);
     } catch (err) {
       console.error(err);
       setErrorMsg(isHindi ? 'जांच रिपोर्ट का विश्लेषण करने में विफलता हुई। कृपया फिर से प्रयास करें।' : 'Failed to analyze the report. Please try again.');
@@ -181,16 +274,16 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
               <input
                 type="file"
                 ref={inputRef}
-                accept=".pdf,.jpg,.jpeg,.png"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.tiff,.tif,.bmp,.dcm,.dicom"
                 onChange={handleFileChange}
                 className="hidden"
               />
               <UploadCloud className="w-10 h-10 text-brand-600" />
               <span className="text-sm font-bold text-content-primary">
-                {isHindi ? 'रिपोर्ट फाइल अपलोड करें' : 'Upload Lab Report File'}
+                {isHindi ? 'दस्तावेज़/रिपोर्ट अपलोड करें' : 'Upload Medical Document'}
               </span>
               <span className="text-[10.5px] text-content-muted">
-                JPG, PNG, PDF (Max 10MB)
+                {isHindi ? 'JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (अधिकतम 10MB)' : 'JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (Max 10MB)'}
               </span>
             </div>
 

@@ -33,12 +33,19 @@ class ClinicalInferenceManager:
             self._groq_client = AsyncGroq(api_key=self.groq_api_key)
         return self._groq_client
 
-    async def get_triage_decision(self, prompt: str) -> TriageResponse:
+    async def get_triage_decision(self, system_prompt: str, chat_history: List[dict]) -> TriageResponse:
         """
         Executes inference first on Groq. If it fails due to rate limits (429), timeouts,
         or server errors (5xx), falls back to Gemini.
         Returns a TriageResponse.
         """
+        # Map message history format to API format
+        # chat_history elements look like {"sender": "Patient"/"Doctor", "text": "..."}
+        api_messages = []
+        for msg in chat_history:
+            role = "user" if msg.get("sender") == "Patient" else "assistant"
+            api_messages.append({"role": role, "content": msg.get("text", "")})
+
         # 1. Primary Execution (Groq)
         if self.groq_client:
             models_to_try = [self.groq_model, "openai/gpt-oss-20b"]
@@ -48,8 +55,8 @@ class ClinicalInferenceManager:
                     response = await self.groq_client.chat.completions.create(
                         model=model_name,
                         messages=[
-                            {"role": "system", "content": "You are a clinical AI agent. If the user input contains greetings like hello, hi, or namaste, respond with a welcoming greeting, set state='interviewing', and red_flags=[]. You must respond with valid JSON matching the requested schema."},
-                            {"role": "user", "content": prompt}
+                            {"role": "system", "content": system_prompt},
+                            *api_messages
                         ],
                         response_format={"type": "json_object"},
                         temperature=0.2,
@@ -65,19 +72,28 @@ class ClinicalInferenceManager:
         # 2. Fallback Execution (Gemini)
         if self.gemini_api_key and self.gemini_api_key.strip():
             try:
-                print(f"[ClinicalInferenceManager] Triggering fallback: Gemini model {self.gemini_model}")
-                import google.generativeai as genai
-                genai.configure(api_key=self.gemini_api_key)
+                gemini_model = getattr(settings, "GEMINI_MODEL", "gemini-3.6-flash")
+                print(f"[ClinicalInferenceManager] Triggering fallback: Gemini model {gemini_model}")
+                from google import genai
+                from google.genai import types
+                client = genai.Client(api_key=self.gemini_api_key)
                 
-                model = genai.GenerativeModel(
-                    model_name=self.gemini_model,
-                    generation_config={"response_mime_type": "application/json"}
-                )
-                
+                gemini_contents = []
+                for msg in api_messages:
+                    role = "user" if msg["role"] == "user" else "model"
+                    gemini_contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
                 loop = asyncio.get_event_loop()
                 response = await loop.run_in_executor(
                     None,
-                    lambda: model.generate_content(prompt)
+                    lambda: client.models.generate_content(
+                        model=gemini_model,
+                        contents=gemini_contents,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            system_instruction=system_prompt
+                        )
+                    )
                 )
                 raw_content = response.text.strip()
                 print(f"[ClinicalInferenceManager] Gemini success: {raw_content}")

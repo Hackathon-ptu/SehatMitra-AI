@@ -13,4 +13,4 @@ api_router.include_router(history.router, prefix="/history", tags=["Consultation
 api_router.include_router(bhashini.router, prefix="/bhashini", tags=["Bhashini Translation API"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Community Surveillance Analytics"])
 api_router.include_router(triage.router, prefix="/triage", tags=["Clinical Triage"])
-api_router.include_router(reports.router, prefix="/reports", tags=["Lab Reports Analyzer"])
+api_router.include_router(reports.router, prefix="/reports", tags=["Lab Reports"])
