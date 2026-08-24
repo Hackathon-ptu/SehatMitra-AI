@@ -12,14 +12,28 @@ app = FastAPI(
 )
 
 # 2. CORS Middleware configure karein
+# Local development origins are always permitted; production origins come
+# from the CORS_ORIGINS environment variable (comma-separated). We never use
+# allow_origins=["*"] because allow_credentials=True makes that unsafe.
+DEV_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+CONFIGURED_ORIGINS = [
+    origin.strip().rstrip("/")
+    for origin in (settings.CORS_ORIGINS or "").split(",")
+    if origin.strip()
+]
+ALLOWED_ORIGINS = DEV_ORIGINS + CONFIGURED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
+    # Allows Vercel preview deployments (https://<branch>-<project>.vercel.app)
+    # without hardcoding every generated preview URL.
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -33,6 +47,7 @@ app.add_middleware(
 @app.on_event("startup")
 def log_database_target():
     print(f"[DB] APP_ENV={settings.APP_ENV} engine={describe_engine()}")
+    print(f"[CORS] allowed origins: {ALLOWED_ORIGINS} + *.vercel.app")
 
 
 # 4. API Routes include karein

@@ -73,3 +73,7 @@ backups/
 # Turso / local secrets
 .env.*
 !.env.example
+
+# Frontend local env (Vite)
+frontend/.env
+frontend/.env.local
