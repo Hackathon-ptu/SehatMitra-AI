@@ -27,7 +27,7 @@ def upgrade() -> None:
     sa.Column('otp_code', sa.String(), nullable=False),
     sa.Column('expires_at', sa.DateTime(), nullable=False),
     sa.Column('is_used', sa.Boolean(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_email_otps_email'), 'email_otps', ['email'], unique=False)
@@ -41,7 +41,7 @@ def upgrade() -> None:
     sa.Column('risk_level', sa.String(), nullable=True),
     sa.Column('reasons', sa.JSON(), nullable=True),
     sa.Column('recommendation', sa.String(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -52,15 +52,15 @@ def upgrade() -> None:
     sa.Column('filename', sa.String(), nullable=False),
     sa.Column('extracted_data', sa.JSON(), nullable=True),
     sa.Column('explanation', sa.String(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_report_history_id'), 'report_history', ['id'], unique=False)
     op.add_column('users', sa.Column('patient_id', sa.String(), nullable=True))
     op.add_column('users', sa.Column('phone', sa.String(), nullable=True))
-    op.add_column('users', sa.Column('is_email_verified', sa.Boolean(), nullable=False, server_default=sa.text('false')))
-    op.add_column('users', sa.Column('is_profile_completed', sa.Boolean(), nullable=False, server_default=sa.text('false')))
+    op.add_column('users', sa.Column('is_email_verified', sa.Boolean(), nullable=False, server_default=sa.text('0')))
+    op.add_column('users', sa.Column('is_profile_completed', sa.Boolean(), nullable=False, server_default=sa.text('0')))
     op.add_column('users', sa.Column('age', sa.Integer(), nullable=True))
     op.add_column('users', sa.Column('gender', sa.String(), nullable=True))
     op.add_column('users', sa.Column('blood_group', sa.String(), nullable=True))

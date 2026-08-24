@@ -27,7 +27,7 @@ def upgrade() -> None:
     sa.Column('language', sa.String(), nullable=False),
     sa.Column('collected_data', sa.JSON(), nullable=True),
     sa.Column('conversation_history', sa.JSON(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -38,7 +38,7 @@ def upgrade() -> None:
     sa.Column('file_path', sa.String(), nullable=False),
     sa.Column('extracted_parameters', sa.JSON(), nullable=True),
     sa.Column('simplified_explanation', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -50,7 +50,7 @@ def upgrade() -> None:
     sa.Column('reasons', sa.JSON(), nullable=True),
     sa.Column('recommendation', sa.Text(), nullable=True),
     sa.Column('disclaimer', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['session_id'], ['interview_sessions.id'], ),
     sa.PrimaryKeyConstraint('id')
     )

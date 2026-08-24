@@ -1,13 +1,28 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
 from typing import Optional
 
-load_dotenv()
+# backend/.env, resolved absolutely so config works no matter which
+# directory the process was started from (app, alembic, tests, Docker).
+ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(ENV_FILE)
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "SehatMitra"
+
+    # Runtime environment: "development" | "staging" | "production"
+    APP_ENV: str = "development"
+
+    # Local SQLite (development only)
     DATABASE_URL: str = "sqlite:///./sehatmitra.db"
+
+    # Turso Cloud / libSQL (staging & production)
+    # TURSO_AUTH_TOKEN is a secret: keep it in .env or the Render dashboard only.
+    TURSO_DATABASE_URL: str = ""
+    TURSO_AUTH_TOKEN: str = ""
     SECRET_KEY: str = "default-secret-key"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
@@ -31,6 +46,6 @@ class Settings(BaseSettings):
     BHASHINI_CONFIG_URL: str = "https://meity-auth.ulcacontrib.org/ulca/apis/v0/model/getModelsPipeline"
 
     class Config:
-        env_file = ".env"
+        env_file = str(ENV_FILE)
         extra = "ignore"
 settings = Settings()

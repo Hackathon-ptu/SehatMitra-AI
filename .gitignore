@@ -61,3 +61,15 @@ __pycache__/
 backend/.env
 frontend/.env
 *.env.local
+# Databases, WAL/SHM sidecars and backups (never commit these)
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*_backup_*.db
+backups/
+
+# Turso / local secrets
+.env.*
+!.env.example
