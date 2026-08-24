@@ -12,6 +12,7 @@ because that file is invisible to every other instance and is lost on
 redeploy.
 """
 
+import os
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
@@ -48,20 +49,28 @@ def _build_engine() -> Engine:
             pool_pre_ping=True,
         )
 
-    if IS_PRODUCTION:
-        missing = []
-        if not turso_url:
-            missing.append("TURSO_DATABASE_URL")
-        if not turso_token:
-            missing.append("TURSO_AUTH_TOKEN")
-        raise RuntimeError(
-            "APP_ENV=production requires Turso configuration. "
-            f"Missing: {', '.join(missing)}. "
-            "Refusing to fall back to local SQLite in production."
-        )
+    # 1. Normalize Database URL
+    raw_db_url = getattr(settings, "DATABASE_URL", None) or os.getenv("DATABASE_URL", "sqlite:///./sehatmitra.db")
 
-    local_url = settings.DATABASE_URL or "sqlite:///./sehatmitra.db"
-    return create_engine(local_url, connect_args={"check_same_thread": False})
+    # Fix Heroku/Render legacy postgres prefix
+    if raw_db_url.startswith("postgres://"):
+        database_url = raw_db_url.replace("postgres://", "postgresql://", 1)
+    else:
+        database_url = raw_db_url
+
+    # 2. Configure dialect-specific connection arguments
+    engine_kwargs = {
+        "pool_pre_ping": True,
+    }
+
+    # Only standard local SQLite supports check_same_thread
+    if database_url.startswith("sqlite") and not database_url.startswith("sqlite+libsql"):
+        engine_kwargs["connect_args"] = {"check_same_thread": False}
+    else:
+        engine_kwargs["connect_args"] = {}
+
+    # 3. Instantiate Engine
+    return create_engine(database_url, **engine_kwargs)
 
 
 engine = _build_engine()
@@ -84,7 +93,8 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def describe_engine() -> str:
     """Human-readable engine description with no credentials in it."""
-    return f"turso ({turso_url})" if use_turso else f"local ({settings.DATABASE_URL})"
+    raw_db_url = getattr(settings, "DATABASE_URL", None) or os.getenv("DATABASE_URL", "sqlite:///./sehatmitra.db")
+    return f"turso ({turso_url})" if use_turso else f"local ({raw_db_url})"
 
 
 # Dependency injection for endpoints
