@@ -19,6 +19,11 @@ class Settings(BaseSettings):
     # Local SQLite (development only)
     DATABASE_URL: str = "sqlite:///./sehatmitra.db"
 
+    # Comma-separated list of extra browser origins allowed to call this API,
+    # e.g. "https://sehatmitra.vercel.app,https://www.sehatmitra.in".
+    # Localhost dev origins are always allowed and need not be listed.
+    CORS_ORIGINS: str = ""
+
     # Turso Cloud / libSQL (staging & production)
     # TURSO_AUTH_TOKEN is a secret: keep it in .env or the Render dashboard only.
     TURSO_DATABASE_URL: str = ""
