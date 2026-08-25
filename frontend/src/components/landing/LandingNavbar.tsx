@@ -1,13 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, Globe, LogOut, User as UserIcon } from 'lucide-react';
+import { Heart, Globe } from 'lucide-react';
 import { Button } from '../common/Button';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { useAuth } from '../../context/AuthContext';
-import { Badge } from '../common/Badge';
 
 export const LandingNavbar: React.FC = () => {
-  const { isAuthenticated, user, logout, showAuthModal } = useAuth();
+  const { user, logout, showAuthModal } = useAuth();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const storedUser = user || JSON.parse(localStorage.getItem("user") || "null");
 
   return (
     <header className="w-full bg-surface-card/90 backdrop-blur border-b border-surface-border sticky top-0 z-40">
@@ -41,36 +42,74 @@ export const LandingNavbar: React.FC = () => {
             </Button>
           </Link>
 
-          {isAuthenticated ? (
-            <div className="flex items-center gap-2">
-              <Badge variant="teal" size="md" icon={<UserIcon className="w-3.5 h-3.5" />}>
-                {user?.email || 'Logged In'}
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={logout}
-                leftIcon={<LogOut className="w-4 h-4 text-red-600" />}
+          {storedUser ? (
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-left focus:outline-none"
               >
-                Logout
-              </Button>
+                <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-sm">
+                  {storedUser.displayName
+                    ? storedUser.displayName[0].toUpperCase()
+                    : storedUser.email
+                    ? storedUser.email[0].toUpperCase()
+                    : "U"}
+                </div>
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden md:inline-block max-w-[120px] truncate">
+                  {storedUser.displayName || storedUser.email?.split("@")[0]}
+                </span>
+                <span className="text-xs text-slate-400">▼</span>
+              </button>
+
+              {menuOpen && (
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 text-left">
+                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                    <p className="text-xs text-slate-400">Signed in as</p>
+                    <p className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">
+                      {storedUser.displayName || "Patient"}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">{storedUser.email}</p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      const tabEvent = new CustomEvent('set-active-tab', { detail: 'profile' });
+                      window.dispatchEvent(tabEvent);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                  >
+                    👤 My Profile
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      setMenuOpen(false);
+                      if (logout) await logout();
+                      localStorage.removeItem("user");
+                      window.location.reload();
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2"
+                  >
+                    🚪 Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={() => showAuthModal('login')}
+                className="px-3.5 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition"
               >
                 Login
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
+              </button>
+              <button
                 onClick={() => showAuthModal('signup')}
+                className="px-4 py-1.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition"
               >
                 Sign Up
-              </Button>
+              </button>
             </div>
           )}
         </div>
