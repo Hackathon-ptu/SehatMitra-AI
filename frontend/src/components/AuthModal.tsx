@@ -31,6 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+  const [showResend, setShowResend] = useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
@@ -40,6 +41,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       setName("");
       setEmail("");
       setPassword("");
+      setShowResend(false);
     }
   }, [isOpen]);
 
@@ -49,6 +51,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     e.preventDefault();
     setError("");
     setSuccessMsg("");
+    setShowResend(false);
     setLoading(true);
 
     try {
@@ -63,40 +66,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         // Step C: Send Official Firebase Verification Email
         await sendEmailVerification(user);
 
-        // Step D: Sync with Backend
-        const res = await axios.post(`${API_BASE_URL}/auth/firebase-login`, {
-          uid: user.uid,
-          email: user.email,
-          displayName: name || user.displayName || email.split("@")[0]
-        });
+        // Step D: Force Sign Out (hard verification gate)
+        await auth.signOut();
 
-        // Step E: Store in LocalStorage & Trigger Navbar Update
-        const userPayload = res.data.user || {
-          uid: user.uid,
-          email: user.email,
-          displayName: name
-        };
-        localStorage.setItem("user", JSON.stringify(userPayload));
-        localStorage.setItem("sehat_user", JSON.stringify(userPayload));
-        if (res.data.access_token) {
-          localStorage.setItem("token", res.data.access_token);
-        }
-        if (setUser) setUser(userPayload);
-
-        window.dispatchEvent(new Event("auth_state_changed"));
-        window.dispatchEvent(new Event("storage"));
-
-        setSuccessMsg("Account created! A verification link has been sent to your Gmail.");
-        setTimeout(() => {
-          onClose();
-          window.location.reload();
-        }, 1500);
+        setSuccessMsg(`Verification email sent to ${email}! Please click the link in your inbox before logging in.`);
+        setIsSignUp(false); // Switch to Sign In tab
       } else {
         // Step A: Sign In with Firebase
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
 
-        // Step B: Sync with Backend
+        // Step B: Check Verification status
+        if (!user.emailVerified) {
+          await auth.signOut();
+          setError("Your email is not verified yet. Please check your inbox or click 'Resend Verification'.");
+          setShowResend(true);
+          setLoading(false);
+          return;
+        }
+
+        // Step C: Sync with Backend
         const res = await axios.post(`${API_BASE_URL}/auth/firebase-login`, {
           uid: user.uid,
           email: user.email,
@@ -123,16 +112,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
       }
     } catch (err: any) {
       console.error("Auth error:", err);
-      // Map standard firebase errors
       if (err.code === "auth/email-already-in-use") {
         setError("An account with this email already exists.");
       } else if (err.code === "auth/weak-password") {
         setError("Password should be at least 6 characters.");
-      } else if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
+      } else if (err.code === "auth/wrong-password" || err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
         setError("Invalid email or password.");
       } else {
         setError(err.message || "Authentication failed.");
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setError("");
+    setSuccessMsg("");
+    setLoading(true);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      await sendEmailVerification(user);
+      await auth.signOut();
+      setSuccessMsg("Verification email resent successfully! Please check your inbox.");
+      setShowResend(false);
+    } catch (err: any) {
+      setError(err.message || "Failed to resend verification email.");
     } finally {
       setLoading(false);
     }
@@ -161,13 +167,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
           <div className="flex border-b border-slate-200 dark:border-slate-800 mb-6">
             <button
               className={`flex-1 pb-3 text-center font-medium ${!isSignUp ? "border-b-2 border-emerald-600 text-emerald-600 font-semibold" : "text-slate-500"}`}
-              onClick={() => { setIsSignUp(false); setError(""); setSuccessMsg(""); }}
+              onClick={() => { setIsSignUp(false); setError(""); setSuccessMsg(""); setShowResend(false); }}
             >
               Sign In
             </button>
             <button
               className={`flex-1 pb-3 text-center font-medium ${isSignUp ? "border-b-2 border-emerald-600 text-emerald-600 font-semibold" : "text-slate-500"}`}
-              onClick={() => { setIsSignUp(true); setError(""); setSuccessMsg(""); }}
+              onClick={() => { setIsSignUp(true); setError(""); setSuccessMsg(""); setShowResend(false); }}
             >
               Sign Up
             </button>
@@ -232,6 +238,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
             >
               {isSignUp ? "Sign Up" : "Sign In"}
             </Button>
+
+            {showResend && (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                className="w-full text-xs font-semibold text-emerald-600 hover:text-emerald-700 text-center underline cursor-pointer focus:outline-none mt-2 block"
+              >
+                Resend Verification Email
+              </button>
+            )}
 
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
