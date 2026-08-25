@@ -340,7 +340,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
   const riskStyles = riskData ? getRiskStyles(riskData.risk_level) : null;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-6xl mx-auto p-4 animate-fade-in">
+    <div className="flex flex-col lg:flex-row gap-6 w-full max-w-4xl mx-auto px-3 sm:px-6 animate-fade-in">
       {/* Left Column: Chat Area */}
       <div className="flex-1 flex flex-col h-[600px] bg-surface-card border border-surface-border rounded-2xl shadow-xl overflow-hidden">
         {/* Chat Header */}
