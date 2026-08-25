@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -31,25 +31,9 @@ from app.api.v1.deps import get_current_user
 
 router = APIRouter()
 
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
-class SendOTPPayload(BaseModel):
-    email: Optional[str] = ""
-    name: Optional[str] = ""
-    password: Optional[str] = ""
-
-class VerifyOTPPayload(BaseModel):
-    email: Optional[str] = ""
-    otp: Optional[str] = ""
-
-class FirebaseLoginPayload(BaseModel):
-    token: Optional[str] = ""
-    email: Optional[str] = ""
-    name: Optional[str] = ""
-    uid: Optional[str] = ""
-
-OTP_STORE = {}
+OTP_STORE: Dict[str, dict] = {}
 
 @router.get("/suggest-usernames")
 def suggest_usernames(
@@ -92,9 +76,9 @@ def suggest_usernames(
     return {"suggestions": suggestions[:4]}
 
 @router.post("/send-otp", status_code=status.HTTP_200_OK)
-def send_otp(payload: SendOTPPayload, db: Session = Depends(get_db)):
+def send_otp(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     try:
-        email = (payload.email or "").strip().lower()
+        email = str(payload.get("email", "")).strip().lower()
         if not email or "@" not in email:
             raise HTTPException(status_code=400, detail="A valid email address is required.")
 
@@ -116,8 +100,8 @@ def send_otp(payload: SendOTPPayload, db: Session = Depends(get_db)):
         OTP_STORE[email] = {
             "otp": otp_code,
             "expires_at": expiry,
-            "name": payload.name or "",
-            "password": payload.password or ""
+            "name": payload.get("name", ""),
+            "password": payload.get("password", "")
         }
  
         # 4. Dispatch email with recovery fallback
@@ -424,14 +408,14 @@ def verify_user_password(
         )
     return {"success": True, "message": "Password verified"}
 
-@router.post("/firebase-login", response_model=TokenResponse)
-def firebase_login(payload: FirebaseLoginPayload, db: Session = Depends(get_db)):
+@router.post("/firebase-login")
+def firebase_login(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     """Syncs Firebase authenticated users with backend session."""
-    user_email = (payload.email or "").strip().lower()
-    if not user_email:
+    email = str(payload.get("email", "")).strip().lower()
+    if not email:
         raise HTTPException(status_code=400, detail="Email is required.")
         
-    user = db.query(User).filter(User.email == user_email).first()
+    user = db.query(User).filter(User.email == email).first()
     
     if not user:
         # Create user
@@ -446,7 +430,8 @@ def firebase_login(payload: FirebaseLoginPayload, db: Session = Depends(get_db))
                 break
         
         # Check username uniqueness, fallback to email prefix if not specified or already taken
-        base_username = payload.name or user_email.split("@")[0]
+        name = payload.get("name") or payload.get("displayName") or email.split("@")[0]
+        base_username = name
         base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username).lower()
         username = base_username
         
@@ -457,8 +442,8 @@ def firebase_login(payload: FirebaseLoginPayload, db: Session = Depends(get_db))
             counter += 1
 
         user = User(
-            full_name=payload.name or username,
-            email=user_email,
+            full_name=name or username,
+            email=email,
             hashed_password=get_password_hash(secrets.token_hex(16)), # dummy password since Auth is done via Firebase
             phone=None,
             username=username,
@@ -474,22 +459,24 @@ def firebase_login(payload: FirebaseLoginPayload, db: Session = Depends(get_db))
     token = create_access_token(data={"sub": str(user.id), "role": user.role})
     
     return {
+        "success": True,
         "access_token": token,
         "token_type": "bearer",
         "user": {
+            "uid": payload.get("uid", email),
+            "email": email,
+            "displayName": user.full_name,
             "id": user.id,
             "patient_id": user.patient_id,
             "username": user.username,
-            "email": user.email,
-            "full_name": user.full_name,
             "is_profile_completed": user.is_profile_completed
         }
     }
 
 @router.post("/verify-otp")
-def verify_otp(payload: VerifyOTPPayload, db: Session = Depends(get_db)):
-    email = (payload.email or "").strip().lower()
-    otp = (payload.otp or "").strip()
+def verify_otp(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+    email = str(payload.get("email", "")).strip().lower()
+    otp = str(payload.get("otp", "")).strip()
     
     stored = OTP_STORE.get(email)
     if not stored or stored["otp"] != otp:
@@ -541,4 +528,21 @@ def verify_otp(payload: VerifyOTPPayload, db: Session = Depends(get_db)):
     # Clean up OTP store
     OTP_STORE.pop(email, None)
 
-    return {"success": True, "message": "Verification successful"}
+    # Return JWT token
+    token = create_access_token(data={"sub": str(user.id), "role": user.role})
+
+    return {
+        "success": True,
+        "message": "Verification successful",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "uid": email,
+            "email": email,
+            "displayName": user.full_name,
+            "id": user.id,
+            "patient_id": user.patient_id,
+            "username": user.username,
+            "is_profile_completed": user.is_profile_completed
+        }
+    }
