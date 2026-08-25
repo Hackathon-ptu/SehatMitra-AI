@@ -31,16 +31,16 @@ from app.api.v1.deps import get_current_user
 
 router = APIRouter()
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
+from typing import Optional
 
-class SendOTPCombinedRequest(BaseModel):
-    email: EmailStr
-    phone: Optional[str] = None
+class SendOTPRequest(BaseModel):
+    email: str
     name: Optional[str] = ""
     password: Optional[str] = ""
 
 class VerifyOTPRequest(BaseModel):
-    email: EmailStr
+    email: str
     otp: str
 
 OTP_STORE = {}
@@ -86,11 +86,11 @@ def suggest_usernames(
     return {"suggestions": suggestions[:4]}
 
 @router.post("/send-otp", status_code=status.HTTP_200_OK)
-def send_otp(payload: SendOTPCombinedRequest, db: Session = Depends(get_db)):
+def send_otp(payload: SendOTPRequest, db: Session = Depends(get_db)):
     try:
         # 1. Check if email or phone is already registered in User table
         existing_user = db.query(User).filter(
-            (User.email == payload.email) | (payload.phone is not None and User.phone == payload.phone)
+            (User.email == payload.email)
         ).first()
         if existing_user:
             raise HTTPException(
@@ -99,7 +99,7 @@ def send_otp(payload: SendOTPCombinedRequest, db: Session = Depends(get_db)):
             )
         
         # 2. Generate, print, and store a 6-digit random code (non-blocking)
-        otp_code = generate_and_store_otp(db, payload.email, payload.phone or "")
+        otp_code = generate_and_store_otp(db, payload.email, "")
 
         # 3. Save to memory OTP_STORE for the verification/signup step
         expiry = datetime.utcnow() + timedelta(minutes=10)
