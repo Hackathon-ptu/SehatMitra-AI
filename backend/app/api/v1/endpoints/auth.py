@@ -110,7 +110,6 @@ async def send_otp_endpoint(request: Request, db: Session = Depends(get_db)):
     print(f"\n====================================", flush=True)
     print(f"[OTP GENERATED] {email} : {code}", flush=True)
     print(f"====================================\n", flush=True)
-    sys.stdout.flush()
 
     try:
         send_otp_email(email, code)
