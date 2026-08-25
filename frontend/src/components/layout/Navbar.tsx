@@ -31,9 +31,10 @@ export const Navbar: React.FC<NavbarProps> = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, user, showAuthModal } = useAuth();
+  const { isAuthenticated, user, showAuthModal, logout } = useAuth();
   const { t } = useLanguage();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const NAV_ITEMS: NavItem[] = [
     { label: t('nav_home') || 'Overview', path: '/' },
@@ -140,18 +141,38 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
           {/* Authentication section */}
           {isAuthenticated ? (
-            <div className="flex items-center gap-3">
+            <div className="relative">
               <button 
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('set-active-tab', { detail: 'profile' }));
-                  navigate('/');
-                }}
-                className="cursor-pointer hover:opacity-90 transition-opacity flex items-center"
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="cursor-pointer hover:opacity-90 transition-opacity flex items-center gap-1.5 focus:outline-none"
               >
                 <Badge variant="teal" size="md" icon={<UserIcon className="w-3.5 h-3.5" />}>
                   {user?.email || 'Logged In'}
                 </Badge>
               </button>
+              {dropdownOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-surface-card border border-surface-border rounded-lg shadow-elevated py-1 z-50 text-left">
+                  <button
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('set-active-tab', { detail: 'profile' }));
+                      navigate('/');
+                      setDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs font-semibold text-content-primary hover:bg-surface-elevated transition-colors"
+                  >
+                    👤 My Profile
+                  </button>
+                  <button
+                    onClick={() => {
+                      logout();
+                      setDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-surface-elevated transition-colors border-t border-surface-border"
+                  >
+                    🚪 Logout
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2">
