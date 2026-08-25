@@ -32,16 +32,22 @@ from app.api.v1.deps import get_current_user
 router = APIRouter()
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any
 
-class SendOTPRequest(BaseModel):
-    email: str
+class SendOTPPayload(BaseModel):
+    email: Optional[str] = ""
     name: Optional[str] = ""
     password: Optional[str] = ""
 
-class VerifyOTPRequest(BaseModel):
-    email: str
-    otp: str
+class VerifyOTPPayload(BaseModel):
+    email: Optional[str] = ""
+    otp: Optional[str] = ""
+
+class FirebaseLoginPayload(BaseModel):
+    token: Optional[str] = ""
+    email: Optional[str] = ""
+    name: Optional[str] = ""
+    uid: Optional[str] = ""
 
 OTP_STORE = {}
 
@@ -86,11 +92,15 @@ def suggest_usernames(
     return {"suggestions": suggestions[:4]}
 
 @router.post("/send-otp", status_code=status.HTTP_200_OK)
-def send_otp(payload: SendOTPRequest, db: Session = Depends(get_db)):
+def send_otp(payload: SendOTPPayload, db: Session = Depends(get_db)):
     try:
-        # 1. Check if email or phone is already registered in User table
+        email = (payload.email or "").strip().lower()
+        if not email or "@" not in email:
+            raise HTTPException(status_code=400, detail="A valid email address is required.")
+
+        # 1. Check if email is already registered in User table
         existing_user = db.query(User).filter(
-            (User.email == payload.email)
+            (User.email == email)
         ).first()
         if existing_user:
             raise HTTPException(
@@ -99,11 +109,11 @@ def send_otp(payload: SendOTPRequest, db: Session = Depends(get_db)):
             )
         
         # 2. Generate, print, and store a 6-digit random code (non-blocking)
-        otp_code = generate_and_store_otp(db, payload.email, "")
+        otp_code = generate_and_store_otp(db, email, "")
 
         # 3. Save to memory OTP_STORE for the verification/signup step
         expiry = datetime.utcnow() + timedelta(minutes=10)
-        OTP_STORE[payload.email] = {
+        OTP_STORE[email] = {
             "otp": otp_code,
             "expires_at": expiry,
             "name": payload.name or "",
@@ -112,7 +122,7 @@ def send_otp(payload: SendOTPRequest, db: Session = Depends(get_db)):
  
         # 4. Dispatch email with recovery fallback
         try:
-            send_otp_email(payload.email, otp_code)
+            send_otp_email(email, otp_code)
         except Exception as email_err:
             print(f"Email delivery failed: {email_err}")
   
@@ -415,9 +425,13 @@ def verify_user_password(
     return {"success": True, "message": "Password verified"}
 
 @router.post("/firebase-login", response_model=TokenResponse)
-def firebase_login(payload: FirebaseLoginRequest, db: Session = Depends(get_db)):
-    # 1. Check if user already exists
-    user = db.query(User).filter(User.email == payload.email).first()
+def firebase_login(payload: FirebaseLoginPayload, db: Session = Depends(get_db)):
+    """Syncs Firebase authenticated users with backend session."""
+    user_email = (payload.email or "").strip().lower()
+    if not user_email:
+        raise HTTPException(status_code=400, detail="Email is required.")
+        
+    user = db.query(User).filter(User.email == user_email).first()
     
     if not user:
         # Create user
@@ -432,7 +446,7 @@ def firebase_login(payload: FirebaseLoginRequest, db: Session = Depends(get_db))
                 break
         
         # Check username uniqueness, fallback to email prefix if not specified or already taken
-        base_username = payload.username or payload.email.split("@")[0]
+        base_username = payload.name or user_email.split("@")[0]
         base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username).lower()
         username = base_username
         
@@ -443,10 +457,10 @@ def firebase_login(payload: FirebaseLoginRequest, db: Session = Depends(get_db))
             counter += 1
 
         user = User(
-            full_name=payload.full_name or username,
-            email=payload.email,
+            full_name=payload.name or username,
+            email=user_email,
             hashed_password=get_password_hash(secrets.token_hex(16)), # dummy password since Auth is done via Firebase
-            phone=payload.phone or None,
+            phone=None,
             username=username,
             patient_id=patient_id,
             is_email_verified=True,
@@ -473,9 +487,12 @@ def firebase_login(payload: FirebaseLoginRequest, db: Session = Depends(get_db))
     }
 
 @router.post("/verify-otp")
-def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
-    stored = OTP_STORE.get(payload.email)
-    if not stored or stored["otp"] != payload.otp:
+def verify_otp(payload: VerifyOTPPayload, db: Session = Depends(get_db)):
+    email = (payload.email or "").strip().lower()
+    otp = (payload.otp or "").strip()
+    
+    stored = OTP_STORE.get(email)
+    if not stored or stored["otp"] != otp:
         raise HTTPException(
             status_code=400,
             detail="Invalid verification code or email"
@@ -487,7 +504,7 @@ def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
         )
     
     # Create the user in database if they don't already exist
-    user = db.query(User).filter(User.email == payload.email).first()
+    user = db.query(User).filter(User.email == email).first()
     if not user:
         import secrets
         import string
@@ -498,7 +515,7 @@ def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
             if not exists:
                 break
         
-        base_username = payload.email.split("@")[0]
+        base_username = email.split("@")[0]
         base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username).lower()
         username = base_username
         
@@ -509,7 +526,7 @@ def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
 
         user = User(
             full_name=stored["name"] or username,
-            email=payload.email,
+            email=email,
             hashed_password=get_password_hash(stored["password"] or secrets.token_hex(16)),
             username=username,
             patient_id=patient_id,
@@ -522,6 +539,6 @@ def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
         db.refresh(user)
 
     # Clean up OTP store
-    OTP_STORE.pop(payload.email, None)
+    OTP_STORE.pop(email, None)
 
     return {"success": True, "message": "Verification successful"}
