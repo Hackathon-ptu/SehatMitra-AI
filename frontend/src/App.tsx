@@ -267,9 +267,9 @@ export const App = () => {
       <OfflineBanner />
 
       {/* Navigation tabs */}
-      <div className="border-b border-surface-border bg-surface-card">
+      <div className="border-b border-surface-border bg-surface-card overflow-x-auto no-scrollbar">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex justify-center -mb-px space-x-2 sm:space-x-8" aria-label="Tabs">
+          <nav className="flex justify-start md:justify-center -mb-px space-x-2 sm:space-x-8 min-w-max md:min-w-0" aria-label="Tabs">
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
@@ -282,7 +282,7 @@ export const App = () => {
                     }
                     setActiveTab(tab.id);
                   }}
-                  className={`flex items-center gap-2 py-4 px-3 border-b-2 font-bold text-xs sm:text-sm transition-all focus:outline-none ${
+                  className={`flex items-center gap-2 py-4 px-3 border-b-2 font-bold text-xs sm:text-sm transition-all focus:outline-none shrink-0 ${
                     isActive
                       ? 'border-brand-600 text-brand-600'
                       : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
@@ -316,6 +316,18 @@ export const App = () => {
           <p>© 2026 SehatMitra AI. सभी अधिकार सुरक्षित हैं। AI परामर्श केवल मार्गदर्शन के लिए है, आपातकालीन स्थिति में तुरंत डॉक्टर से संपर्क करें।</p>
         </div>
       </footer>
+
+      {/* Mobile Floating Action Button (FAB) for quick access to AI Chat/Triage */}
+      {activeTab !== 'chat' && (
+        <button
+          onClick={() => setActiveTab('chat')}
+          className="md:hidden fixed bottom-6 right-6 z-50 p-4 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-lg shadow-brand-600/30 flex items-center justify-center transition-all hover:scale-105 active:scale-95 border border-white/10"
+          aria-label="Launch AI Triage Chat"
+          title="Launch AI Triage Chat"
+        >
+          <MessageSquare className="w-6 h-6 fill-white/10" />
+        </button>
+      )}
 
       {/* Global Auth Modal portal */}
       <AuthModal isOpen={!!authModalMode} onClose={hideAuthModal} />
