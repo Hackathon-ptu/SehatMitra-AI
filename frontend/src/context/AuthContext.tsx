@@ -122,7 +122,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Synchronize with Firebase & localStorage on mount
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
+      const isGoogleUser = currentUser?.providerData.some(p => p.providerId === "google.com");
+      const isVerified = currentUser && (currentUser.emailVerified || isGoogleUser);
+
+      if (isVerified) {
         localStorage.setItem("user_id", currentUser.uid);
         localStorage.setItem("user_email", currentUser.email || "");
         
@@ -143,8 +146,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem("user_email");
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+        localStorage.removeItem("sehat_user");
         setToken(null);
         setUser(null);
+        window.dispatchEvent(new Event("auth_state_changed"));
+        window.dispatchEvent(new Event("storage"));
       }
     });
     return () => unsubscribe();
