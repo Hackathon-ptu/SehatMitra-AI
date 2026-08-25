@@ -75,3 +75,9 @@ class ResetPasswordRequest(BaseModel):
     email: EmailStr
     otp_code: str
     new_password: str = Field(..., min_length=6)
+
+class FirebaseLoginRequest(BaseModel):
+    email: EmailStr
+    full_name: Optional[str] = ""
+    username: Optional[str] = ""
+    phone: Optional[str] = ""

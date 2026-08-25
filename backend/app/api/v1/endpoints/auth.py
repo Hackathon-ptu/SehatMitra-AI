@@ -23,6 +23,7 @@ from app.schemas.auth import (
     VerifyPasswordRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    FirebaseLoginRequest,
 )
 from app.services.email_service import send_otp_email
 from app.services.otp_service import generate_and_store_otp
@@ -389,3 +390,61 @@ def verify_user_password(
             detail="Incorrect password"
         )
     return {"success": True, "message": "Password verified"}
+
+@router.post("/firebase-login", response_model=TokenResponse)
+def firebase_login(payload: FirebaseLoginRequest, db: Session = Depends(get_db)):
+    # 1. Check if user already exists
+    user = db.query(User).filter(User.email == payload.email).first()
+    
+    if not user:
+        # Create user
+        # Generate patient ID
+        import secrets
+        import string
+        while True:
+            suffix = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+            patient_id = f"SM-2026-{suffix}"
+            exists = db.query(User).filter(User.patient_id == patient_id).first()
+            if not exists:
+                break
+        
+        # Check username uniqueness, fallback to email prefix if not specified or already taken
+        base_username = payload.username or payload.email.split("@")[0]
+        base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username).lower()
+        username = base_username
+        
+        # Ensure username uniqueness
+        counter = 1
+        while db.query(User).filter(User.username == username).first():
+            username = f"{base_username}_{counter}"
+            counter += 1
+
+        user = User(
+            full_name=payload.full_name or username,
+            email=payload.email,
+            hashed_password=get_password_hash(secrets.token_hex(16)), # dummy password since Auth is done via Firebase
+            phone=payload.phone or None,
+            username=username,
+            patient_id=patient_id,
+            is_email_verified=True,
+            is_profile_completed=False,
+            role=UserRole.PATIENT,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    token = create_access_token(data={"sub": str(user.id), "role": user.role})
+    
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "patient_id": user.patient_id,
+            "username": user.username,
+            "email": user.email,
+            "full_name": user.full_name,
+            "is_profile_completed": user.is_profile_completed
+        }
+    }
