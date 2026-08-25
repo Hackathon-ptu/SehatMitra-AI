@@ -27,15 +27,61 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     FirebaseLoginRequest,
 )
-from app.services.email_service import send_otp_email
 from app.services.otp_service import generate_and_store_otp
 from app.api.v1.deps import get_current_user
+import json
+import urllib.request
+import urllib.error
 
 router = APIRouter()
 
 from typing import Dict, Any
 
 OTP_STORE: Dict[str, dict] = {}
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+
+def send_via_resend(to_email: str, code: str) -> bool:
+    """Delivers email via HTTPS (Port 443) - unblockable by cloud firewalls."""
+    if not RESEND_API_KEY:
+        print("[RESEND] RESEND_API_KEY is not set in Render Environment variables.", flush=True)
+        return False
+
+    url = "https://api.resend.com/emails"
+    headers = {
+        "Authorization": f"Bearer {RESEND_API_KEY.strip()}",
+        "Content-Type": "application/json",
+        "User-Agent": "SehatMitra-AI"
+    }
+    payload = {
+        "from": "SehatMitra AI <onboarding@resend.dev>",
+        "to": [to_email],
+        "subject": f"Your SehatMitra Verification Code: {code}",
+        "html": f"""
+        <div style="font-family: Arial, sans-serif; padding: 24px; background-color: #f9fafb;">
+            <div style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 24px; border: 1px solid #e5e7eb;">
+                <h2 style="color: #059669; text-align: center; margin-top: 0;">SehatMitra AI</h2>
+                <p style="font-size: 14px; color: #374151;">Your 6-digit verification code is:</p>
+                <div style="text-align: center; margin: 20px 0;">
+                    <span style="font-size: 32px; font-weight: bold; letter-spacing: 6px; color: #059669; background: #ecfdf5; padding: 10px 24px; border-radius: 8px; display: inline-block;">{code}</span>
+                </div>
+                <p style="font-size: 12px; color: #6b7280; text-align: center; margin-bottom: 0;">Valid for 10 minutes. Do not share this OTP with anyone.</p>
+            </div>
+        </div>
+        """
+    }
+
+    try:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=8) as res:
+            if res.status in (200, 201):
+                print(f"[RESEND SUCCESS] Email successfully delivered to {to_email}", flush=True)
+                return True
+    except urllib.error.HTTPError as e:
+        err_body = e.read().decode("utf-8", errors="ignore")
+        print(f"[RESEND HTTP ERROR] {err_body}", flush=True)
+    except Exception as general_err:
+        print(f"[RESEND ERROR] {general_err}", flush=True)
+    return False
 
 @router.get("/suggest-usernames")
 def suggest_usernames(
@@ -112,9 +158,9 @@ async def send_otp_endpoint(request: Request, db: Session = Depends(get_db)):
     print(f"====================================\n", flush=True)
 
     try:
-        send_otp_email(email, code)
+        send_via_resend(email, code)
     except Exception as email_err:
-        print(f"Email delivery failed: {email_err}")
+        print(f"Resend delivery failed: {email_err}")
 
     return {"success": True, "message": f"OTP sent to {email}", "dev_otp": code}
 
