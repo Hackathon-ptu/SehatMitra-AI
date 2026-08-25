@@ -68,6 +68,19 @@ export const authService = {
     return response.data;
   },
 
+  async firebaseLogin(data: any) {
+    const response = await apiClient.post('/auth/firebase-login', {
+      email: data.email,
+      full_name: data.full_name,
+      username: data.username,
+      phone: data.phone,
+    });
+    if (response.data?.access_token) {
+      localStorage.setItem('token', response.data.access_token);
+    }
+    return response.data;
+  },
+
   async verifyAndRegister(data: any) {
     const response = await apiClient.post('/auth/verify-and-register', {
       email: data.email,

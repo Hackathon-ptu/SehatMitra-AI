@@ -1,5 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authService } from '../services/api';
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  User as FirebaseUser,
+} from "firebase/auth";
+import { auth, googleProvider } from "../config/firebase";
 
 export interface UserPayload {
   id?: number;
@@ -28,12 +38,15 @@ interface AuthContextType {
   user: UserPayload | null;
   isAuthenticated: boolean;
   login: (token: string, user?: UserPayload) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   showAuthModal: (mode: 'login' | 'signup') => void;
   hideAuthModal: () => void;
   authModalMode: 'login' | 'signup' | null;
   refreshUser: () => Promise<void>;
   updateUser: (updatedUser: UserPayload) => void;
+  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  signupWithEmail: (email: string, pass: string, name?: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -81,6 +94,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const syncWithBackend = async (firebaseUser: FirebaseUser) => {
+    try {
+      const res = await authService.firebaseLogin({
+        email: firebaseUser.email || "",
+        full_name: firebaseUser.displayName || "",
+      });
+      if (res?.access_token) {
+        setToken(res.access_token);
+        setUser(res.user);
+        localStorage.setItem('token', res.access_token);
+        localStorage.setItem('user', JSON.stringify(res.user));
+      }
+    } catch (err) {
+      console.error("Failed to sync Firebase user with backend", err);
+    }
+  };
+
   const refreshUser = async () => {
     const savedToken = localStorage.getItem('token');
     if (savedToken) {
@@ -88,13 +118,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Synchronize with localStorage on mount
+  // Synchronize with Firebase & localStorage on mount
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
-    if (savedToken) {
-      setToken(savedToken);
-      fetchProfile(savedToken);
-    }
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        localStorage.setItem("user_id", currentUser.uid);
+        localStorage.setItem("user_email", currentUser.email || "");
+        
+        const savedToken = localStorage.getItem('token');
+        if (!savedToken) {
+          await syncWithBackend(currentUser);
+        } else {
+          setToken(savedToken);
+          const savedUser = localStorage.getItem('user');
+          if (savedUser) {
+            setUser(JSON.parse(savedUser));
+          } else {
+            await fetchProfile(savedToken);
+          }
+        }
+      } else {
+        localStorage.removeItem("user_id");
+        localStorage.removeItem("user_email");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setToken(null);
+        setUser(null);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   const login = (newToken: string, newUser?: UserPayload) => {
@@ -109,11 +161,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthModalMode(null);
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken(null);
-    setUser(null);
+  const loginWithEmail = async (email: string, pass: string) => {
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    if (cred.user) {
+      await syncWithBackend(cred.user);
+    }
+  };
+
+  const signupWithEmail = async (email: string, pass: string, name?: string) => {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    if (cred.user) {
+      if (name) {
+        await updateProfile(cred.user, { displayName: name });
+      }
+      await syncWithBackend(cred.user);
+    }
+  };
+
+  const loginWithGoogle = async () => {
+    const cred = await signInWithPopup(auth, googleProvider);
+    if (cred.user) {
+      await syncWithBackend(cred.user);
+    }
+  };
+
+  const logout = async () => {
+    await signOut(auth);
   };
 
   const updateUser = (updatedUser: UserPayload) => {
@@ -142,6 +215,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authModalMode,
         refreshUser,
         updateUser,
+        loginWithEmail,
+        signupWithEmail,
+        loginWithGoogle,
       }}
     >
       {children}

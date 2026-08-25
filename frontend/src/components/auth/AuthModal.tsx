@@ -1,63 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { authService } from '../../services/api';
-import { X, Mail, Lock, User, Phone, AlertCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { X, Mail, Lock, User, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../common/Button';
 
 export const AuthModal: React.FC = () => {
-  const { authModalMode, hideAuthModal, login } = useAuth();
+  const { authModalMode, hideAuthModal, loginWithEmail, signupWithEmail, loginWithGoogle } = useAuth();
   
-  // View states: 'login' | 'signup' | 'otp' | 'forgot-step-1' | 'forgot-step-2'
-  const [viewMode, setViewMode] = useState<'login' | 'signup' | 'otp' | 'forgot-step-1' | 'forgot-step-2'>('login');
+  // View states: 'login' | 'signup' | 'forgot-step-1'
+  const [viewMode, setViewMode] = useState<'login' | 'signup' | 'forgot-step-1'>('login');
   
   // Login Form States
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
-  // Signup Form States (Step 1)
+  // Signup Form States
   const [fullName, setFullName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
-  const [username, setUsername] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [otpCode, setOtpCode] = useState('');
-
-  // Suggestions state
-  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   // Forgot Password States
   const [forgotIdentifier, setForgotIdentifier] = useState('');
-  const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotOtpCode, setForgotOtpCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
-
-  // Automatically fetch username suggestions when name/email changes
-  useEffect(() => {
-    if (!fullName && !signupEmail) {
-      setSuggestions([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await authService.suggestUsernames(fullName, signupEmail);
-        if (res?.suggestions) {
-          setSuggestions(res.suggestions);
-        }
-      } catch (e) {
-        console.error("Error fetching username suggestions", e);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [fullName, signupEmail]);
-
-  // OTP Verification States (Step 2)
-  const [countdown, setCountdown] = useState(60);
-  const [canResend, setCanResend] = useState(false);
 
   // Loading & Error States
   const [isLoading, setIsLoading] = useState(false);
@@ -75,19 +39,6 @@ export const AuthModal: React.FC = () => {
     }
   }, [authModalMode]);
 
-  // Countdown timer for Resend OTP
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    const isOtpActive = viewMode === 'otp' || viewMode === 'forgot-step-2';
-    if (isOtpActive && countdown > 0) {
-      setCanResend(false);
-      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    } else if (countdown === 0) {
-      setCanResend(true);
-    }
-    return () => clearTimeout(timer);
-  }, [viewMode, countdown]);
-
   if (!authModalMode) return null;
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
@@ -96,44 +47,18 @@ export const AuthModal: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      const data = await authService.login({
-        identifier: loginIdentifier,
-        password: loginPassword,
-      });
-      if (data?.access_token) {
-        localStorage.setItem('token', data.access_token);
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
-        }
-        login(data.access_token);
-        hideAuthModal();
-      } else {
-        throw new Error('Authentication failed');
-      }
+      await loginWithEmail(loginIdentifier, loginPassword);
+      hideAuthModal();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.response?.data?.detail || 'Incorrect credentials');
+      setErrorMsg(err.message || 'Incorrect credentials');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSendOtp = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    
-    // Strict validations
-    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/;
-    if (!usernameRegex.test(username)) {
-      setErrorMsg('Username must be 3-30 alphanumeric characters or underscores.');
-      return;
-    }
-
-    const phoneRegex = /^[6-9]\d{9}$/;
-    if (!phoneRegex.test(phoneNumber)) {
-      setErrorMsg('Please enter a valid 10-digit Indian phone number starting with 6-9');
-      return;
-    }
-
+  const handleSignupSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (signupPassword.length < 6) {
       setErrorMsg('Password must be at least 6 characters');
       return;
@@ -145,125 +70,26 @@ export const AuthModal: React.FC = () => {
 
     try {
       const cleanEmail = signupEmail.trim();
-      const cleanPhone = phoneNumber.trim();
-      const res = await authService.sendOTP(cleanEmail, cleanPhone);
-      if (res && res.success) {
-        setViewMode('otp');
-        setCountdown(60);
-        setCanResend(false);
-        setSuccessMsg(`A 6-digit verification code has been dispatched to ${cleanEmail}`);
-      } else {
-        throw new Error(res?.message || 'Failed to generate verification code');
-      }
+      await signupWithEmail(cleanEmail, signupPassword, fullName);
+      hideAuthModal();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.response?.data?.detail || err.message || "Failed to generate verification code");
+      setErrorMsg(err.message || "Failed to create account");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleVerifyAndRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otpCode.length !== 6) {
-      setErrorMsg('Please enter a valid 6-digit OTP code');
-      return;
-    }
-
+  const handleGoogleSignIn = async () => {
     setIsLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
-
     try {
-      const data = await authService.verifyAndRegister({
-        email: signupEmail,
-        otp_code: otpCode,
-        password: signupPassword,
-        full_name: fullName,
-        phone: phoneNumber,
-        username: username,
-      });
-
-      if (data?.access_token) {
-        localStorage.setItem('token', data.access_token);
-        if (data.user) {
-          localStorage.setItem('user', JSON.stringify(data.user));
-        }
-        login(data.access_token);
-        hideAuthModal();
-        alert(`Congratulations! Registration complete. Your Patient ID is: ${data.user?.patient_id}`);
-      } else {
-        setErrorMsg('Registration failed');
-      }
+      await loginWithGoogle();
+      hideAuthModal();
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.response?.data?.detail || 'OTP verification failed. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Forgot Password Actions
-  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      const cleanIdentifier = forgotIdentifier.trim();
-      const res = await authService.forgotPassword(cleanIdentifier);
-      if (res && res.success) {
-        // Find user email from response or use identifier if it is email format
-        const resolvedEmail = cleanIdentifier.includes('@') ? cleanIdentifier : (res.dev_otp ? res.dev_otp : cleanIdentifier);
-        // We can check if backend returns success with verification details
-        setForgotEmail(cleanIdentifier.includes('@') ? cleanIdentifier : resolvedEmail);
-        setViewMode('forgot-step-2');
-        setCountdown(60);
-        setCanResend(false);
-        setSuccessMsg(`A 6-digit password reset code has been generated. check console or email.`);
-      } else {
-        throw new Error(res?.message || 'Failed to dispatch reset code');
-      }
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.response?.data?.detail || 'No account associated with this email or username was found.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (forgotOtpCode.length !== 6) {
-      setErrorMsg('Please enter a valid 6-digit verification code.');
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      setErrorMsg('Passwords do not match.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setErrorMsg('Password must be at least 6 characters.');
-      return;
-    }
-
-    setIsLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-
-    try {
-      const res = await authService.resetPassword(forgotEmail, forgotOtpCode, newPassword);
-      if (res && res.success) {
-        alert('Your password has been successfully reset. You may now login.');
-        setLoginIdentifier(forgotEmail);
-        setViewMode('login');
-      } else {
-        throw new Error(res?.message || 'Failed to reset password.');
-      }
-    } catch (err: any) {
-      console.error(err);
-      setErrorMsg(err.response?.data?.detail || 'Reset password failed. Check your OTP code.');
+      setErrorMsg(err.message || "Google sign-in failed");
     } finally {
       setIsLoading(false);
     }
@@ -278,9 +104,7 @@ export const AuthModal: React.FC = () => {
           <h2 className="text-xl font-bold text-content-primary">
             {viewMode === 'login' && 'Welcome Back'}
             {viewMode === 'signup' && 'Create Account'}
-            {viewMode === 'otp' && 'Verify Your Email'}
             {viewMode === 'forgot-step-1' && 'Recover Password'}
-            {viewMode === 'forgot-step-2' && 'Reset Password'}
           </h2>
           <button
             onClick={hideAuthModal}
@@ -343,13 +167,13 @@ export const AuthModal: React.FC = () => {
             /* Login Form */
             <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">Email, Phone, or Username</label>
+                <label className="text-xs font-semibold text-content-secondary">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
                   <input
-                    type="text"
+                    type="email"
                     required
-                    placeholder="Enter email, phone, or username"
+                    placeholder="Enter email address"
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
@@ -400,69 +224,47 @@ export const AuthModal: React.FC = () => {
               >
                 Sign In
               </Button>
-            </form>
-          )}
 
-          {viewMode === 'otp' && (
-            /* Registration Step 2: OTP Verification */
-            <form onSubmit={handleVerifyAndRegister} className="flex flex-col gap-4">
-              <div className="text-center text-xs text-content-secondary mb-2">
-                We have sent an authentication code to <strong>{signupEmail}</strong>. Please enter it below to complete registration.
-              </div>
-              
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">6-Digit Verification Code</label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    placeholder="000000"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-9 pr-4 py-2 border text-center tracking-[1em] text-lg font-bold border-surface-border bg-surface-elevated rounded-lg text-content-primary focus:border-brand-600 focus:outline-none"
-                  />
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-surface-border"></div>
                 </div>
-              </div>
-
-              <Button
-                type="submit"
-                isLoading={isLoading}
-                className="mt-2 w-full"
-              >
-                Verify & Register
-              </Button>
-
-              <div className="text-center mt-3">
-                {canResend ? (
-                  <button
-                    type="button"
-                    onClick={() => handleSendOtp()}
-                    className="text-xs font-bold text-brand-600 hover:text-brand-700 underline"
-                  >
-                    Resend Verification OTP
-                  </button>
-                ) : (
-                  <span className="text-xs text-content-muted">
-                    Resend code in {countdown}s
-                  </span>
-                )}
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-surface-card px-2 text-content-muted">Or continue with</span>
+                </div>
               </div>
 
               <button
                 type="button"
-                onClick={() => setViewMode('signup')}
-                className="text-xs text-content-secondary hover:underline mt-1"
+                onClick={handleGoogleSignIn}
+                className="w-full flex items-center justify-center gap-2.5 px-4 py-2 border border-surface-border rounded-lg bg-surface-elevated hover:bg-surface-hover text-sm font-semibold text-content-primary transition-colors focus:outline-none"
               >
-                ← Go back and edit details
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.65 1.39 7.5l3.9 3.03C6.27 7.74 8.9 5.04 12 5.04z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M23.49 12.27c0-.81-.07-1.59-.2-2.27H12v4.51h6.45c-.29 1.48-1.14 2.73-2.4 3.58l3.72 2.88c2.18-2 3.72-4.94 3.72-8.7z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.29 14.53c-.24-.72-.38-1.5-.38-2.3 0-.8.14-1.57.38-2.3L1.39 6.9C.5 8.7 0 10.7 0 12.8s.5 4.1 1.39 5.9l3.9-3.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.72-2.88c-1.04.69-2.38 1.11-4.24 1.11-3.1 0-5.73-2.7-6.71-5.49L1.39 16c1.98 3.85 5.96 6.5 10.61 6.5z"
+                  />
+                </svg>
+                Google
               </button>
             </form>
           )}
 
           {viewMode === 'signup' && (
-            /* Registration Step 1: Account Details */
-            <form onSubmit={handleSendOtp} className="flex flex-col gap-4">
+            /* Signup Form */
+            <form onSubmit={handleSignupSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-content-secondary">Full Name</label>
                 <div className="relative">
@@ -479,36 +281,6 @@ export const AuthModal: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">Username</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
-                  <input
-                    type="text"
-                    required
-                    placeholder="Select unique username (e.g. john_12)"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                    className="w-full pl-9 pr-4 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
-                  />
-                </div>
-                {suggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
-                    <span className="text-[10px] text-content-muted">Suggestions:</span>
-                    {suggestions.map((sug) => (
-                      <button
-                        key={sug}
-                        type="button"
-                        onClick={() => setUsername(sug)}
-                        className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800 transition-colors"
-                      >
-                        @{sug}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-content-secondary">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
@@ -518,21 +290,6 @@ export const AuthModal: React.FC = () => {
                     placeholder="you@example.com"
                     value={signupEmail}
                     onChange={(e) => setSignupEmail(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">Phone Number (Indian)</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
-                  <input
-                    type="tel"
-                    required
-                    placeholder="10-digit Indian phone (e.g. 9876543210)"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
                     className="w-full pl-9 pr-4 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
                   />
                 </div>
@@ -565,26 +322,61 @@ export const AuthModal: React.FC = () => {
                 isLoading={isLoading}
                 className="mt-2 w-full"
               >
-                Send Verification Code
+                Sign Up
               </Button>
+
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-surface-border"></div>
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-surface-card px-2 text-content-muted">Or continue with</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full flex items-center justify-center gap-2.5 px-4 py-2 border border-surface-border rounded-lg bg-surface-elevated hover:bg-surface-hover text-sm font-semibold text-content-primary transition-colors focus:outline-none"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.68 1.54 14.98 1 12 1 7.35 1 3.37 3.65 1.39 7.5l3.9 3.03C6.27 7.74 8.9 5.04 12 5.04z"
+                  />
+                  <path
+                    fill="#4285F4"
+                    d="M23.49 12.27c0-.81-.07-1.59-.2-2.27H12v4.51h6.45c-.29 1.48-1.14 2.73-2.4 3.58l3.72 2.88c2.18-2 3.72-4.94 3.72-8.7z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.29 14.53c-.24-.72-.38-1.5-.38-2.3 0-.8.14-1.57.38-2.3L1.39 6.9C.5 8.7 0 10.7 0 12.8s.5 4.1 1.39 5.9l3.9-3.17z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c3.24 0 5.97-1.07 7.96-2.91l-3.72-2.88c-1.04.69-2.38 1.11-4.24 1.11-3.1 0-5.73-2.7-6.71-5.49L1.39 16c1.98 3.85 5.96 6.5 10.61 6.5z"
+                  />
+                </svg>
+                Google
+              </button>
             </form>
           )}
 
           {viewMode === 'forgot-step-1' && (
             /* Forgot Password: Step 1 (Identifier) */
-            <form onSubmit={handleForgotPasswordSubmit} className="flex flex-col gap-4">
+            <form onSubmit={(e) => { e.preventDefault(); setErrorMsg("Password recovery is managed by Firebase. Please request reset on Firebase console or use direct email resets."); }} className="flex flex-col gap-4">
               <div className="text-xs text-content-secondary leading-relaxed text-center mb-2">
-                Enter your registered Email Address or Username. We will generate and dispatch a password reset code.
+                Enter your registered Email Address. We will generate and dispatch a password reset link.
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">Username or Email Address</label>
+                <label className="text-xs font-semibold text-content-secondary">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
                   <input
-                    type="text"
+                    type="email"
                     required
-                    placeholder="Enter username or email"
+                    placeholder="Enter email"
                     value={forgotIdentifier}
                     onChange={(e) => setForgotIdentifier(e.target.value)}
                     className="w-full pl-9 pr-4 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
@@ -597,7 +389,7 @@ export const AuthModal: React.FC = () => {
                 isLoading={isLoading}
                 className="mt-2 w-full"
               >
-                Send Reset Code
+                Send Reset Link
               </Button>
 
               <button
@@ -606,91 +398,6 @@ export const AuthModal: React.FC = () => {
                 className="text-xs text-center text-brand-600 font-bold hover:text-brand-700 underline mt-2"
               >
                 Back to Login
-              </button>
-            </form>
-          )}
-
-          {viewMode === 'forgot-step-2' && (
-            /* Forgot Password: Step 2 (Reset Code & New Password) */
-            <form onSubmit={handleResetPasswordSubmit} className="flex flex-col gap-4">
-              <div className="text-xs text-content-secondary leading-relaxed text-center mb-2">
-                Enter the 6-digit code sent to your registered email address along with your new password.
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">6-Digit Reset Code</label>
-                <div className="relative">
-                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    placeholder="000000"
-                    value={forgotOtpCode}
-                    onChange={(e) => setForgotOtpCode(e.target.value.replace(/\D/g, ''))}
-                    className="w-full pl-9 pr-4 py-2 border text-center tracking-[1em] text-lg font-bold border-surface-border bg-surface-elevated rounded-lg text-content-primary focus:border-brand-600 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">New Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    required
-                    placeholder="Enter new password (min 6 chars)"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-secondary focus:outline-none"
-                  >
-                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-content-secondary">Confirm New Password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-muted" />
-                  <input
-                    type={showConfirmNewPassword ? 'text' : 'password'}
-                    required
-                    placeholder="Confirm new password"
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    className="w-full pl-9 pr-10 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-secondary focus:outline-none"
-                  >
-                    {showConfirmNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              <Button
-                type="submit"
-                isLoading={isLoading}
-                className="mt-2 w-full"
-              >
-                Reset Password
-              </Button>
-
-              <button
-                type="button"
-                onClick={() => setViewMode('forgot-step-1')}
-                className="text-xs text-content-secondary hover:underline mt-1 text-center"
-              >
-                ← Go back and request a new code
               </button>
             </form>
           )}
