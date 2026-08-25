@@ -76,15 +76,15 @@ def suggest_usernames(
     return {"suggestions": suggestions[:4]}
 
 @router.post("/send-otp")
-async def send_otp_handler(request: Request, db: Session = Depends(get_db)):
+async def send_otp_endpoint(request: Request, db: Session = Depends(get_db)):
     try:
-        body = await request.json()
+        data = await request.json()
     except Exception:
-        body = {}
-    
-    email = str(body.get("email", "")).strip().lower()
-    name = str(body.get("name", "")).strip()
-    password = str(body.get("password", "")).strip()
+        data = {}
+
+    email = str(data.get("email") or data.get("username") or "").strip().lower()
+    name = str(data.get("full_name") or data.get("name") or data.get("fullName") or "").strip()
+    password = str(data.get("password") or "").strip()
 
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Please enter a valid email address.")
@@ -106,7 +106,7 @@ async def send_otp_handler(request: Request, db: Session = Depends(get_db)):
     }
 
     print(f"\n====================================", flush=True)
-    print(f"[SEHATMITRA OTP CODE] {email} -> {code}", flush=True)
+    print(f"[OTP GENERATED] {email} : {code}", flush=True)
     print(f"====================================\n", flush=True)
     sys.stdout.flush()
 
@@ -115,7 +115,7 @@ async def send_otp_handler(request: Request, db: Session = Depends(get_db)):
     except Exception as email_err:
         print(f"Email delivery failed: {email_err}")
 
-    return {"success": True, "message": f"OTP successfully dispatched to {email}", "dev_otp": code}
+    return {"success": True, "message": f"OTP sent to {email}", "dev_otp": code}
 
 @router.post("/verify-and-register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def verify_and_register(payload: VerifyAndRegisterRequest, db: Session = Depends(get_db)):
@@ -475,27 +475,27 @@ async def firebase_login_handler(request: Request, db: Session = Depends(get_db)
     }
 
 @router.post("/verify-otp")
-async def verify_otp_handler(request: Request, db: Session = Depends(get_db)):
+async def verify_otp_endpoint(request: Request, db: Session = Depends(get_db)):
     try:
-        body = await request.json()
+        data = await request.json()
     except Exception:
-        body = {}
+        data = {}
 
-    email = str(body.get("email", "")).strip().lower()
-    otp = str(body.get("otp", "")).strip()
-    
-    stored = OTP_STORE.get(email)
-    if not stored or stored["otp"] != otp:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid verification code or email"
-        )
-    if datetime.utcnow() > stored["expires_at"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Verification code expired"
-        )
-    
+    email = str(data.get("email") or data.get("username") or "").strip().lower()
+    otp = str(data.get("otp") or "").strip()
+
+    record = OTP_STORE.get(email)
+    if not record:
+        raise HTTPException(status_code=400, detail="No OTP requested for this email.")
+    if datetime.utcnow() > record["expires_at"]:
+        OTP_STORE.pop(email, None)
+        raise HTTPException(status_code=400, detail="OTP has expired.")
+    if record["otp"] != otp:
+        raise HTTPException(status_code=400, detail="Invalid OTP code.")
+
+    user_name = record.get("name") or email.split("@")[0]
+    password = record.get("password", "")
+
     # Create the user in database if they don't already exist
     user = db.query(User).filter(User.email == email).first()
     if not user:
@@ -518,9 +518,9 @@ async def verify_otp_handler(request: Request, db: Session = Depends(get_db)):
             counter += 1
 
         user = User(
-            full_name=stored["name"] or username,
+            full_name=user_name or username,
             email=email,
-            hashed_password=get_password_hash(stored["password"] or secrets.token_hex(16)),
+            hashed_password=get_password_hash(password or secrets.token_hex(16)),
             username=username,
             patient_id=patient_id,
             is_email_verified=True,
@@ -539,7 +539,7 @@ async def verify_otp_handler(request: Request, db: Session = Depends(get_db)):
 
     return {
         "success": True,
-        "message": "Verification successful",
+        "message": "Verified successfully",
         "access_token": token,
         "token_type": "bearer",
         "user": {
