@@ -12,6 +12,28 @@ interface AuthModalProps {
   onClose: () => void;
 }
 
+// Helper function to extract a clean string from any backend error
+const formatErrorMessage = (err: any): string => {
+  const detail = err.response?.data?.detail;
+  
+  // If FastAPI returns an array of Pydantic validation errors
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => d.msg || `${d.loc?.join(".")}: invalid`).join(", ");
+  }
+  
+  // If detail is a single object
+  if (typeof detail === "object" && detail !== null) {
+    return detail.msg || JSON.stringify(detail);
+  }
+  
+  // If detail is already a string
+  if (typeof detail === "string") {
+    return detail;
+  }
+  
+  return err.message || "An unexpected error occurred.";
+};
+
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
   const { loginWithGoogle, loginWithEmail, setUser } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
@@ -59,7 +81,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         onClose();
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || "Failed to process request.");
+      setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -83,7 +105,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         }, 1000);
       }
     } catch (err: any) {
-      setError(err.response?.data?.detail || "Invalid verification code.");
+      setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
     }
