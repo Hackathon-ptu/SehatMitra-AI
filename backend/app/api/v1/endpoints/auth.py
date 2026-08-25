@@ -25,6 +25,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
 )
 from app.services.email_service import send_otp_email
+from app.services.otp_service import generate_and_store_otp
 from app.api.v1.deps import get_current_user
 
 router = APIRouter()
@@ -82,42 +83,15 @@ def send_otp(payload: SendOTPRequest, db: Session = Depends(get_db)):
                 detail="This email or phone number is already registered."
             )
         
-        # 2. Generate a 6-digit random code
-        otp_code = f"{random.randint(100000, 999999)}"
-        
-        # 3. Invalidate any previous unused OTPs for this email
-        db.query(EmailOTP).filter(
-            EmailOTP.email == payload.email,
-            EmailOTP.is_used == False
-        ).update({"is_used": True})
-        db.commit()
-
-        # 4. Insert new record
-        db_otp = EmailOTP(
-            email=payload.email,
-            otp_code=otp_code,
-            expires_at=datetime.utcnow() + timedelta(minutes=10),
-            is_used=False
-        )
-        db.add(db_otp)
-        db.commit()
-
-        # 5. Dispatch email with recovery fallback
+        # 2. Generate, print, and store a 6-digit random code (non-blocking)
+        otp_code = generate_and_store_otp(db, payload.email, payload.phone or "")
+ 
+        # 3. Dispatch email with recovery fallback
         try:
             send_otp_email(payload.email, otp_code)
         except Exception as email_err:
             print(f"Email delivery failed: {email_err}")
-
-        # Visual print statement
-        print(f"""
-============================================================
-[SEHATMITRA VERIFICATION OTP]
-Target Email : {payload.email}
-OTP Code     : {otp_code}
-Expires In   : 10 Minutes
-============================================================
-""")
-
+ 
         return { "success": True, "message": "OTP generated successfully", "dev_otp": otp_code }
     except HTTPException:
         raise
@@ -358,37 +332,14 @@ def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db
             detail="No account associated with this email or username was found."
         )
 
-    otp_code = f"{random.randint(100000, 999999)}"
-
-    db.query(EmailOTP).filter(
-        EmailOTP.email == user.email,
-        EmailOTP.is_used == False
-    ).update({"is_used": True})
-    db.commit()
-
-    db_otp = EmailOTP(
-        email=user.email,
-        otp_code=otp_code,
-        expires_at=datetime.utcnow() + timedelta(minutes=10),
-        is_used=False
-    )
-    db.add(db_otp)
-    db.commit()
-
+    # Generate, print, and store OTP (non-blocking)
+    otp_code = generate_and_store_otp(db, user.email, getattr(user, "phone", "") or "")
+ 
     try:
         send_otp_email(user.email, otp_code)
     except Exception as email_err:
         print(f"Email delivery failed: {email_err}")
-
-    print(f"""
-============================================================
-[SEHATMITRA FORGOT PASSWORD OTP]
-Target Email : {user.email}
-OTP Code     : {otp_code}
-Expires In   : 10 Minutes
-============================================================
-""")
-
+ 
     return {"success": True, "message": "Password reset OTP dispatched successfully", "dev_otp": otp_code}
 
 @router.post("/reset-password", status_code=status.HTTP_200_OK)

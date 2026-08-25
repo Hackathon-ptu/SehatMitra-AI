@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { authService } from '../../services/api';
-import { X, Mail, Lock, User, Phone, AlertCircle, Loader2, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { X, Mail, Lock, User, Phone, AlertCircle, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { Button } from '../common/Button';
 
 export const AuthModal: React.FC = () => {
@@ -395,10 +395,9 @@ export const AuthModal: React.FC = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="mt-2 w-full flex justify-center items-center gap-2"
+                isLoading={isLoading}
+                className="mt-2 w-full"
               >
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Sign In
               </Button>
             </form>
@@ -429,10 +428,9 @@ export const AuthModal: React.FC = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="mt-2 w-full flex justify-center items-center gap-2"
+                isLoading={isLoading}
+                className="mt-2 w-full"
               >
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Verify & Register
               </Button>
 
@@ -564,10 +562,9 @@ export const AuthModal: React.FC = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="mt-2 w-full flex justify-center items-center gap-2"
+                isLoading={isLoading}
+                className="mt-2 w-full"
               >
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Send Verification Code
               </Button>
             </form>
@@ -597,10 +594,9 @@ export const AuthModal: React.FC = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="mt-2 w-full flex justify-center items-center gap-2"
+                isLoading={isLoading}
+                className="mt-2 w-full"
               >
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Send Reset Code
               </Button>
 
@@ -683,10 +679,9 @@ export const AuthModal: React.FC = () => {
 
               <Button
                 type="submit"
-                disabled={isLoading}
-                className="mt-2 w-full flex justify-center items-center gap-2"
+                isLoading={isLoading}
+                className="mt-2 w-full"
               >
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                 Reset Password
               </Button>
 

@@ -49,7 +49,7 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
             msg.attach(part)
 
             # Connect and send
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT or 587) as server:
+            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT or 587, timeout=5.0) as server:
                 server.starttls()
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                 server.sendmail(from_addr, to_email, msg.as_string())
