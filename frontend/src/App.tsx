@@ -6,20 +6,22 @@ import { HistoryDashboard } from './components/HistoryDashboard';
 import { TriageAssistant } from './components/triage/TriageAssistant';
 import { AshaDashboard } from './components/dashboard/AshaDashboard';
 import { ProfilePage } from './components/profile/ProfilePage';
-import { AuthModal } from './components/auth/AuthModal';
+import { AuthModal } from './components/AuthModal';
 import { LanguageSelectorModal } from './components/LanguageSelectorModal';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
 import { BHASHINI_LANGUAGES } from './constants/languages';
-import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, Globe, LogOut, User as UserIcon, Sun, Moon, Mic, Activity } from 'lucide-react';
+import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, Globe, User as UserIcon, Sun, Moon, Mic, Activity } from 'lucide-react';
 import { UI_TRANSLATIONS } from './constants/translations';
 import { EmergencySOSModal } from './components/EmergencySOSModal';
 import { OfflineBanner } from './components/common/OfflineBanner';
 
 export const App = () => {
   const [activeTab, setActiveTab] = useState('chat');
-  const { isAuthenticated, user, logout, showAuthModal } = useAuth();
+  const { isAuthenticated, user, logout, showAuthModal, authModalMode, hideAuthModal } = useAuth();
   const [isSosOpen, setIsSosOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const storedUser = user || JSON.parse(localStorage.getItem("user") || "null");
 
   useEffect(() => {
     const handleSetTab = (e: any) => {
@@ -190,45 +192,72 @@ export const App = () => {
             </button>
 
             {/* Authentication Action Controls */}
-            {isAuthenticated ? (
-              <div className="flex items-center gap-3">
-                <div className="hidden md:flex flex-col text-right">
-                  <span className="text-xs font-extrabold text-content-primary">{user?.full_name || user?.email}</span>
-                  {user?.patient_id && (
-                    <span className="text-[10px] text-brand-600 font-mono font-bold tracking-wider">ID: {user.patient_id}</span>
-                  )}
-                </div>
-                {user?.role === 'patient' && (
-                  <button
-                    onClick={() => setActiveTab('profile')}
-                    className="px-3 py-1.5 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-                    title="View / Edit Health Profile"
-                  >
-                    <UserIcon className="w-3.5 h-3.5" />
-                    <span>{translate('profileTab') || 'My Profile'}</span>
-                  </button>
-                )}
+            {storedUser ? (
+              <div className="relative">
                 <button
-                  onClick={logout}
-                  className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className="flex items-center gap-2 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition text-left focus:outline-none"
                 >
-                  <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">{translate('logout')}</span>
+                  <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm shadow-sm">
+                    {storedUser.displayName
+                      ? storedUser.displayName[0].toUpperCase()
+                      : storedUser.email
+                      ? storedUser.email[0].toUpperCase()
+                      : "U"}
+                  </div>
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden md:inline-block max-w-[120px] truncate">
+                    {storedUser.displayName || storedUser.email?.split("@")[0]}
+                  </span>
+                  <span className="text-xs text-slate-400">▼</span>
                 </button>
+
+                {menuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 py-2 z-50 text-left">
+                    <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                      <p className="text-xs text-slate-400">Signed in as</p>
+                      <p className="text-sm font-semibold truncate text-slate-800 dark:text-slate-100">
+                        {storedUser.displayName || "Patient"}
+                      </p>
+                      <p className="text-xs text-slate-500 truncate">{storedUser.email}</p>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setActiveTab('profile');
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
+                    >
+                      👤 My Profile
+                    </button>
+
+                    <button
+                      onClick={async () => {
+                        setMenuOpen(false);
+                        if (logout) await logout();
+                        localStorage.removeItem("user");
+                        window.location.reload();
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2"
+                    >
+                      🚪 Sign Out
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => showAuthModal('login')}
-                  className="px-3 py-1.5 bg-surface-elevated hover:bg-surface-border text-content-primary border border-surface-border rounded-lg text-xs font-bold transition-all"
+                  className="px-3.5 py-1.5 text-sm font-medium text-slate-700 dark:text-slate-200 hover:text-emerald-600 dark:hover:text-emerald-400 transition"
                 >
-                  {translate('login')}
+                  Login
                 </button>
                 <button
                   onClick={() => showAuthModal('signup')}
-                  className="px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-sm transition-all"
+                  className="px-4 py-1.5 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-sm transition"
                 >
-                  {translate('signup')}
+                  Sign Up
                 </button>
               </div>
             )}
@@ -289,7 +318,7 @@ export const App = () => {
       </footer>
 
       {/* Global Auth Modal portal */}
-      <AuthModal />
+      <AuthModal isOpen={!!authModalMode} onClose={hideAuthModal} />
 
       {/* Language Selection Modal on first visit */}
       <LanguageSelectorModal
