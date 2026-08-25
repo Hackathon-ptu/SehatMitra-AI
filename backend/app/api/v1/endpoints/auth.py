@@ -31,6 +31,20 @@ from app.api.v1.deps import get_current_user
 
 router = APIRouter()
 
+from pydantic import BaseModel, EmailStr
+
+class SendOTPCombinedRequest(BaseModel):
+    email: EmailStr
+    phone: Optional[str] = None
+    name: Optional[str] = ""
+    password: Optional[str] = ""
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+OTP_STORE = {}
+
 @router.get("/suggest-usernames")
 def suggest_usernames(
     name: Optional[str] = None,
@@ -72,11 +86,11 @@ def suggest_usernames(
     return {"suggestions": suggestions[:4]}
 
 @router.post("/send-otp", status_code=status.HTTP_200_OK)
-def send_otp(payload: SendOTPRequest, db: Session = Depends(get_db)):
+def send_otp(payload: SendOTPCombinedRequest, db: Session = Depends(get_db)):
     try:
         # 1. Check if email or phone is already registered in User table
         existing_user = db.query(User).filter(
-            (User.email == payload.email) | (User.phone == payload.phone)
+            (User.email == payload.email) | (payload.phone is not None and User.phone == payload.phone)
         ).first()
         if existing_user:
             raise HTTPException(
@@ -86,13 +100,22 @@ def send_otp(payload: SendOTPRequest, db: Session = Depends(get_db)):
         
         # 2. Generate, print, and store a 6-digit random code (non-blocking)
         otp_code = generate_and_store_otp(db, payload.email, payload.phone or "")
+
+        # 3. Save to memory OTP_STORE for the verification/signup step
+        expiry = datetime.utcnow() + timedelta(minutes=10)
+        OTP_STORE[payload.email] = {
+            "otp": otp_code,
+            "expires_at": expiry,
+            "name": payload.name or "",
+            "password": payload.password or ""
+        }
  
-        # 3. Dispatch email with recovery fallback
+        # 4. Dispatch email with recovery fallback
         try:
             send_otp_email(payload.email, otp_code)
         except Exception as email_err:
             print(f"Email delivery failed: {email_err}")
- 
+  
         return { "success": True, "message": "OTP generated successfully", "dev_otp": otp_code }
     except HTTPException:
         raise
@@ -448,3 +471,57 @@ def firebase_login(payload: FirebaseLoginRequest, db: Session = Depends(get_db))
             "is_profile_completed": user.is_profile_completed
         }
     }
+
+@router.post("/verify-otp")
+def verify_otp(payload: VerifyOTPRequest, db: Session = Depends(get_db)):
+    stored = OTP_STORE.get(payload.email)
+    if not stored or stored["otp"] != payload.otp:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid verification code or email"
+        )
+    if datetime.utcnow() > stored["expires_at"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Verification code expired"
+        )
+    
+    # Create the user in database if they don't already exist
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        import secrets
+        import string
+        while True:
+            suffix = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+            patient_id = f"SM-2026-{suffix}"
+            exists = db.query(User).filter(User.patient_id == patient_id).first()
+            if not exists:
+                break
+        
+        base_username = payload.email.split("@")[0]
+        base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username).lower()
+        username = base_username
+        
+        counter = 1
+        while db.query(User).filter(User.username == username).first():
+            username = f"{base_username}_{counter}"
+            counter += 1
+
+        user = User(
+            full_name=stored["name"] or username,
+            email=payload.email,
+            hashed_password=get_password_hash(stored["password"] or secrets.token_hex(16)),
+            username=username,
+            patient_id=patient_id,
+            is_email_verified=True,
+            is_profile_completed=False,
+            role=UserRole.PATIENT,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    # Clean up OTP store
+    OTP_STORE.pop(payload.email, None)
+
+    return {"success": True, "message": "Verification successful"}
