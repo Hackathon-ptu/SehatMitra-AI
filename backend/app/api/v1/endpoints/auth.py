@@ -75,50 +75,47 @@ def suggest_usernames(
 
     return {"suggestions": suggestions[:4]}
 
-@router.post("/send-otp", status_code=status.HTTP_200_OK)
-def send_otp(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+@router.post("/send-otp")
+async def send_otp_handler(request: Request, db: Session = Depends(get_db)):
     try:
-        email = str(payload.get("email", "")).strip().lower()
-        if not email or "@" not in email:
-            raise HTTPException(status_code=400, detail="A valid email address is required.")
+        body = await request.json()
+    except Exception:
+        body = {}
+    
+    email = str(body.get("email", "")).strip().lower()
+    name = str(body.get("name", "")).strip()
+    password = str(body.get("password", "")).strip()
 
-        # 1. Check if email is already registered in User table
-        existing_user = db.query(User).filter(
-            (User.email == email)
-        ).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This email or phone number is already registered."
-            )
-        
-        # 2. Generate, print, and store a 6-digit random code (non-blocking)
-        otp_code = generate_and_store_otp(db, email, "")
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
 
-        # 3. Save to memory OTP_STORE for the verification/signup step
-        expiry = datetime.utcnow() + timedelta(minutes=10)
-        OTP_STORE[email] = {
-            "otp": otp_code,
-            "expires_at": expiry,
-            "name": payload.get("name", ""),
-            "password": payload.get("password", "")
-        }
- 
-        # 4. Dispatch email with recovery fallback
-        try:
-            send_otp_email(email, otp_code)
-        except Exception as email_err:
-            print(f"Email delivery failed: {email_err}")
-  
-        return { "success": True, "message": "OTP generated successfully", "dev_otp": otp_code }
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Unexpected error in send_otp: {e}")
+    # 1. Check if email is already registered in User table
+    existing_user = db.query(User).filter(User.email == email).first()
+    if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal Server Error during OTP generation: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email or phone number is already registered."
         )
+
+    code = f"{random.randint(100000, 999999)}"
+    OTP_STORE[email] = {
+        "otp": code,
+        "expires_at": datetime.utcnow() + timedelta(minutes=10),
+        "name": name,
+        "password": password
+    }
+
+    print(f"\n====================================", flush=True)
+    print(f"[SEHATMITRA OTP CODE] {email} -> {code}", flush=True)
+    print(f"====================================\n", flush=True)
+    sys.stdout.flush()
+
+    try:
+        send_otp_email(email, code)
+    except Exception as email_err:
+        print(f"Email delivery failed: {email_err}")
+
+    return {"success": True, "message": f"OTP successfully dispatched to {email}", "dev_otp": code}
 
 @router.post("/verify-and-register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def verify_and_register(payload: VerifyAndRegisterRequest, db: Session = Depends(get_db)):
@@ -409,9 +406,13 @@ def verify_user_password(
     return {"success": True, "message": "Password verified"}
 
 @router.post("/firebase-login")
-def firebase_login(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
-    """Syncs Firebase authenticated users with backend session."""
-    email = str(payload.get("email", "")).strip().lower()
+async def firebase_login_handler(request: Request, db: Session = Depends(get_db)):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    email = str(body.get("email", "")).strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="Email is required.")
         
@@ -430,7 +431,7 @@ def firebase_login(payload: Dict[str, Any] = Body(...), db: Session = Depends(ge
                 break
         
         # Check username uniqueness, fallback to email prefix if not specified or already taken
-        name = payload.get("name") or payload.get("displayName") or email.split("@")[0]
+        name = str(body.get("displayName") or body.get("name") or email.split("@")[0])
         base_username = name
         base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username).lower()
         username = base_username
@@ -463,7 +464,7 @@ def firebase_login(payload: Dict[str, Any] = Body(...), db: Session = Depends(ge
         "access_token": token,
         "token_type": "bearer",
         "user": {
-            "uid": payload.get("uid", email),
+            "uid": str(body.get("uid", email)),
             "email": email,
             "displayName": user.full_name,
             "id": user.id,
@@ -474,9 +475,14 @@ def firebase_login(payload: Dict[str, Any] = Body(...), db: Session = Depends(ge
     }
 
 @router.post("/verify-otp")
-def verify_otp(payload: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
-    email = str(payload.get("email", "")).strip().lower()
-    otp = str(payload.get("otp", "")).strip()
+async def verify_otp_handler(request: Request, db: Session = Depends(get_db)):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    email = str(body.get("email", "")).strip().lower()
+    otp = str(body.get("otp", "")).strip()
     
     stored = OTP_STORE.get(email)
     if not stored or stored["otp"] != otp:
