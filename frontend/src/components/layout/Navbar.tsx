@@ -19,7 +19,6 @@ import { Button } from '../common/Button';
 import { cn } from '../../utils/cn';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { Badge } from '../common/Badge';
 import { MedicalProfileModal } from '../profile/MedicalProfileModal';
 
 export interface NavbarProps {
@@ -31,10 +30,33 @@ export const Navbar: React.FC<NavbarProps> = () => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { isAuthenticated, user, showAuthModal, logout } = useAuth();
+  const { showAuthModal, logout } = useAuth();
   const { t } = useLanguage();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [user, setUser] = useState<any>(() => {
+    try {
+      const raw = localStorage.getItem("sehat_user") || localStorage.getItem("user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [dropdown, setDropdown] = useState(false);
+
+  useEffect(() => {
+    const sync = () => {
+      try {
+        const raw = localStorage.getItem("sehat_user") || localStorage.getItem("user");
+        setUser(raw ? JSON.parse(raw) : null);
+      } catch {}
+    };
+    window.addEventListener("auth_state_changed", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("auth_state_changed", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
 
   const NAV_ITEMS: NavItem[] = [
     { label: t('nav_home') || 'Overview', path: '/' },
@@ -140,56 +162,49 @@ export const Navbar: React.FC<NavbarProps> = () => {
           </Link>
 
           {/* Authentication section */}
-          {isAuthenticated ? (
+          {user ? (
             <div className="relative">
-              <button 
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="cursor-pointer hover:opacity-90 transition-opacity flex items-center gap-1.5 focus:outline-none"
+              <button
+                onClick={() => setDropdown(!dropdown)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 focus:outline-none"
               >
-                <Badge variant="teal" size="md" icon={<UserIcon className="w-3.5 h-3.5" />}>
-                  {user?.email || 'Logged In'}
-                </Badge>
+                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm">
+                  {user.displayName ? user.displayName[0].toUpperCase() : user.email ? user.email[0].toUpperCase() : "U"}
+                </div>
+                <span className="text-xs font-semibold max-w-[100px] truncate text-slate-700 dark:text-slate-200">
+                  {user.displayName || user.email?.split("@")[0]}
+                </span>
+                <span className="text-xs text-slate-400">▼</span>
               </button>
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-surface-card border border-surface-border rounded-lg shadow-elevated py-1 z-50 text-left">
+              {dropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1 z-50 text-left">
+                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200">
+                    <p className="font-semibold truncate">{user.displayName || "Patient"}</p>
+                    <p className="text-slate-400 truncate">{user.email}</p>
+                  </div>
                   <button
                     onClick={() => {
-                      window.dispatchEvent(new CustomEvent('set-active-tab', { detail: 'profile' }));
-                      navigate('/');
-                      setDropdownOpen(false);
+                      localStorage.removeItem("sehat_user");
+                      localStorage.removeItem("user");
+                      setUser(null);
+                      if (logout) logout();
+                      window.location.reload();
                     }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-content-primary hover:bg-surface-elevated transition-colors"
+                    className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                   >
-                    👤 My Profile
-                  </button>
-                  <button
-                    onClick={() => {
-                      logout();
-                      setDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2 text-xs font-semibold text-red-600 hover:bg-surface-elevated transition-colors border-t border-surface-border"
-                  >
-                    🚪 Logout
+                    Sign Out
                   </button>
                 </div>
               )}
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => showAuthModal('login')}
-              >
-                {t('login')}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => showAuthModal('signup')}
-              >
-                {t('signup')}
-              </Button>
+              <button onClick={() => showAuthModal('login')} className="px-3 py-1.5 text-xs font-medium border border-surface-border rounded-lg text-content-primary bg-surface-card hover:bg-surface-elevated">
+                Login
+              </button>
+              <button onClick={() => showAuthModal('signup')} className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">
+                Sign Up
+              </button>
             </div>
           )}
         </div>
@@ -257,7 +272,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
                 📲 Install SehatMitra App
               </button>
             )}
-            {isAuthenticated ? (
+            {user ? (
               <div className="flex flex-col gap-2 w-full">
                 <button 
                   onClick={() => {
@@ -268,7 +283,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
                   className="flex items-center justify-center p-2 rounded bg-brand-50/50 border border-brand-100 text-xs font-bold text-brand-800 cursor-pointer hover:bg-brand-50 transition-colors w-full"
                 >
                   <UserIcon className="w-4 h-4 mr-1.5 text-brand-600" />
-                  {user?.email}
+                  {user.email}
                 </button>
               </div>
             ) : (
