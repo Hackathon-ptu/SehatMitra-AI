@@ -60,7 +60,7 @@ class TriageService:
             history_str = "\n".join([f"{msg.get('sender', 'user')}: {msg.get('text', '')}" for msg in dialogue_history])
  
         lang_name = "English"
-        if is_hi:
+        if language.startswith("hi"):
             lang_name = "Hindi"
         elif language.startswith("pa"):
             lang_name = "Punjabi"
@@ -70,6 +70,18 @@ class TriageService:
             lang_name = "Tamil"
         elif language.startswith("te"):
             lang_name = "Telugu"
+        elif language.startswith("mr"):
+            lang_name = "Marathi"
+        elif language.startswith("gu"):
+            lang_name = "Gujarati"
+        elif language.startswith("kn"):
+            lang_name = "Kannada"
+        elif language.startswith("ml"):
+            lang_name = "Malayalam"
+        elif language.startswith("or"):
+            lang_name = "Odia"
+        elif language.startswith("ur"):
+            lang_name = "Urdu"
  
         age = patient_history.get('age', 'N/A') if patient_history else 'N/A'
         history_context = ""
@@ -291,7 +303,13 @@ class TriageService:
             "pa": "Punjabi",
             "bn": "Bengali",
             "ta": "Tamil",
-            "te": "Telugu"
+            "te": "Telugu",
+            "mr": "Marathi",
+            "gu": "Gujarati",
+            "kn": "Kannada",
+            "ml": "Malayalam",
+            "or": "Odia",
+            "ur": "Urdu"
         }
         language_name = lang_map.get(request.language.lower()[:2], "English")
 

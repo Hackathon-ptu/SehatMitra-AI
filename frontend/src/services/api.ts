@@ -352,10 +352,43 @@ export const neuralTtsService = {
       text,
       language_code: languageCode,
     }, {
-      timeout: 2000,
+      timeout: 8000,
     });
     return response.data;
   }
 };
 
+// ASHA Worker & Community Health Portal Service
+export const ashaService = {
+  async getCommunityStats() {
+    const response = await apiClient.get('/analytics/community-stats');
+    return response.data;
+  },
+  async submitFieldScreening(payload: any) {
+    const response = await apiClient.post('/analytics/field-screening', payload);
+    return response.data;
+  },
+  async getMchRecords() {
+    const response = await apiClient.get('/analytics/mch-records');
+    return response.data;
+  },
+  async addMchRecord(payload: any) {
+    const response = await apiClient.post('/analytics/mch-records', payload);
+    return response.data;
+  },
+  async getSupplies() {
+    const response = await apiClient.get('/analytics/supplies');
+    return response.data;
+  },
+  async requestRestock(payload: any) {
+    const response = await apiClient.post('/analytics/supplies/request', payload);
+    return response.data;
+  },
+  async reportOutbreak(payload: any) {
+    const response = await apiClient.post('/analytics/report-outbreak', payload);
+    return response.data;
+  }
+};
+
 export default apiClient;
+
