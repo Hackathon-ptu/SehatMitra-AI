@@ -77,3 +77,12 @@ backups/
 # Frontend local env (Vite)
 frontend/.env
 frontend/.env.local
+
+venv/
+.venv/
+node_modules/
+dist/
+build/
+.env
+__pycache__/
+*.pyc
