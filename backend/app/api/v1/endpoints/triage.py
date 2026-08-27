@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.schemas.triage import TriageRequest, TriageResponse
+from app.schemas.triage import LegacyTriageRequest, LegacyTriageResponse
 from app.services.triage_service import TriageService
 from app.api.v1.deps import get_current_user_optional
 from app.models.user import User
@@ -9,9 +9,9 @@ from typing import Optional
 
 router = APIRouter()
 
-@router.post("/", response_model=TriageResponse)
+@router.post("/", response_model=LegacyTriageResponse)
 async def perform_triage(
-    request: TriageRequest,
+    request: LegacyTriageRequest,
     current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):

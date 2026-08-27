@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+
+import API_BASE_URL from '../config/api';
 import { authService } from '../services/api';
 import {
   signInWithEmailAndPassword,
@@ -10,6 +12,21 @@ import {
   User as FirebaseUser,
 } from "firebase/auth";
 import { auth, googleProvider } from "../config/firebase";
+
+// Centralized fetch utility that automatically attaches JWT Authorization header
+export const authFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const fullUrl = `${API_BASE_URL}${url.startsWith('/') ? url : `/${url}`}`;
+  const response = await fetch(fullUrl, { ...options, headers });
+  return response;
+};
 
 export interface UserPayload {
   id?: number;
@@ -105,6 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setToken(res.access_token);
         setUser(res.user);
         localStorage.setItem('token', res.access_token);
+        localStorage.setItem('access_token', res.access_token);
         localStorage.setItem('user', JSON.stringify(res.user));
       }
     } catch (err) {
@@ -113,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUser = async () => {
-    const savedToken = localStorage.getItem('token');
+    const savedToken = localStorage.getItem('token') || localStorage.getItem('access_token');
     if (savedToken) {
       await fetchProfile(savedToken);
     }
@@ -158,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = (newToken: string, newUser?: UserPayload) => {
     localStorage.setItem('token', newToken);
+    localStorage.setItem('access_token', newToken);
     setToken(newToken);
     if (newUser) {
       setUser(newUser);
@@ -166,6 +185,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fetchProfile(newToken);
     }
     setAuthModalMode(null);
+    // Notify all components (e.g. HistoryDashboard) that auth state changed
+    window.dispatchEvent(new Event('auth_state_changed'));
+    window.dispatchEvent(new Event('storage'));
   };
 
   const loginWithEmail = async (email: string, pass: string) => {
@@ -194,6 +216,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     await signOut(auth);
+    // Clear persisted auth data
+    localStorage.removeItem('token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user');
   };
 
   const updateUser = (updatedUser: UserPayload) => {

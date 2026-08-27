@@ -1,5 +1,5 @@
 import React from 'react';
-import { BHASHINI_LANGUAGES } from '../constants/languages';
+import { LANGUAGES } from '../config/languages';
 import { Globe, X } from 'lucide-react';
 
 export const LanguageSelectorModal = ({ isOpen, onClose, onSelectLanguage }) => {
@@ -25,10 +25,10 @@ export const LanguageSelectorModal = ({ isOpen, onClose, onSelectLanguage }) => 
         {/* Content Body: Grid of Languages */}
         <div className="flex-1 overflow-y-auto p-6">
           <p className="text-xs sm:text-sm text-content-muted mb-4 font-semibold">
-            सेहतमित्र ऐप का उपयोग करने के लिए अपनी पसंदीदा भाषा का चयन करें:
+            सेहतमित्र ऐप का उपयोग करने के लिए अपनी पसंदीदा भाषा का चयन करें (Select language to continue):
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {BHASHINI_LANGUAGES.filter((l) => ['hi-IN', 'en-IN', 'pa-IN', 'te-IN'].includes(l.code)).map((lang) => (
+            {LANGUAGES.map((lang) => (
               <button
                 key={lang.code}
                 onClick={() => onSelectLanguage(lang.code)}

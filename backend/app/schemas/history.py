@@ -1,6 +1,14 @@
 from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, List
+
+class ConsultationHistoryCreate(BaseModel):
+    session_id: Optional[int] = None
+    language: str
+    conversation_history: Optional[List[Any]] = None
+    risk_level: Optional[str] = None
+    reasons: Optional[List[str]] = None
+    recommendation: Optional[str] = None
 
 class ConsultationHistoryResponse(BaseModel):
     id: int

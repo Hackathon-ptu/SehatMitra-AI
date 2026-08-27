@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { healthService, bhashiniService } from '../services/api';
+import { healthService, historyService } from '../services/api';
+import { playGlobalSpeech, stopAllSpeech } from '../utils/speech';
 import { Mic, MicOff, Send, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
 import { BHASHINI_LANGUAGES } from '../constants/languages';
 import { useAuth } from '../context/AuthContext';
@@ -9,7 +10,7 @@ import { useLanguage } from '../context/LanguageContext';
 
 export const HealthChat = ({ languageCode = 'hi-IN' }) => {
   const { t } = useLanguage();
-  const selectedLangConfig = BHASHINI_LANGUAGES.find(l => l.code === languageCode) || BHASHINI_LANGUAGES[0];
+  const selectedLangConfig = BHASHINI_LANGUAGES.find(l => l.code === languageCode) || BHASHINI_LANGUAGES.find(l => l.code.startsWith(languageCode)) || BHASHINI_LANGUAGES[0];
   const bhashiniCode = selectedLangConfig.bhashiniCode;
 
   const { user } = useAuth();
@@ -68,13 +69,16 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
   const [riskData, setRiskData] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState(null);
+  const [interviewStatus, setInterviewStatus] = useState('in_progress');
+  const [currentStep, setCurrentStep] = useState(1);
+  const [totalSteps, setTotalSteps] = useState(6);
+  const [collectedPoints, setCollectedPoints] = useState([]);
 
   const messagesEndRef = useRef(null);
 
   // Synchronize initial greeting based on the selected languageCode
   useEffect(() => {
-    const t = UI_TRANSLATIONS[languageCode] || UI_TRANSLATIONS['hi-IN'] || UI_TRANSLATIONS['en-IN'];
-    const welcomeText = t.welcome;
+    const welcomeText = t('welcome') || 'Hello! I am your SehatMitra AI health assistant. What symptoms are you experiencing?';
 
     setMessages([
       {
@@ -87,6 +91,10 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
     setSessionId(null);
     setIsCompleted(false);
     setRiskData(null);
+    setInterviewStatus('in_progress');
+    setCurrentStep(1);
+    setTotalSteps(6);
+    setCollectedPoints([]);
   }, [languageCode]);
 
   // Initialize Web Speech API Recognition dynamically when languageCode updates
@@ -120,77 +128,27 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
     }
   }, [languageCode]);
 
-  // Speech Synthesis (TTS) Helper Function with Bhashini fallback
-  const speakText = async (msg) => {
-    try {
-      // 1. Try Bhashini synthesis first
-      const data = await bhashiniService.synthesizeSpeech(msg.text, bhashiniCode);
-      if (data && data.audio_base64) {
-        const audio = new Audio(`data:audio/wav;base64,${data.audio_base64}`);
-        audio.onended = () => setSpeakingMsgId(null);
-        audio.play();
-        return audio;
-      }
-    } catch (e) {
-      console.warn("Bhashini TTS failed, falling back to Web Speech API", e);
-    }
-
-    // 2. Fall back to standard browser synthesis
-    if (!window.speechSynthesis) return null;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(msg.text);
-    utterance.lang = languageCode;
-    utterance.rate = 0.95;
-    utterance.pitch = 1.0;
-    const voices = window.speechSynthesis.getVoices();
-    const voice = voices.find((v) => v.lang.includes(bhashiniCode) || v.lang.toLowerCase().includes(bhashiniCode));
-    if (voice) {
-      utterance.voice = voice;
-    }
-    window.speechSynthesis.speak(utterance);
-    return null;
-  };
-
-  const [activeAudioElement, setActiveAudioElement] = useState(null);
-
   const stopSpeaking = () => {
-    if (activeAudioElement) {
-      activeAudioElement.pause();
-      setActiveAudioElement(null);
-    }
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    stopAllSpeech();
+    setSpeakingMsgId(null);
   };
 
   // State to track currently playing message
   const [speakingMsgId, setSpeakingMsgId] = useState(null);
 
-  const togglePlaySpeech = async (msg) => {
+  const togglePlaySpeech = (msg) => {
     if (speakingMsgId === msg.id) {
       stopSpeaking();
-      setSpeakingMsgId(null);
     } else {
       setSpeakingMsgId(msg.id);
-      const audioObj = await speakText(msg);
-      if (audioObj) {
-        setActiveAudioElement(audioObj);
-      }
+      playGlobalSpeech(
+        msg.text,
+        languageCode,
+        undefined,
+        () => setSpeakingMsgId(null)
+      );
     }
   };
-
-  // Clean speaking state when synthesis finishes
-  useEffect(() => {
-    if (window.speechSynthesis) {
-      const handleEnd = () => setSpeakingMsgId(null);
-      window.speechSynthesis.addEventListener('end', handleEnd);
-      return () => {
-        if (window.speechSynthesis) {
-          window.speechSynthesis.removeEventListener('end', handleEnd);
-        }
-      };
-    }
-  }, []);
 
   // Auto scroll to bottom of chat
   useEffect(() => {
@@ -229,56 +187,100 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
 
     try {
       const payload = {
-        symptoms_data: {
-          user_input_summary: userText,
-          dialogue_history: updatedMessages.map(m => ({
-            sender: m.sender === 'user' ? 'Patient' : 'Doctor',
-            text: m.text
-          })),
-          detected_symptoms: []
-        },
+        message: userText,
         language: selectedLangConfig.code.split('-')[0],
+        history: updatedMessages.slice(0, -1).map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text
+        }))
       };
 
-      const response = await healthService.getTriageChatResponse(payload);
+      const response = await healthService.getDualAiTriage(payload);
 
-      // Append bot response (doctor_reply)
+      // Append bot response
       const botMsg = {
         id: `bot-${Date.now()}`,
         sender: 'bot',
-        text: response.doctor_reply || "I have received your message.",
+        text: response.reply || response.message || response.clinical_summary,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, botMsg]);
 
-      // Update right-hand Primary Health Risk Report card live only if it is a clinical response
-      if (response.risk_level && response.risk_level !== 'none') {
+      // Update interview status and progress states
+      if (response.interview_status) setInterviewStatus(response.interview_status);
+      if (response.current_step) setCurrentStep(response.current_step);
+      if (response.total_steps) setTotalSteps(response.total_steps);
+      if (response.collected_points) setCollectedPoints(response.collected_points);
+
+      // Only update triage results if reasons list has non-empty items
+      const hasReasons = response.reasons && response.reasons.length > 0 && response.reasons.some(r => r && r.trim().length > 0);
+      if (hasReasons && response.risk_level) {
+        const triageReasons = response.reasons.filter(r => r && r.trim().length > 0);
         setRiskData({
           risk_level: response.risk_level,
-          primary_diagnosis: response.primary_diagnosis,
-          reasons: response.reasons,
-          home_remedies: response.remedies,
-          recommendation: response.recommendation,
+          primary_diagnosis: response.recommended_specialist || 'Consult Specialist',
+          reasons: triageReasons,
+          recommendation: response.recommendation || `Please consult a ${response.recommended_specialist || 'Physician'} as soon as possible.`,
           disclaimer: response.disclaimer,
-          clinical_reasons: response.reasons
+          clinical_reasons: triageReasons,
+          doctor_checklist: response.doctor_checklist || [],
+          engine_used: response.engine_used
         });
-      }
-      if (response.is_interview_complete !== undefined) {
-        setIsCompleted(response.is_interview_complete);
-      }
 
-      const normalizedRisk = response.risk_level?.toLowerCase();
-      if (normalizedRisk === 'emergency' || normalizedRisk === 'high') {
-        window.dispatchEvent(new CustomEvent('open-sos'));
+        if (response.is_interview_complete === true) {
+          setIsCompleted(true);
+          const normalizedRisk = response.risk_level?.toLowerCase();
+          if (normalizedRisk === 'emergency' || normalizedRisk === 'high') {
+            window.dispatchEvent(new CustomEvent('open-sos'));
+          }
+
+          // Auto-save triage session if user is logged in
+          const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+          if (token && user) {
+            const conversation_history = updatedMessages.map(m => ({
+              role: m.sender === 'user' ? 'user' : 'assistant',
+              content: m.text
+            }));
+            const savePayload = {
+              session_id: Date.now(),
+              language: selectedLangConfig.code.split('-')[0],
+              conversation_history,
+              risk_level: response.risk_level,
+              reasons: triageReasons,
+              recommendation: response.recommendation || `Please consult a ${response.recommended_specialist || 'Physician'} as soon as possible.`
+            };
+            historyService.saveConsultation(savePayload).catch(err => {
+              console.error('Failed to auto-save consultation to history', err);
+            });
+          }
+        } else {
+          setIsCompleted(false);
+        }
+      } else {
+        setRiskData(null);
+        setIsCompleted(false);
       }
     } catch (err) {
-      console.error(err);
+      const statusCode = err.response?.status;
+      const responseData = err.response?.data;
+      console.error("Chat API Error details:", {
+        status: statusCode,
+        data: responseData,
+        message: err.message
+      });
+
+      let errorText = bhashiniCode === 'en' 
+        ? 'Sorry, a network connection error has occurred. Please try again.' 
+        : 'माफ़ कीजियेगा, नेटवर्क में कुछ तकनीकी त्रुटि आ गई है। कृपया पुनः प्रयास करें।';
+
+      if (statusCode === 500 || statusCode === 503) {
+        errorText = "AI service is currently initializing. Please check your API keys in backend .env.";
+      }
+
       const errorMsg = {
         id: `err-${Date.now()}`,
         sender: 'bot',
-        text: bhashiniCode === 'en' 
-          ? 'Sorry, a network connection error has occurred. Please try again.' 
-          : 'माफ़ कीजियेगा, नेटवर्क में कुछ तकनीकी त्रुटि आ गई है। कृपया पुनः प्रयास करें।',
+        text: errorText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -302,6 +304,10 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
     setUserInput('');
     setIsCompleted(false);
     setRiskData(null);
+    setInterviewStatus('in_progress');
+    setCurrentStep(1);
+    setTotalSteps(6);
+    setCollectedPoints([]);
   };
 
   const getRiskStyles = (level) => {
@@ -309,29 +315,30 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
     switch (lvl) {
       case 'emergency':
         return {
-          bg: 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-950 dark:text-red-200',
-          badge: 'bg-red-500 text-white',
+          bg: 'bg-red-50 dark:bg-red-950/40 border-red-200 text-red-950 dark:text-red-200',
+          badge: 'bg-rose-100 text-rose-800 animate-pulse',
           label: t('risk_emergency') || 'Emergency Risk',
         };
       case 'high':
         return {
-          bg: 'bg-red-50 dark:bg-red-950/40 border-red-500 text-red-950 dark:text-red-200',
-          badge: 'bg-red-500 text-white',
+          bg: 'bg-orange-50 dark:bg-orange-950/40 border-orange-200 text-orange-950 dark:text-orange-200',
+          badge: 'bg-orange-100 text-orange-800',
           label: t('risk_high') || 'High Risk',
         };
       case 'moderate':
+      case 'medium':
       case 'amber':
         return {
-          bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-500 text-amber-950 dark:text-amber-200',
-          badge: 'bg-amber-500 text-white',
+          bg: 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 text-amber-950 dark:text-amber-200',
+          badge: 'bg-amber-100 text-amber-800',
           label: t('risk_moderate') || 'Moderate Risk',
         };
       case 'low':
       case 'green':
       default:
         return {
-          bg: 'bg-green-50 dark:bg-green-950/40 border-green-500 text-green-950 dark:text-green-200',
-          badge: 'bg-green-500 text-white',
+          bg: 'bg-green-50 dark:bg-green-950/40 border-green-200 text-green-950 dark:text-green-200',
+          badge: 'bg-emerald-100 text-emerald-800',
           label: t('risk_low') || 'Low Risk',
         };
     }
@@ -340,9 +347,10 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
   const riskStyles = riskData ? getRiskStyles(riskData.risk_level) : null;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 w-full max-w-4xl mx-auto px-3 sm:px-6 animate-fade-in">
-      {/* Left Column: Chat Area */}
-      <div className="flex-1 flex flex-col h-[600px] bg-surface-card border border-surface-border rounded-2xl shadow-xl overflow-hidden">
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 animate-fade-in">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Left Column: Chat Area */}
+        <div className="lg:col-span-7 flex flex-col h-[calc(100vh-210px)] min-h-[600px] bg-surface-card border border-surface-border rounded-2xl shadow-xl overflow-hidden">
         {/* Chat Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border bg-gradient-to-r from-brand-600 to-brand-700 text-white">
           <div className="flex items-center gap-3">
@@ -373,13 +381,13 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
+              className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} animate-fade-in`}
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4.5 py-3 text-sm shadow-sm leading-relaxed relative group ${
+                className={`text-sm shadow-sm leading-relaxed relative group ${
                   msg.sender === 'user'
-                    ? 'bg-brand-600 text-white rounded-tr-none'
-                    : 'bg-surface-card text-content-primary border border-surface-border rounded-tl-none'
+                    ? 'max-w-[75%] mr-1 sm:mr-2 rounded-2xl rounded-tr-none px-4 py-3 bg-teal-700 text-white'
+                    : 'max-w-[80%] bg-surface-card text-content-primary border border-surface-border rounded-2xl rounded-tl-none px-4.5 py-3'
                 }`}
               >
                 <p className="text-left whitespace-pre-wrap">{msg.text}</p>
@@ -446,21 +454,19 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
               type="text"
               value={userInput}
               onChange={(e) => setUserInput(e.target.value)}
-              disabled={loading || isCompleted}
+              disabled={loading}
               placeholder={
                 isListening
                   ? t('listening') || 'Listening...'
-                  : isCompleted
-                  ? 'Completed.'
-                  : t('chatPlaceholder') || 'Type your symptoms here...'
+                  : 'Describe your symptoms in detail...'
               }
               className="flex-1 bg-transparent border-0 text-sm text-content-primary placeholder:text-content-disabled focus:outline-none py-2 px-1"
             />
             <button
               type="submit"
-              disabled={!userInput.trim() || loading || isCompleted}
+              disabled={!userInput.trim() || loading}
               className={`p-2.5 rounded-lg transition-all flex items-center justify-center ${
-                userInput.trim() && !loading && !isCompleted
+                userInput.trim() && !loading
                   ? 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800'
                   : 'bg-surface-elevated text-content-disabled cursor-not-allowed border border-surface-border'
               }`}
@@ -478,41 +484,66 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
 
       {/* Right Column: Triage Result Card or Placeholder */}
       {!isCompleted ? (
-        <div className="w-full lg:w-[400px] border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg h-fit self-start">
-          <div className="flex items-center gap-2">
-            <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-            <span className="text-xs font-bold uppercase tracking-wider text-blue-500">
-              {t('clinical_intake_in_progress') || 'Clinical Intake in Progress'}
-            </span>
-          </div>
-          <h3 className="text-lg font-bold">
-            {t('clinical_intake_in_progress') || 'Clinical Intake in Progress'}
-          </h3>
-          <p className="text-sm text-content-secondary leading-relaxed">
-            {t('answering_triage_questions') || "Answering doctor's triage questions... Please answer the follow-up question on the left."}
-          </p>
-          
-          <div className="border-t border-surface-border pt-4">
-            <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-2">
-              {t('clinical_progress') || 'Clinical Progress'}
-            </span>
-            <p className="text-xs text-content-secondary mb-2">
-              {t('conversational_turns') || 'Conversational turns'}: {messages.filter(m => m.sender === 'user').length} / 4
+        (collectedPoints.length === 0 && (!riskData || !riskData.reasons || riskData.reasons.length === 0)) ? (
+          <div className="w-full lg:col-span-5 border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-center justify-center items-center shadow-lg h-[calc(100vh-210px)] min-h-[600px] animate-fade-in">
+            <Sparkles className="w-8 h-8 text-content-muted animate-pulse" />
+            <h3 className="text-base font-bold">No Symptoms Evaluated Yet</h3>
+            <p className="text-xs text-content-secondary leading-relaxed px-4">
+              Describe your symptoms in the chat to see clinical triage.
             </p>
-            {riskData && riskData.reasons && riskData.reasons.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {riskData.reasons.map((reason, idx) => (
-                  <span key={idx} className="px-2 py-0.5 bg-brand-50 text-brand-700 text-xs rounded border border-brand-100 font-medium">
-                    {reason}
-                  </span>
-                ))}
+          </div>
+        ) : (
+          <div className="w-full lg:col-span-5 border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg h-[calc(100vh-210px)] min-h-[600px] overflow-y-auto animate-fade-in">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-500">
+                Clinical Assessment Ongoing
+              </span>
+            </div>
+            <h3 className="text-lg font-bold">
+              Active Turn #{currentStep}
+            </h3>
+
+            <p className="text-sm text-content-secondary leading-relaxed">
+              Please answer the follow-up question on the left to help clarify symptoms.
+            </p>
+
+            {/* Live Symptom Notes / Collected Points */}
+            {collectedPoints && collectedPoints.length > 0 && (
+              <div className="border-t border-surface-border pt-4">
+                <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-2">
+                  Live Symptom Notes
+                </span>
+                <ul className="list-disc pl-5 text-xs text-content-secondary space-y-1.5">
+                  {collectedPoints.map((point, idx) => point && point.trim() && (
+                    <li key={idx} className="leading-relaxed">
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Cumulative Case Details if reasons are present */}
+            {riskData && riskData.reasons && riskData.reasons.length > 0 && riskData.reasons.some(r => r && r.trim().length > 0) && (
+              <div className="border-t border-surface-border pt-4">
+                <span className="text-xs font-bold uppercase tracking-wider text-content-muted block mb-2">
+                  Clinical Notes Recorded
+                </span>
+                <div className="flex flex-col gap-1.5">
+                  {riskData.reasons.map((reason, idx) => reason && reason.trim() && (
+                    <p key={idx} className="text-[11px] leading-relaxed text-content-secondary bg-surface-bg/50 px-2.5 py-1.5 rounded border border-surface-border animate-fade-in">
+                      {reason}
+                    </p>
+                  ))}
+                </div>
               </div>
             )}
           </div>
-        </div>
+        )
       ) : (
         riskData && riskStyles && (
-          <div className={`w-full lg:w-[400px] border-2 rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg}`}>
+          <div className={`w-full lg:col-span-5 border-2 rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg} h-[calc(100vh-210px)] min-h-[600px] overflow-y-auto animate-fade-in`}>
             <div className="flex items-center justify-between">
               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${riskStyles.badge}`}>
                 {riskStyles.label}
@@ -548,6 +579,25 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
                 <p className="text-sm font-semibold leading-relaxed">{riskData.recommendation}</p>
               </div>
 
+              {riskData.doctor_checklist && riskData.doctor_checklist.length > 0 && (
+                <div className="p-3 bg-surface-card border border-surface-border rounded-lg flex flex-col gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-content-muted">
+                    Checklist for Doctor / Patient
+                  </span>
+                  <div className="flex flex-col gap-1.5">
+                    {riskData.doctor_checklist.map((item, idx) => (
+                      <label key={idx} className="flex items-start gap-2 text-xs text-content-secondary cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 rounded border-surface-border text-brand-600 focus:ring-brand-500"
+                        />
+                        <span>{item}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {riskData.disclaimer && (
                 <div className="p-3 rounded-lg bg-surface-card border border-surface-border flex gap-2">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
@@ -566,6 +616,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
           </div>
         )
       )}
+      </div>
     </div>
   );
 };

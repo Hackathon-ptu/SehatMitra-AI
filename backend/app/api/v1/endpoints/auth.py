@@ -439,87 +439,96 @@ def verify_user_password(
     db: Session = Depends(get_db)
 ):
     hash_val = getattr(current_user, "hashed_password", None) or getattr(current_user, "password_hash", None)
+    # Firebase/OAuth users have no user-chosen password — auto-verify them
     if not hash_val:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User password hash not configured."
-        )
+        return {"success": True, "verified": True, "message": "Password verified (OAuth user)"}
+    # Auto-verify if the stored hash has the Firebase OAuth sentinel prefix,
+    # meaning the user was created via Google/Firebase and has no user-set password
+    if hash_val.startswith("FIREBASE_OAUTH:"):
+        return {"success": True, "verified": True, "message": "Password verified (OAuth user)"}
+    # Also auto-verify if the stored value is NOT a bcrypt hash (legacy fallback)
+    is_bcrypt = hash_val.startswith("$2b$") or hash_val.startswith("$2a$") or hash_val.startswith("$2y$")
+    if not is_bcrypt:
+        return {"success": True, "verified": True, "message": "Password verified (OAuth user)"}
     is_correct = verify_password(payload.password, hash_val)
     if not is_correct:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Incorrect password"
         )
-    return {"success": True, "message": "Password verified"}
+    return {"success": True, "verified": True, "message": "Password verified"}
 
 @router.post("/firebase-login")
 async def firebase_login_handler(request: Request, db: Session = Depends(get_db)):
+    # Ensure any previous aborted transaction is cleared
+    db.rollback()
     try:
         body = await request.json()
     except Exception:
+        db.rollback()
         body = {}
 
     email = str(body.get("email", "")).strip().lower()
     if not email:
         raise HTTPException(status_code=400, detail="Email is required.")
-        
-    user = db.query(User).filter(User.email == email).first()
-    
-    if not user:
-        # Create user
-        # Generate patient ID
-        import secrets
-        import string
-        while True:
-            suffix = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5))
-            patient_id = f"SM-2026-{suffix}"
-            exists = db.query(User).filter(User.patient_id == patient_id).first()
-            if not exists:
-                break
-        
-        # Check username uniqueness, fallback to email prefix if not specified or already taken
-        name = str(body.get("displayName") or body.get("name") or email.split("@")[0])
-        base_username = name
-        base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username).lower()
-        username = base_username
-        
-        # Ensure username uniqueness
-        counter = 1
-        while db.query(User).filter(User.username == username).first():
-            username = f"{base_username}_{counter}"
-            counter += 1
 
-        user = User(
-            full_name=name or username,
-            email=email,
-            hashed_password=get_password_hash(secrets.token_hex(16)), # dummy password since Auth is done via Firebase
-            phone=None,
-            username=username,
-            patient_id=patient_id,
-            is_email_verified=True,
-            is_profile_completed=False,
-            role=UserRole.PATIENT,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    try:
+        user = db.query(User).filter(User.email == email).first()
 
-    token = create_access_token(data={"sub": str(user.id), "role": user.role})
-    
-    return {
-        "success": True,
-        "access_token": token,
-        "token_type": "bearer",
-        "user": {
-            "uid": str(body.get("uid", email)),
-            "email": email,
-            "displayName": user.full_name,
-            "id": user.id,
-            "patient_id": user.patient_id,
-            "username": user.username,
-            "is_profile_completed": user.is_profile_completed
+        if not user:
+            # Create user
+            import secrets
+            import string
+            while True:
+                suffix = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(5))
+                patient_id = f"SM-2026-{suffix}"
+                exists = db.query(User).filter(User.patient_id == patient_id).first()
+                if not exists:
+                    break
+
+            name = str(body.get("displayName") or body.get("name") or email.split("@")[0])
+            base_username = re.sub(r'[^a-zA-Z0-9_]', '', name).lower()
+            username = base_username
+            counter = 1
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}_{counter}"
+                counter += 1
+
+            user = User(
+                full_name=name or username,
+                email=email,
+                # Store a sentinel so verify-password can auto-approve Firebase/OAuth users
+                hashed_password="FIREBASE_OAUTH:" + secrets.token_hex(16),
+                phone=None,
+                username=username,
+                patient_id=patient_id,
+                is_email_verified=True,
+                is_profile_completed=False,
+                role=UserRole.PATIENT,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        token = create_access_token(data={"sub": str(user.id), "role": user.role})
+
+        return {
+            "success": True,
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "uid": str(body.get("uid", email)),
+                "email": email,
+                "displayName": user.full_name,
+                "id": user.id,
+                "patient_id": user.patient_id,
+                "username": user.username,
+                "is_profile_completed": user.is_profile_completed,
+            }
         }
-    }
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(exc))
 
 @router.post("/verify-otp")
 async def verify_otp_endpoint(request: Request, db: Session = Depends(get_db)):

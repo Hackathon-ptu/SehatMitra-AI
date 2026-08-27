@@ -6,3 +6,6 @@ class ReportResponse(BaseModel):
     extracted_data: Union[Dict[str, Any], List[Any]]
     explanation: str
     status: str
+
+class ReportAnalysisRequest(BaseModel):
+    language: str = "en"

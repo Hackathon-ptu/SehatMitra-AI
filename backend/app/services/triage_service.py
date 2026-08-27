@@ -1,7 +1,42 @@
 import json
-from typing import Optional, Dict, Any
+import asyncio
+import traceback
+import re
+from typing import Optional, Dict, Any, List
+from dotenv import load_dotenv
+load_dotenv()
+
 from app.core.config import settings
-from app.services.ai_service import get_gemini_client
+from app.schemas.triage import TriageRequest, TriageResponse, ChatMessage
+from groq import AsyncGroq
+from google import genai
+from google.genai import types
+
+_groq_client = None
+
+def get_groq_client():
+    global _groq_client
+    if _groq_client is None:
+        if settings.GROQ_API_KEY:
+            _groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+    return _groq_client
+
+_gemini_client = None
+
+def get_gemini_client_new():
+    global _gemini_client
+    if _gemini_client is None:
+        if settings.GEMINI_API_KEY:
+            _gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+    return _gemini_client
+
+def clean_json_response(raw_text: str) -> dict:
+    clean = re.sub(r'```(?:json)?', '', raw_text).strip()
+    match = re.search(r'\{.*\}', clean, re.DOTALL)
+    if match:
+        return json.loads(match.group(0))
+    return json.loads(clean)
+
 
 class TriageService:
     @staticmethod
@@ -246,3 +281,246 @@ class TriageService:
             "disclaimer": disclaimer,
             "doctor_reply": "I have completed the risk assessment based on your symptoms." if not is_hi else "मैंने आपके लक्षणों के आधार पर जोखिम मूल्यांकन पूरा कर लिया है।"
         }
+
+    @staticmethod
+    async def perform_dual_ai_triage(request: TriageRequest) -> TriageResponse:
+        # Resolve language name for prompt injection
+        lang_map = {
+            "en": "English",
+            "hi": "Hindi",
+            "pa": "Punjabi",
+            "bn": "Bengali",
+            "ta": "Tamil",
+            "te": "Telugu"
+        }
+        language_name = lang_map.get(request.language.lower()[:2], "English")
+
+        # Compile message history (limit to last 14 turns to preserve multi-turn clinical context)
+        messages = []
+        if request.history:
+            for msg in request.history[-14:]:
+                messages.append({"role": msg.role, "content": msg.content})
+        messages.append({"role": "user", "content": request.message})
+
+        # Calculate current turn/step dynamically
+        user_msg_count = sum(1 for m in request.history if m.role == "user") if request.history else 0
+        current_step = user_msg_count + 1
+
+        CLINICAL_INTAKE_SYSTEM_PROMPT = f"""
+        You are SehatMitra-AI, an empathetic, thorough clinical intake assistant.
+        Your goal is to conduct a systematic, multi-turn clinical interview by asking ONE focused diagnostic follow-up question at a time (e.g., pain scale 0-10, duration, onset, exact location, or red flags) to gather details on the patient's symptoms.
+        
+        CURRENT TURN NUMBER: {current_step}
+        
+        DYNAMIC INTERVIEW COMPLEXITY & COMPLETION RULES:
+        - You must dynamically control when the interview is complete by setting "is_interview_complete" to true or false:
+          - Emergency cases (e.g. chest pain, severe shortness of breath, sudden numbness, anaphylaxis): Short-circuit immediately, asking only 1-2 questions to establish key parameters before concluding. Set "is_interview_complete" to true.
+          - Standard/Simple cases (e.g. mild cold, simple cut, localized rash): Ask 3-5 questions before concluding and setting "is_interview_complete" to true.
+          - Complex/Vague cases (e.g. chronic pain, multiple systemic symptoms, or vague complaints): Ask 8-14+ questions, continuing to clarify all clinical parameters (SOCRATES framework: Site, Onset, Character, Radiation, Associations, Time course, Exacerbating/Relieving factors, Severity) and red flags, before setting "is_interview_complete" to true.
+        - While "is_interview_complete" is false, set "recommendation" to "" and "doctor_checklist" to [].
+        - Once "is_interview_complete" is true, conclude the assessment in "conversational_reply" and fully populate the final "recommendation" and "doctor_checklist".
+        - On every turn, set "current_step" to {current_step}, and "collected_points" to a list of clinical points gathered so far.
+        
+        INTERVIEW STYLE:
+        - Be warm, supportive, and clinical.
+        - Ask ONLY ONE focused question per turn in "conversational_reply" to avoid overwhelming the patient.
+        - In "reasons", maintain a cumulative, detailed clinical summary of the patient's case (e.g. "The patient reports a dull headache starting yesterday. Pain is rated 7/10."). Do not discard details from previous turns.
+        
+        CLINICAL URGENCY:
+        - Assess the urgency of symptoms:
+          - Emergency: Chest pain, severe breathlessness, unconsciousness, severe bleeding, or anaphylaxis.
+          - High: Worsening fever with stiff neck, severe localized pain, pre-existing comorbidities (diabetes, asthma) with worsening symptoms.
+          - Medium: Moderate fever, persistent cough, minor infections, moderate pain.
+          - Low: Mild symptoms, common cold, minor cuts, fatigue, normal viral symptoms.
+        - Recommend the correct specialist (e.g., Cardiologist, Pulmonologist, General Physician, Pediatrician, Dermatologist).
+        - Create a doctor checklist of 3-5 critical diagnostic questions or check-boxes for the clinical team/patient to verify.
+        
+        GREETINGS & CASUAL INPUTS:
+        - If the patient message is a greeting (e.g., "hi", "hello", "hlo", "namaste") or casual chat without symptoms, respond naturally in "conversational_reply", set "is_clinical_triage" to false, "clinical_summary" to "", "reasons" to [], "risk_level" to "Low", "doctor_checklist" to [], "recommended_specialist" to "", "interview_status" to "in_progress", and "is_interview_complete" to false.
+        
+        CRITICAL LOCALIZATION INSTRUCTION:
+        - The requested language is: {language_name}.
+        - You MUST translate the `conversational_reply`, `clinical_summary`, `reasons`, `recommendation`, `recommended_specialist`, `doctor_checklist` items, and `disclaimer` into {language_name} using the native script.
+        - The JSON keys must remain in English as defined below.
+        
+        STRICT JSON OUTPUT SCHEMA:
+        You must output a valid JSON object. Do not include any other text. Here is the JSON schema:
+        {{
+          "conversational_reply": "ONE focused diagnostic follow-up question in patient's language, or welcoming message if greeting",
+          "clinical_summary": "Clinical summary of symptoms in patient's language, or empty string if no symptoms are described yet",
+          "is_clinical_triage": true | false,
+          "risk_level": "Low" | "Medium" | "High" | "Emergency",
+          "reasons": ["Cumulative clinical summary line 1", "Cumulative clinical summary line 2"],
+          "recommendation": "Practical home guidance and detailed red-flag warnings in patient's language (leave empty string \"\" if is_interview_complete is false)",
+          "doctor_checklist": ["checklist item 1 in patient's language", "checklist item 2 in patient's language"] (or empty list [] if is_interview_complete is false),
+          "recommended_specialist": "Recommended specialist name in patient's language" (or empty string "" if is_clinical_triage is false),
+          "disclaimer": "AI triage disclaimer in patient's language",
+          "interview_status": "in_progress" | "completed",
+          "current_step": {current_step},
+          "collected_points": ["point 1", "point 2"],
+          "is_interview_complete": true | false
+        }}
+        """
+
+        parsed = None
+        engine = None
+
+        # 1. Primary Inference: Groq LPU with dynamic model discovery
+        groq_client = get_groq_client()
+        if groq_client:
+            models_to_try = [
+                'openai/gpt-oss-120b',
+                'openai/gpt-oss-20b',
+                'qwen/qwen3.6-27b'
+            ]
+            try:
+                # Dynamic discovery
+                print("[TriageService] Fetching dynamic Groq models list...")
+                groq_models = await groq_client.models.list()
+                exclusions = ['guard', 'whisper', 'safeguard', 'embedding', 'prompt-guard']
+                discovered_ids = []
+                for m in groq_models.data:
+                    m_id_lower = m.id.lower()
+                    if not any(ex in m_id_lower for ex in exclusions):
+                        if any(inc in m_id_lower for inc in ["llama", "mixtral", "gemma", "gpt-oss", "qwen"]):
+                            discovered_ids.append(m.id)
+                if discovered_ids:
+                    models_to_try = discovered_ids + [m for m in models_to_try if m not in discovered_ids]
+                    print(f"[TriageService] Discovered Groq models: {discovered_ids}")
+            except Exception as list_err:
+                print(f"[TriageService] Groq model listing failed: {list_err}. Using default list.")
+
+            for model_name in models_to_try:
+                try:
+                    print(f"[TriageService] Trying Groq model: {model_name}")
+                    response = await groq_client.chat.completions.create(
+                        model=model_name,
+                        messages=[
+                            {"role": "system", "content": CLINICAL_INTAKE_SYSTEM_PROMPT},
+                            *messages
+                        ],
+                        response_format={"type": "json_object"},
+                        temperature=0.65,
+                        max_tokens=1200,
+                        timeout=15.0
+                    )
+                    raw_content = response.choices[0].message.content
+                    parsed = clean_json_response(raw_content)
+                    engine = "groq"
+                    print(f"[TriageService] Groq success on {model_name}")
+                    break
+                except Exception as e:
+                    print(f"[TriageService] Groq primary execution failed on {model_name}: {type(e).__name__}: {e}")
+                    traceback.print_exc()
+
+        # 2. Fallback Failover: Google GenAI Client
+        if not parsed:
+            gemini_client = get_gemini_client_new()
+            if gemini_client:
+                gemini_models = [
+                    "gemini-3.6-flash", 
+                    "gemini-3.5-flash", 
+                    "gemini-flash-latest"
+                ]
+                for gemini_model_name in gemini_models:
+                    try:
+                        print(f"[TriageService] Trying Gemini fallback model (Async GenAI SDK): {gemini_model_name}")
+                        # Build contents for new GenAI SDK
+                        genai_contents = []
+                        for msg in messages:
+                            role = "user" if msg["role"] == "user" else "model"
+                            genai_contents.append(
+                                types.Content(
+                                    role=role,
+                                    parts=[types.Part.from_text(text=msg["content"])]
+                                )
+                            )
+
+                        response = await gemini_client.aio.models.generate_content(
+                            model=gemini_model_name,
+                            contents=genai_contents,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                system_instruction=CLINICAL_INTAKE_SYSTEM_PROMPT
+                            )
+                        )
+                        raw_content = response.text.strip()
+                        parsed = clean_json_response(raw_content)
+                        engine = "gemini_fallback"
+                        print(f"[TriageService] Gemini fallback success on {gemini_model_name}")
+                        break
+                    except Exception as gemini_err:
+                        print(f"[TriageService] Gemini fallback execution failed on {gemini_model_name}: {type(gemini_err).__name__}: {gemini_err}")
+                        traceback.print_exc()
+
+        # 3. Handle parser fallback if both failed or returned invalid responses
+        if not parsed:
+            parsed = {
+                "conversational_reply": "I'm sorry, I'm having trouble connecting to my primary clinical analysis models right now.",
+                "clinical_summary": f"Dual-AI system analysis offline/error. Symptom recorded: {request.message}",
+                "is_clinical_triage": False,
+                "risk_level": "Low",
+                "reasons": ["Service offline fallback"],
+                "recommendation": "Consult physician for diagnosis.",
+                "doctor_checklist": [],
+                "recommended_specialist": "General Physician",
+                "disclaimer": "This fallback summary is active due to AI endpoint timeouts.",
+                "interview_status": "in_progress",
+                "current_step": current_step,
+                "collected_points": [],
+                "is_interview_complete": False
+            }
+            engine = "gemini_fallback"  # Denoting service error mode as fallback outcome
+
+        try:
+            # Norm / Validate risk levels
+            r_level = parsed.get("risk_level", "Medium").strip().capitalize()
+            if r_level not in ["Low", "Medium", "High", "Emergency"]:
+                if r_level.lower() == "moderate":
+                    r_level = "Medium"
+                else:
+                    r_level = "Medium"
+
+            is_triage = parsed.get("is_clinical_triage") or parsed.get("has_symptoms") or False
+            is_complete = parsed.get("is_interview_complete") or (parsed.get("interview_status") == "completed") or False
+            return TriageResponse(
+                clinical_summary=parsed.get("clinical_summary", "Clinical assessment in progress."),
+                risk_level=r_level,
+                doctor_checklist=parsed.get("doctor_checklist") if is_complete else [],
+                recommended_specialist=parsed.get("recommended_specialist", "General Physician"),
+                disclaimer=parsed.get("disclaimer", "Disclaimer: AI assistant evaluation."),
+                engine_used=engine or "fallback",
+                message=parsed.get("conversational_reply") or parsed.get("message") or parsed.get("clinical_summary") or "",
+                has_symptoms=is_triage,
+                reply=parsed.get("conversational_reply") or parsed.get("message") or parsed.get("clinical_summary") or "",
+                is_clinical_triage=is_triage,
+                reasons=parsed.get("reasons") or [parsed.get("clinical_summary")] or [],
+                recommendation=parsed.get("recommendation", "") if is_complete else "",
+                interview_status="completed" if is_complete else "in_progress",
+                current_step=int(parsed.get("current_step") or current_step),
+                total_steps=int(parsed.get("total_steps") or 6),
+                collected_points=parsed.get("collected_points") or [],
+                is_interview_complete=is_complete
+            )
+        except Exception as norm_err:
+            print(f"[TriageService] Critical normalization fallback error: {norm_err}")
+            traceback.print_exc()
+            return TriageResponse(
+                clinical_summary=f"Clinical analysis currently in safe mode. Symptom recorded: {request.message}",
+                risk_level="Medium",
+                doctor_checklist=["Verify details manually with the patient", "Log symptom description"],
+                recommended_specialist="General Physician",
+                disclaimer="Safe clinical backup mode active.",
+                engine_used="fallback",
+                message=f"I recorded: {request.message}",
+                has_symptoms=True,
+                reply=f"I recorded: {request.message}",
+                is_clinical_triage=True,
+                reasons=["Safe mode backup evaluation"],
+                recommendation="Please consult a clinician.",
+                interview_status="in_progress",
+                current_step=current_step,
+                collected_points=[],
+                is_interview_complete=False
+            )
+

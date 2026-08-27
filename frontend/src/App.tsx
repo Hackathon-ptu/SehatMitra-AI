@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { HealthChat } from './components/HealthChat';
 import { LabReportAnalyzer } from './components/reports/LabReportAnalyzer';
 import { HospitalLocator } from './components/HospitalLocator';
@@ -8,10 +8,10 @@ import { AshaDashboard } from './components/dashboard/AshaDashboard';
 import { ProfilePage } from './components/profile/ProfilePage';
 import { AuthModal } from './components/AuthModal';
 import { LanguageSelectorModal } from './components/LanguageSelectorModal';
+import { LanguageSelector } from './components/language/LanguageSelector';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
-import { BHASHINI_LANGUAGES } from './constants/languages';
-import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, Globe, User as UserIcon, Sun, Moon, Mic, Activity, Menu, X } from 'lucide-react';
+import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIcon, Sun, Moon, Mic, Activity, Menu, X } from 'lucide-react';
 import { UI_TRANSLATIONS } from './constants/translations';
 import { EmergencySOSModal } from './components/EmergencySOSModal';
 import { OfflineBanner } from './components/common/OfflineBanner';
@@ -69,10 +69,7 @@ export const App = () => {
     }
   }, []);
 
-  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const lang = e.target.value as any;
-    setLanguage(lang);
-  };
+
 
   const handleSelectLanguageFromModal = (langCode: string) => {
     setLanguage(langCode as any);
@@ -163,21 +160,7 @@ export const App = () => {
 
           {/* Right Header Panel: Lang Dropdown + Auth triggers */}
           <div className="flex items-center gap-3">
-            {/* Bhashini Multi-language selection dropdown */}
-            <div className="relative flex items-center bg-surface-elevated border border-surface-border rounded-lg px-2 py-1 gap-1">
-              <Globe className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-              <select
-                value={selectedLanguage}
-                onChange={handleLanguageChange}
-                className="bg-transparent border-none text-xs font-bold text-content-primary focus:outline-none focus:ring-0 cursor-pointer max-w-[100px] sm:max-w-none"
-              >
-                {BHASHINI_LANGUAGES.filter((l: any) => ['hi-IN', 'en-IN', 'pa-IN', 'te-IN'].includes(l.code)).map((lang: any) => (
-                  <option key={lang.code} value={lang.code} className="bg-surface-card text-content-primary">
-                    {lang.nativeName} ({lang.name})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <LanguageSelector />
 
             {/* Desktop-only Panel (lg and above) */}
             <div className="hidden lg:flex items-center gap-3">
@@ -412,7 +395,7 @@ export const App = () => {
           {activeTab === 'triage' && <TriageAssistant />}
           {activeTab === 'report' && <LabReportAnalyzer languageCode={selectedLanguage} />}
           {activeTab === 'hospitals' && <HospitalLocator />}
-          {activeTab === 'history' && isAuthenticated && <HistoryDashboard />}
+          {activeTab === 'history' && <HistoryDashboard />}
           {activeTab === 'asha' && <AshaDashboard />}
           {activeTab === 'profile' && isAuthenticated && <ProfilePage />}
         </div>

@@ -10,21 +10,36 @@ export const apiClient = axios.create({
   },
 });
 
-// Setup Auth Interceptor to attach JWT token
+// Request interceptor to attach JWT token to ALL requests
 apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
+  (config: any) => {
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token');
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
   },
+  (error: any) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle 401 globally and clear auth data
+apiClient.interceptors.response.use(
+  (response) => response,
   (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      window.dispatchEvent(new Event('auth_state_changed'));
+    }
     return Promise.reject(error);
   }
 );
 
 // Auth API endpoints
+
 export const authApi = {
   async signup(data: any) {
     const signupData = {
@@ -77,6 +92,7 @@ export const authService = {
     });
     if (response.data?.access_token) {
       localStorage.setItem('token', response.data.access_token);
+      localStorage.setItem('access_token', response.data.access_token);
     }
     return response.data;
   },
@@ -92,6 +108,7 @@ export const authService = {
     });
     if (response.data?.access_token) {
       localStorage.setItem('token', response.data.access_token);
+      localStorage.setItem('access_token', response.data.access_token);
     }
     return response.data;
   },
@@ -113,6 +130,7 @@ export const authService = {
 
     if (response.data?.access_token) {
       localStorage.setItem('token', response.data.access_token);
+      localStorage.setItem('access_token', response.data.access_token);
     }
     return response.data;
   },
@@ -165,6 +183,10 @@ export const healthService = {
   },
   async getTriageChatResponse(payload: any) {
     const response = await apiClient.post('/triage/', payload);
+    return response.data;
+  },
+  async getDualAiTriage(payload: any) {
+    const response = await apiClient.post('/triage/chat', payload);
     return response.data;
   },
 };
@@ -271,14 +293,35 @@ export const reportService = {
   },
 };
 
+
+
 // Consultation & report history service (used by HistoryDashboard.jsx)
+
+// Type definitions for history service
+export interface ConsultationRecord {
+  // Define fields as needed; using index signature for flexibility
+  [key: string]: any;
+}
+
+export interface SaveConsultationPayload {
+  // Define fields as needed; using index signature for flexibility
+  [key: string]: any;
+}
+
 export const historyService = {
-  async getConsultations() {
-    const response = await apiClient.get('/history/consultations');
+  async getConsultations(userEmail?: string): Promise<ConsultationRecord[]> {
+    const url = userEmail ? `/history/consultations?user_email=${encodeURIComponent(userEmail)}` : '/history/consultations';
+    const response = await apiClient.get(url);
     return response.data;
   },
-  async getReports() {
+
+  async getReports(): Promise<any[]> {
     const response = await apiClient.get('/history/reports');
+    return response.data;
+  },
+
+  async saveConsultation(data: SaveConsultationPayload): Promise<any> {
+    const response = await apiClient.post('/history/consultations/save', data);
     return response.data;
   },
 };
@@ -300,6 +343,19 @@ export const bhashiniService = {
     });
     return response.data;
   },
+};
+
+// Microsoft Edge Neural TTS service
+export const neuralTtsService = {
+  async synthesizeSpeech(text: string, languageCode: string) {
+    const response = await apiClient.post('/tts/speak', {
+      text,
+      language_code: languageCode,
+    }, {
+      timeout: 2000,
+    });
+    return response.data;
+  }
 };
 
 export default apiClient;

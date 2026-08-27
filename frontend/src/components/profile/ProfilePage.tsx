@@ -244,7 +244,6 @@ export const ProfilePage: React.FC = () => {
                 <div className="relative">
                   <input
                     type={showPassword ? "text" : "password"}
-                    required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={t('passwordPlaceholder')}

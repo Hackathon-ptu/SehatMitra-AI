@@ -59,9 +59,7 @@ def _build_engine() -> Engine:
         database_url = raw_db_url
 
     # 2. Configure dialect-specific connection arguments
-    engine_kwargs = {
-        "pool_pre_ping": True,
-    }
+    engine_kwargs = {"pool_pre_ping": True, "pool_recycle": 300}
 
     # Only standard local SQLite supports check_same_thread
     if database_url.startswith("sqlite") and not database_url.startswith("sqlite+libsql"):
@@ -102,5 +100,8 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception as exc:
+        db.rollback()
+        raise
     finally:
         db.close()

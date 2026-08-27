@@ -43,8 +43,8 @@ class UserProfileResponse(BaseModel):
     patient_id: Optional[str] = None
     phone: Optional[str] = None
     username: Optional[str] = None
-    is_email_verified: bool
-    is_profile_completed: bool
+    is_email_verified: Optional[bool] = False
+    is_profile_completed: Optional[bool] = False
     age: Optional[int] = None
     gender: Optional[str] = None
     blood_group: Optional[str] = None

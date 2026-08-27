@@ -1,7 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { apiClient } from '../../services/api';
+import React, { useState, useRef, useEffect } from 'react';
+import { apiClient, neuralTtsService } from '../../services/api';
 import { UploadCloud, FileText, AlertCircle, FileCheck2, HelpCircle, Camera } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from 'react-i18next';
 // @ts-ignore
 import { generateConsultationSlip } from '../../utils/pdfGenerator';
 
@@ -22,18 +23,189 @@ interface AnalysisResult {
   explanation: string;
 }
 
+const LAB_TRANSLATIONS: Record<string, any> = {
+  en: {
+    title: "Multimodal Medical Report Analyzer",
+    subtitle: "Capture or upload your blood tests, prescriptions, or report images. SehatMitra-AI will parse key medical biomarkers.",
+    upload_doc: "Upload Medical Document",
+    upload_limit: "JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (Max 10MB)",
+    take_photo: "Take Report Photo",
+    scan_camera: "Scan directly using phone camera",
+    remove: "Remove",
+    analyze_btn: "Analyze Report",
+    summary_title: "Biomarker Summary",
+    biomarkers_title: "Extracted Health Biomarkers",
+    normal_range: "Normal Range:",
+    error_type: "Please upload only JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, or DICOM files.",
+    error_fail: "Failed to analyze the report. Please try again."
+  },
+  hi: {
+    title: "मल्टीमोडल मेडिकल लैब रिपोर्ट विश्लेषक",
+    subtitle: "अपनी रक्त जांच रिपोर्ट, पर्चे या लैब रिपोर्ट की फोटो खींचें या अपलोड करें। AI प्रमुख स्वास्थ्य संकेतकों का विश्लेषण करेगा।",
+    upload_doc: "दस्तावेज़/रिपोर्ट अपलोड करें",
+    upload_limit: "JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (अधिकतम 10MB)",
+    take_photo: "कैमरा से फोटो खींचें",
+    scan_camera: "मोबाइल कैमरा से सीधे स्कैन करें",
+    remove: "हटाएं",
+    analyze_btn: "रिपोर्ट का विश्लेषण करें",
+    summary_title: "रिपोर्ट सारांश",
+    biomarkers_title: "पहचाने गए स्वास्थ्य संकेतक (बायोमार्कर)",
+    normal_range: "सामान्य रेंज:",
+    error_type: "कृपया केवल JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP या DICOM फाइल ही अपलोड करें।",
+    error_fail: "जांच रिपोर्ट का विश्लेषण करने में विफलता हुई। कृपया फिर से प्रयास करें।"
+  },
+  bn: {
+    title: "মাল্টিমোডাল মেডিকেল ল্যাব রিপোর্ট বিশ্লেষক",
+    subtitle: "আপনার রক্ত পরীক্ষার রিপোর্ট, প্রেসক্রিপশন বা ল্যাব রিপোর্টের ছবি তুলুন বা আপলোড করুন। AI প্রধান স্বাস্থ্য সূচকগুলি বিশ্লেষণ করবে।",
+    upload_doc: "নথিপত্র/রিপোর্ট আপলোড করুন",
+    upload_limit: "JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (সর্বোচ্চ ১০MB)",
+    take_photo: "ক্যামেরা থেকে ছবি তুলুন",
+    scan_camera: "মোবাইল ক্যামেরা থেকে সরাসরি স্ক্যান করুন",
+    remove: "মুছে ফেলুন",
+    analyze_btn: "রিপোর্ট বিশ্লেষণ করুন",
+    summary_title: "রিপোর্ট সারাংশ",
+    biomarkers_title: "সনাক্ত করা স্বাস্থ্য সূচক (বায়োমার্কার)",
+    normal_range: "স্বাভাবিক পরিসীমা:",
+    error_type: "অনুগ্রহ করে কেবল JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, অথবা DICOM ফাইল আপলোড করুন।",
+    error_fail: "রিপোর্ট বিশ্লেষণ করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।"
+  },
+  pa: {
+    title: "ਮਲਟੀਮੋਡਲ ਮੈਡੀਕਲ ਲੈਬ ਰਿਪੋਰਟ ਵਿਸ਼ਲੇਸ਼ਕ",
+    subtitle: "ਆਪਣੀ ਖੂਨ ਦੀ ਜਾਂਚ ਰਿਪੋਰਟ, ਪਰਚੇ ਜਾਂ ਲੈਬ ਰਿਪੋਰਟ ਦੀ ਫੋਟੋ ਖਿੱਚੋ ਜਾਂ ਅਪਲੋਡ ਕਰੋ। AI ਮੁੱਖ ਸਿਹਤ ਸੰਕੇਤਕਾਂ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰੇਗਾ।",
+    upload_doc: "ਦਸਤਾਵੇਜ਼/ਰਿਪੋਰਟ ਅਪਲੋਡ ਕਰੋ",
+    upload_limit: "JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (ਵੱਧ ਤੋਂ ਵੱਧ 10MB)",
+    take_photo: "ਕੈਮਰਾ ਤੋਂ ਫੋਟੋ ਖਿੱਚੋ",
+    scan_camera: "ਮੋਬਾਈਲ ਕੈਮਰੇ ਨਾਲ ਸਿੱਧਾ ਸਕੈਨ ਕਰੋ",
+    remove: "ਹਟਾਓ",
+    analyze_btn: "ਰਿਪੋਰਟ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰੋ",
+    summary_title: "ਰਿਪੋਰਟ ਸਾਰਾਂਸ਼",
+    biomarkers_title: "ਪਛਾਣੇ ਗਏ ਸਿਹਤ ਸੰਕੇਤਕ (ਬਾਇਓਮਾਰਕਰ)",
+    normal_range: "ਸਧਾਰਨ ਸੀਮਾ:",
+    error_type: "ਕਿਰਪਾ ਕਰਕੇ ਸਿਰਫ਼ JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, ਜਾਂ DICOM ਫਾਈਲਾਂ ਹੀ ਅਪਲੋਡ ਕਰੋ।",
+    error_fail: "ਰਿਪੋਰਟ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰਨ ਵਿੱਚ ਅਸਫਲ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।"
+  }
+};
+
 export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCode = 'hi-IN' }) => {
   const { user } = useAuth();
+  const { i18n } = useTranslation();
   const [dragOver, setDragOver] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  const activeLang = i18n.language || 'en';
+  const primaryLang = activeLang.split('-')[0].toLowerCase();
+  const trans = LAB_TRANSLATIONS[primaryLang] || LAB_TRANSLATIONS.en;
   
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const isHindi = languageCode === 'hi-IN';
+
+  const stopAudioPlayback = () => {
+    window.speechSynthesis.cancel();
+    if (activeAudioRef.current) {
+      try {
+        activeAudioRef.current.pause();
+      } catch (err) {
+        console.error('Error pausing audio:', err);
+      }
+      activeAudioRef.current = null;
+    }
+    setIsSpeaking(false);
+  };
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopAudioPlayback();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopAudioPlayback();
+    };
+  }, []);
+
+  const handleToggleAudio = async () => {
+    if (isSpeaking) {
+      stopAudioPlayback();
+      return;
+    }
+
+    const textToSpeak = analysisResult?.explanation;
+    if (!textToSpeak) return;
+
+    stopAudioPlayback();
+
+    if (window.speechSynthesis) {
+      try {
+        window.speechSynthesis.resume();
+      } catch (err) {
+        console.warn("speechSynthesis resume failed", err);
+      }
+    }
+
+    const activeLang = i18n.language || 'en';
+
+    try {
+      const data = await neuralTtsService.synthesizeSpeech(textToSpeak, activeLang);
+      if (data && data.audio_base64) {
+        const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
+        activeAudioRef.current = audio;
+        audio.onended = () => {
+          setIsSpeaking(false);
+          activeAudioRef.current = null;
+        };
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          activeAudioRef.current = null;
+        };
+        setIsSpeaking(true);
+        try {
+          await audio.play();
+          return;
+        } catch (playErr) {
+          console.warn("Audio play rejected, falling back to Web Speech API", playErr);
+          setIsSpeaking(false);
+          activeAudioRef.current = null;
+        }
+      }
+    } catch (e) {
+      console.warn("Neural TTS failed, falling back to Web Speech API", e);
+    }
+
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    
+    let utteranceLang = 'en-IN';
+    if (activeLang.startsWith('hi')) {
+      utteranceLang = 'hi-IN';
+    } else if (activeLang.startsWith('pa')) {
+      utteranceLang = 'pa-IN';
+    } else if (activeLang.startsWith('en')) {
+      utteranceLang = 'en-IN';
+    } else {
+      utteranceLang = `${activeLang}-IN`;
+    }
+    
+    utterance.lang = utteranceLang;
+    utterance.rate = 0.92;
+
+    utterance.onend = () => {
+      setIsSpeaking(false);
+    };
+    utterance.onerror = () => {
+      setIsSpeaking(false);
+    };
+
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handleDownloadSlip = () => {
     if (!analysisResult) return;
@@ -136,10 +308,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
     const fileExtension = selectedFile.name.split('.').pop()?.toLowerCase() || '';
     
     if (!validExtensions.includes(fileExtension)) {
-      setErrorMsg(isHindi 
-        ? 'कृपया केवल JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP या DICOM फाइल ही अपलोड करें।'
-        : 'Please upload only JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, or DICOM files.'
-      );
+      setErrorMsg(trans.error_type);
       return;
     }
     setErrorMsg(null);
@@ -176,7 +345,8 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await apiClient.post(`/reports/analyze?language=${languageCode.split('-')[0]}`, formData, {
+      formData.append('language', primaryLang);
+      const res = await apiClient.post('/reports/analyze', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -205,7 +375,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
       setAnalysisResult(mappedResult);
     } catch (err) {
       console.error(err);
-      setErrorMsg(isHindi ? 'जांच रिपोर्ट का विश्लेषण करने में विफलता हुई। कृपया फिर से प्रयास करें।' : 'Failed to analyze the report. Please try again.');
+      setErrorMsg(trans.error_fail);
     } finally {
       setLoading(false);
     }
@@ -238,12 +408,10 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
     <div className="max-w-4xl mx-auto p-4 animate-fade-in text-left">
       <div className="flex flex-col gap-2 mb-6">
         <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-content-primary">
-          {isHindi ? 'मल्टीमोडल मेडिकल लैब रिपोर्ट विश्लेषक' : 'Multimodal Medical Report Analyzer'}
+          {trans.title}
         </h2>
         <p className="text-xs sm:text-sm text-content-muted">
-          {isHindi 
-            ? 'अपनी रक्त जांच रिपोर्ट, पर्चे या लैब रिपोर्ट की फोटो खींचें या अपलोड करें। AI प्रमुख स्वास्थ्य संकेतकों का विश्लेषण करेगा।' 
-            : 'Capture or upload your blood tests, prescriptions, or report images. SehatMitra-AI will parse key medical biomarkers.'}
+          {trans.subtitle}
         </p>
       </div>
 
@@ -280,10 +448,10 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
               />
               <UploadCloud className="w-10 h-10 text-brand-600" />
               <span className="text-sm font-bold text-content-primary">
-                {isHindi ? 'दस्तावेज़/रिपोर्ट अपलोड करें' : 'Upload Medical Document'}
+                {trans.upload_doc}
               </span>
               <span className="text-[10.5px] text-content-muted">
-                {isHindi ? 'JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (अधिकतम 10MB)' : 'JPG, PNG, WEBP, PDF, HEIC, TIFF, BMP, DICOM (Max 10MB)'}
+                {trans.upload_limit}
               </span>
             </div>
 
@@ -302,10 +470,10 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
               />
               <Camera className="w-10 h-10 text-brand-600" />
               <span className="text-sm font-bold text-content-primary">
-                {isHindi ? 'कैमरा से फोटो खींचें' : 'Take Report Photo'}
+                {trans.take_photo}
               </span>
               <span className="text-[10.5px] text-content-muted">
-                {isHindi ? 'मोबाइल कैमरा से सीधे स्कैन करें' : 'Scan directly using phone camera'}
+                {trans.scan_camera}
               </span>
             </div>
           </div>
@@ -328,13 +496,13 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
                   onClick={handleReset}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-surface-border text-content-secondary transition-colors"
                 >
-                  {isHindi ? 'हटाएं' : 'Remove'}
+                  {trans.remove}
                 </button>
                 <button
                   onClick={handleUploadAndAnalyze}
                   className="px-4 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-bold hover:bg-brand-700 shadow-md transition-colors"
                 >
-                  {isHindi ? 'रिपोर्ट का विश्लेषण करें' : 'Analyze Report'}
+                  {trans.analyze_btn}
                 </button>
               </div>
             </div>
@@ -373,9 +541,32 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
           
           {/* Summary Banner */}
           <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-md flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-brand-600 font-bold text-sm">
-              <FileCheck2 className="w-5 h-5" />
-              <span>{isHindi ? 'रिपोर्ट सारांश' : 'Biomarker Summary'}</span>
+            <div className="flex items-center justify-between gap-2 text-brand-600 font-bold text-sm">
+              <div className="flex items-center gap-2">
+                <FileCheck2 className="w-5 h-5" />
+                <span>{trans.summary_title}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleAudio}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer shadow-sm select-none border ${
+                  isSpeaking
+                    ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100 dark:bg-red-950/20 dark:text-red-400 dark:border-red-800/50 dark:hover:bg-red-950/40'
+                    : 'bg-teal-50 text-teal-600 border-teal-200 hover:bg-teal-100 dark:bg-teal-950/20 dark:text-teal-400 dark:border-teal-800/50 dark:hover:bg-teal-950/40'
+                }`}
+              >
+                {isSpeaking ? (
+                  <>
+                    <span>⏹️</span>
+                    <span>Stop Audio (रोकें)</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🔊</span>
+                    <span>Listen Summary (सुनें)</span>
+                  </>
+                )}
+              </button>
             </div>
             <p className="text-sm sm:text-base text-content-primary leading-relaxed whitespace-pre-wrap font-medium">
               {analysisResult.explanation}
@@ -385,7 +576,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
           {/* Biomarkers Grid */}
           <div className="flex flex-col gap-3">
             <h3 className="text-base font-bold text-content-primary tracking-tight">
-              {isHindi ? 'पहचाने गए स्वास्थ्य संकेतक (बायोमार्कर)' : 'Extracted Health Biomarkers'}
+              {trans.biomarkers_title}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {analysisResult.extracted_data && Object.keys(analysisResult.extracted_data).length > 0 ? (
@@ -409,7 +600,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
                       </span>
                     </div>
                     <div className="text-[11px] text-content-muted flex flex-col gap-0.5">
-                      <span>{isHindi ? 'सामान्य रेंज: ' : 'Normal Range: '}{val.reference_range || 'N/A'}</span>
+                      <span>{trans.normal_range} {val.reference_range || 'N/A'}</span>
                     </div>
                   </div>
                 ))

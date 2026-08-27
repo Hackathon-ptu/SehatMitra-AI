@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   Heart, 
-  Globe, 
   MessageSquare, 
   ClipboardList, 
   ShieldAlert, 
@@ -20,6 +19,7 @@ import { cn } from '../utils/cn';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { MedicalProfileModal } from './profile/MedicalProfileModal';
+import { LanguageSelector } from './language/LanguageSelector';
 
 export interface NavbarProps {
   pageMode?: PageMode;
@@ -151,15 +151,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
             </button>
           )}
 
-          <Link to="/language">
-            <Button
-              variant="outline"
-              size="sm"
-              leftIcon={<Globe className="w-4 h-4 text-brand-600" />}
-            >
-              Language
-            </Button>
-          </Link>
+          <LanguageSelector />
 
           {/* Authentication section */}
           {user ? (
@@ -219,11 +211,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
             <span>SOS / 108</span>
           </button>
 
-          <Link to="/language" onClick={closeMobileMenu}>
-            <IconButton aria-label="Change Language" variant="ghost" size="sm">
-              <Globe className="w-5 h-5 text-brand-600" />
-            </IconButton>
-          </Link>
+          <LanguageSelector />
 
           <IconButton
             aria-label={mobileMenuOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
