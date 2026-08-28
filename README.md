@@ -14,7 +14,7 @@
   <b>Bridging the last-mile healthcare divide across rural Primary Health Centres (PHCs) through sub-second dialect voice triage, multimodal lab biomarker OCR, and ABDM-compliant identity records.</b>
 </p>
 
-[Explore Live Demo](https://sehatmitra-ai.vercel.app) • [Interactive API Docs](https://sehatmitra-api.onrender.com/docs) • [Report a Bug](https://github.com/Abhi013-oss/SehatMitra-AI/issues)
+[Explore Live Demo](https://sehat-mitra-ai-kappa.vercel.app/) • [Interactive API Docs](https://sehatmitra-api.onrender.com/docs) • [Report a Bug](https://github.com/Abhi013-oss/SehatMitra-AI/issues)
 
 </div>
 
