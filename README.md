@@ -55,7 +55,6 @@ Rural healthcare systems in low-resource environments face severe operational st
 ---
 
 ## 🏗️ Core Architecture
-## 🏗️ Core Architecture
 
 ```mermaid
 flowchart TD
