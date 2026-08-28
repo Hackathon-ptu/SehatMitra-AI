@@ -193,8 +193,8 @@ export const TriageAssistant: React.FC = () => {
     }
   };
 
-  const handleTriageSubmit = async (customInput?: string) => {
-    const textToSubmit = (customInput !== undefined ? customInput : symptomInput).trim();
+  const handleTriageSubmit = async (customInput?: string | React.MouseEvent<any> | any) => {
+    const textToSubmit = (typeof customInput === 'string' ? customInput : symptomInput).trim();
     if (!textToSubmit) {
       setErrorMsg(
         language.split('-')[0] === 'hi'
@@ -645,7 +645,7 @@ export const TriageAssistant: React.FC = () => {
               )}
 
               <Button
-                onClick={handleTriageSubmit}
+                onClick={() => handleTriageSubmit()}
                 disabled={isLoading}
                 variant="primary"
                 className="w-full py-2.5 font-bold flex items-center justify-center gap-2"
