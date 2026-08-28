@@ -55,25 +55,37 @@ Rural healthcare systems in low-resource environments face severe operational st
 ---
 
 ## 🏗️ Core Architecture
-┌─────────────────────────────────────────┐
-                           │       React 19 Progressive Web App      │
-                           │   (Voice Web Audio / ABDM QR Canvas)    │
-                           └────────────────────┬────────────────────┘
-                                                │ HTTPS / JSON & Audio Chunks
-                                                ▼
-                           ┌─────────────────────────────────────────┐
-                           │           FastAPI Gateway API           │
-                           │  (Custom JWT Auth, Session Middleware)  │
-                           └──────┬─────────────┬─────────────┬──────┘
-                                  │             │             │
-          ┌───────────────────────┘             │             └───────────────────────┐
-          ▼                                     ▼                                     ▼
-          ┌───────────────────────┐             ┌───────────────────────┐             ┌───────────────────────┐
-│   Clinical Triage     │             │    Vision OCR Engine  │             │   Edge Persistence    │
-│ • Groq LPU Inference  │             │ • Google Gemini Vision│             │ • Turso LibSQL Edge   │
-│ • SOCRATES Schema     │             │ • Pillow Biomarker OCR│             │ • Offline Session Cache│
-│ • edge-tts Audio Sync │             │ • Plain Regional Text │             │ • ABDM Identity Sync  │
-└───────────────────────┘             └───────────────────────┘             └───────────────────────┘
+## 🏗️ Core Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client ["📱 Client Layer (React 19 PWA)"]
+        A["🎙️ Real-time Web Audio Stream"]
+        B["🪪 ABDM Digital ABHA QR Canvas"]
+        C["🔄 Axios Network Interceptor"]
+    end
+
+    subgraph Gateway ["⚡ API Gateway (FastAPI)"]
+        D["🔐 Custom JWT & Session Auth"]
+        E["🔀 Dynamic Model Failover Router"]
+    end
+
+    subgraph Engines ["🧠 Core Intelligence & Clinical Engines"]
+        F["⚡ Groq LPU Triage (SOCRATES Protocol)"]
+        G["🔬 Gemini Vision OCR (Biomarker Extraction)"]
+        H["🔊 edge-tts (12+ Indic Voice Streaming)"]
+    end
+
+    subgraph Data ["💾 Edge Persistence & Resilience"]
+        I[("📡 Turso LibSQL Edge Database")]
+        J["🛡️ Offline-Cached Fallback State"]
+    end
+
+    Client -->|Encrypted HTTPS / Audio Chunks| Gateway
+    Gateway --> Engines
+    Gateway --> Data
+    Engines <--> Data
+```
 
 ---
 
