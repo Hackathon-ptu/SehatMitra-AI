@@ -367,6 +367,10 @@ export const App = () => {
                 <button
                   key={tab.id}
                   onClick={() => {
+                    if (tab.id === 'asha' && !isAuthenticated) {
+                      showAuthModal('login');
+                      return;
+                    }
                     setActiveTab(tab.id);
                   }}
                   className={`flex items-center gap-2 py-3.5 px-4 border-b-2 text-xs sm:text-sm transition-all duration-150 focus:outline-none shrink-0 ${

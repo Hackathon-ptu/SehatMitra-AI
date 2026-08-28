@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ashaService } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Users, 
   MapPin, 
@@ -19,7 +20,9 @@ import {
   Send,
   X,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Lock,
+  LogIn
 } from 'lucide-react';
 import { Button } from '../common/Button';
 
@@ -106,6 +109,8 @@ interface SupplyItem {
 }
 
 export const AshaDashboard: React.FC = () => {
+  const { isAuthenticated, showAuthModal } = useAuth();
+
   // Main Tab State
   const [activeSubTab, setActiveSubTab] = useState<'surveillance' | 'screening' | 'mch' | 'supplies' | 'outbreak'>('surveillance');
 
@@ -285,16 +290,20 @@ export const AshaDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchStats();
-  }, []);
+    if (isAuthenticated) {
+      fetchStats();
+    }
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    if (activeSubTab === 'mch' && mchMothers.length === 0) {
-      fetchMch();
-    } else if (activeSubTab === 'supplies' && supplies.length === 0) {
-      fetchSupplies();
+    if (isAuthenticated) {
+      if (activeSubTab === 'mch' && mchMothers.length === 0) {
+        fetchMch();
+      } else if (activeSubTab === 'supplies' && supplies.length === 0) {
+        fetchSupplies();
+      }
     }
-  }, [activeSubTab]);
+  }, [activeSubTab, isAuthenticated]);
 
   // Handle Export CSV
   const handleExportCSV = () => {
@@ -506,6 +515,45 @@ export const AshaDashboard: React.FC = () => {
     "Extreme Weakness / Paleness",
     "Yellowish Eyes (Jaundice)"
   ];
+
+  if (!isAuthenticated) {
+    return (
+      <div className="w-full max-w-xl mx-auto my-12 p-8 bg-surface-card border border-surface-border rounded-3xl shadow-elevated text-center flex flex-col items-center gap-6 animate-fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-600 flex items-center justify-center shadow-inner">
+          <Lock className="w-8 h-8" />
+        </div>
+
+        <div className="flex flex-col gap-2 max-w-md">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-content-primary">
+            ASHA Portal Access Restricted
+          </h2>
+          <p className="text-xs sm:text-sm text-content-muted leading-relaxed">
+            The ASHA & Community Health Worker Portal contains confidential community health records, maternal (MCH) tracking, child immunization schedules, and medicine supplies. Please log in or register an account to access this portal.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <button
+            onClick={() => showAuthModal('login')}
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>Login to ASHA Account</span>
+          </button>
+          <button
+            onClick={() => showAuthModal('signup')}
+            className="px-6 py-3 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer"
+          >
+            <span>Register New Account</span>
+          </button>
+        </div>
+
+        <div className="pt-4 border-t border-surface-border/60 text-[11px] text-content-muted">
+          National Health Mission (NHM) • Verified Community Health Worker Gateway
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full flex flex-col gap-6 text-left animate-fade-in pb-12">
