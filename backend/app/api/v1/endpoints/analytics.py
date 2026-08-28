@@ -12,58 +12,21 @@ import uuid
 
 router = APIRouter()
 
-# In-memory fast stores for ASHA field operations (persisted during server session)
-_field_screenings = [
-    {"patient_id": "SM-2026-F9X28", "patient_name": "Sunita Devi", "age": 28, "gender": "Female", "village": "Rampur Sector 4", "primary_symptom": "Acute High Fever & Body Ache", "bp": "120/80", "spo2": 97, "temperature": 102.4, "risk_level": "moderate", "recommendation": "Paracetamol, hydration, and Dengue NS1 blood test if fever > 3 days.", "created_at": "2026-08-27T10:30:00"},
-    {"patient_id": "SM-2026-L5D12", "patient_name": "Ramesh Kumar", "age": 54, "gender": "Male", "village": "Gopalpur", "primary_symptom": "Severe Chest Heaviness & Sweating", "bp": "165/105", "spo2": 91, "temperature": 98.6, "risk_level": "emergency", "recommendation": "Immediate ambulance referral to District Hospital. ECG required.", "created_at": "2026-08-27T11:15:00"},
-    {"patient_id": "SM-2026-M8W90", "patient_name": "Pooja Sharma", "age": 22, "gender": "Female", "village": "Rampur Sector 4", "primary_symptom": "High Fever & Skin Rashes (ANC 2nd Trimester)", "bp": "110/70", "spo2": 98, "temperature": 101.8, "risk_level": "high", "recommendation": "High risk pregnancy with pyrexia. Urgent PHC Obstetrician consultation.", "created_at": "2026-08-27T12:00:00"},
-    {"patient_id": "SM-2026-B3K88", "patient_name": "Mohan Lal", "age": 42, "gender": "Male", "village": "Bhimpur", "primary_symptom": "Mild Cough & Sore Throat", "bp": "118/78", "spo2": 99, "temperature": 99.1, "risk_level": "low", "recommendation": "Home steam inhalation, warm fluids, cetirizine. Rest for 3 days.", "created_at": "2026-08-27T13:45:00"},
-    {"patient_id": "SM-2026-X9Z11", "patient_name": "Chhotu (Child)", "age": 4, "gender": "Male", "village": "Gopalpur", "primary_symptom": "Watery Diarrhea & Sunken Eyes", "bp": "90/60", "spo2": 96, "temperature": 100.2, "risk_level": "high", "recommendation": "Moderate-severe dehydration. Administer ORS + Zinc syrup immediately and visit PHC.", "created_at": "2026-08-27T14:20:00"},
-]
-
-_mch_records = [
-    {"id": "MCH-01", "mother_name": "Pooja Sharma", "age": 22, "village": "Rampur Sector 4", "gestation_weeks": 26, "trimester": "2nd", "hb_level": 9.2, "high_risk_flag": True, "risk_reason": "Moderate Anemia (Hb 9.2) & High Fever", "next_anc_date": "2026-09-02", "ifa_given": 60, "tt_doses": 2},
-    {"id": "MCH-02", "mother_name": "Rekha Devi", "age": 29, "village": "Bhimpur", "gestation_weeks": 34, "trimester": "3rd", "hb_level": 11.5, "high_risk_flag": False, "risk_reason": "Normal Progression", "next_anc_date": "2026-08-30", "ifa_given": 100, "tt_doses": 2},
-    {"id": "MCH-03", "mother_name": "Aarti Kumari", "age": 19, "village": "Gopalpur", "gestation_weeks": 14, "trimester": "1st", "hb_level": 8.4, "high_risk_flag": True, "risk_reason": "Severe Anemia & Teen Pregnancy", "next_anc_date": "2026-08-29", "ifa_given": 30, "tt_doses": 1},
-    {"id": "MCH-04", "mother_name": "Kavita Bai", "age": 31, "village": "Sundarpur", "gestation_weeks": 38, "trimester": "3rd", "hb_level": 10.8, "high_risk_flag": True, "risk_reason": "Gestational Hypertension (BP 145/95)", "next_anc_date": "2026-08-28", "ifa_given": 120, "tt_doses": 2},
-]
-
-_immunization_schedules = [
-    {"id": "IMM-01", "child_name": "Aarav Kumar", "parent_name": "Sunita Devi", "village": "Rampur Sector 4", "age_months": 3.5, "due_vaccine": "Pentavalent-3, OPV-3, Rotavirus-3", "due_date": "2026-08-30", "status": "Due"},
-    {"id": "IMM-02", "child_name": "Gauri", "parent_name": "Pooja", "village": "Bhimpur", "age_months": 9, "due_vaccine": "MR-1 (Measles-Rubella), Vitamin-A (1st Dose)", "due_date": "2026-09-05", "status": "Due"},
-    {"id": "IMM-03", "child_name": "Rohan", "parent_name": "Meena Devi", "village": "Gopalpur", "age_months": 16, "due_vaccine": "DPT Booster-1, MR-2", "due_date": "2026-08-26", "status": "Overdue"},
-]
+# In-memory fast stores for ASHA field operations (starts at clean zero)
+_field_screenings = []
+_mch_records = []
+_immunization_schedules = []
+_epidemic_alerts = []
 
 _asha_supplies = [
-    {"item_id": "SUP-01", "name": "ORS (Oral Rehydration Salts) Packets", "category": "Essential Meds", "stock": 42, "unit": "Packets", "minimum_required": 50, "status": "Low Stock"},
-    {"item_id": "SUP-02", "name": "Zinc Sulfate 20mg Tablets/Syrup", "category": "Pediatric", "stock": 85, "unit": "Strips", "minimum_required": 40, "status": "Adequate"},
-    {"item_id": "SUP-03", "name": "Iron & Folic Acid (IFA) Red Tablets", "category": "Maternal", "stock": 160, "unit": "Tablets", "minimum_required": 100, "status": "Adequate"},
-    {"item_id": "SUP-04", "name": "Paracetamol 500mg Tablets", "category": "Essential Meds", "stock": 18, "unit": "Strips", "minimum_required": 30, "status": "Critical Low"},
-    {"item_id": "SUP-05", "name": "Rapid Pregnancy Test Kits (Nischay)", "category": "Diagnostics", "stock": 12, "unit": "Kits", "minimum_required": 15, "status": "Adequate"},
-    {"item_id": "SUP-06", "name": "Malaria Rapid Diagnostic Test (RDT) Kits", "category": "Diagnostics", "stock": 6, "unit": "Kits", "minimum_required": 20, "status": "Critical Low"},
-    {"item_id": "SUP-07", "name": "Digital Thermometer & Pulse Oximeter", "category": "Equipment", "stock": 2, "unit": "Sets (Functional)", "minimum_required": 1, "status": "Adequate"},
-    {"item_id": "SUP-08", "name": "Sanitary Napkins (Free Days Scheme)", "category": "Hygiene", "stock": 90, "unit": "Packs", "minimum_required": 80, "status": "Adequate"},
-]
-
-_epidemic_alerts = [
-    {
-        "id": "ALERT-01",
-        "village": "Rampur Sector 4",
-        "condition": "Fever & Joint Pain Cluster (Dengue/Malaria Warning)",
-        "severity": "Warning",
-        "cases_reported": 14,
-        "recommendation": "Initiate anti-larval spray, distribute mosquito nets & conduct rapid Dengue NS1 testing.",
-        "reported_at": "2026-08-25"
-    },
-    {
-        "id": "ALERT-02",
-        "village": "Gopalpur",
-        "condition": "Diarrhea Cluster (Water Contamination / Gastroenteritis Risk)",
-        "severity": "High Alert",
-        "cases_reported": 9,
-        "recommendation": "Distribute ORS/Zinc packets, test community borewell water and chlorinate local wells.",
-        "reported_at": "2026-08-26"
-    }
+    {"item_id": "SUP-01", "name": "ORS (Oral Rehydration Salts) Packets", "category": "Essential Meds", "stock": 0, "unit": "Packets", "minimum_required": 50, "status": "Out of Stock"},
+    {"item_id": "SUP-02", "name": "Zinc Sulfate 20mg Tablets/Syrup", "category": "Pediatric", "stock": 0, "unit": "Strips", "minimum_required": 40, "status": "Out of Stock"},
+    {"item_id": "SUP-03", "name": "Iron & Folic Acid (IFA) Red Tablets", "category": "Maternal", "stock": 0, "unit": "Tablets", "minimum_required": 100, "status": "Out of Stock"},
+    {"item_id": "SUP-04", "name": "Paracetamol 500mg Tablets", "category": "Essential Meds", "stock": 0, "unit": "Strips", "minimum_required": 30, "status": "Out of Stock"},
+    {"item_id": "SUP-05", "name": "Rapid Pregnancy Test Kits (Nischay)", "category": "Diagnostics", "stock": 0, "unit": "Kits", "minimum_required": 15, "status": "Out of Stock"},
+    {"item_id": "SUP-06", "name": "Malaria Rapid Diagnostic Test (RDT) Kits", "category": "Diagnostics", "stock": 0, "unit": "Kits", "minimum_required": 20, "status": "Out of Stock"},
+    {"item_id": "SUP-07", "name": "Digital Thermometer & Pulse Oximeter", "category": "Equipment", "stock": 0, "unit": "Sets", "minimum_required": 1, "status": "Out of Stock"},
+    {"item_id": "SUP-08", "name": "Sanitary Napkins (Free Days Scheme)", "category": "Hygiene", "stock": 0, "unit": "Packs", "minimum_required": 80, "status": "Out of Stock"},
 ]
 
 # Pydantic Schemas
@@ -159,7 +122,7 @@ def get_community_health_stats(
             seen_ids.add(pid)
             unique_records.append(r)
 
-    # Calculate dynamic risk distribution
+    # Calculate dynamic risk distribution (starts at 0)
     risk_distribution = {"low": 0, "moderate": 0, "high": 0, "emergency": 0}
     for rec in unique_records:
         lvl = rec.get("risk_level", "low").lower()
@@ -168,24 +131,29 @@ def get_community_health_stats(
         else:
             risk_distribution["moderate"] += 1
 
-    if sum(risk_distribution.values()) == 0:
-        risk_distribution = {"low": 58, "moderate": 31, "high": 14, "emergency": 6}
-
     emergency_count = risk_distribution.get("emergency", 0) + risk_distribution.get("high", 0)
 
+    # Dynamic top symptoms parsed from submitted records
+    symptom_map = {}
+    for r in unique_records:
+        ps = r.get("primary_symptom", "")
+        if ps and ps != "General Health Screening":
+            for s in ps.split(","):
+                clean = s.strip()
+                if clean:
+                    symptom_map[clean] = symptom_map.get(clean, 0) + 1
+
     top_symptoms = [
-        {"name": "Acute Fever / Pyrexia (Viral/Malaria)", "count": 38, "trend": "+14%"},
-        {"name": "Upper Respiratory / Cough & Breathlessness", "count": 29, "trend": "+6%"},
-        {"name": "Gastrointestinal / Watery Diarrhea", "count": 21, "trend": "+8%"},
-        {"name": "Hypertension / BP Spikes in Elderly", "count": 14, "trend": "+1%"},
-        {"name": "Maternal Anemia / High-Risk Pregnancy", "count": 9, "trend": "-3%"},
-        {"name": "Skin Rashes & Pediatric Infections", "count": 8, "trend": "0%"}
+        {"name": k, "count": v, "trend": f"+{v}"}
+        for k, v in sorted(symptom_map.items(), key=lambda item: item[1], reverse=True)[:6]
     ]
 
+    active_villages = len(set(r.get("village") for r in unique_records if r.get("village")))
+
     return {
-        "total_screenings": max(total_triages + len(_field_screenings), len(unique_records)),
-        "active_villages_covered": 8,
-        "emergency_cases_referred": max(emergency_count, 8),
+        "total_screenings": len(unique_records),
+        "active_villages_covered": active_villages,
+        "emergency_cases_referred": emergency_count,
         "risk_distribution": risk_distribution,
         "top_symptoms": top_symptoms,
         "epidemic_alerts": _epidemic_alerts,
