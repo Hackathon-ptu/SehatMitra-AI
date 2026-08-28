@@ -1,23 +1,36 @@
 import { neuralTtsService } from '../services/api';
 
 let activeGlobalAudio: HTMLAudioElement | null = null;
+let currentSpeechRequestId = 0;
 
 export const stopAllSpeech = () => {
+  // Invalidate any in-flight async speech requests
+  currentSpeechRequestId++;
+
   if (window.speechSynthesis) {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch (err) {
+      console.warn('SpeechSynthesis cancel failed:', err);
+    }
   }
+
   if (activeGlobalAudio) {
     try {
       activeGlobalAudio.pause();
+      activeGlobalAudio.currentTime = 0;
+      activeGlobalAudio.src = '';
+      activeGlobalAudio.onended = null;
+      activeGlobalAudio.onerror = null;
     } catch (err) {
-      console.error('Error pausing active global audio:', err);
+      console.warn('Error pausing active global audio:', err);
     }
     activeGlobalAudio = null;
   }
 };
 
 const getLocaleHelper = (lang: string) => {
-  const primary = lang.split('-')[0].toLowerCase();
+  const primary = (lang || 'en').split('-')[0].toLowerCase();
   switch (primary) {
     case 'en': return 'en-IN';
     case 'hi': return 'hi-IN';
@@ -41,8 +54,14 @@ export const playGlobalSpeech = async (
   onStart?: () => void,
   onEnd?: () => void
 ) => {
+  // Stop existing speech and create a new unique request ID
   stopAllSpeech();
-  if (!text) return;
+  const thisRequestId = currentSpeechRequestId;
+
+  if (!text || !text.trim()) {
+    onEnd?.();
+    return;
+  }
 
   if (window.speechSynthesis) {
     try {
@@ -52,47 +71,82 @@ export const playGlobalSpeech = async (
     }
   }
 
+  onStart?.();
+
   // 1. Try Microsoft Edge Neural TTS
   try {
-    onStart?.();
     const data = await neuralTtsService.synthesizeSpeech(text, langCode);
+
+    // If another speech request was triggered while fetching, ignore this result
+    if (thisRequestId !== currentSpeechRequestId) {
+      return;
+    }
+
     if (data && data.audio_base64) {
       const audio = new Audio(`data:audio/mp3;base64,${data.audio_base64}`);
       activeGlobalAudio = audio;
+
       audio.onended = () => {
-        onEnd?.();
-        activeGlobalAudio = null;
+        if (thisRequestId === currentSpeechRequestId) {
+          activeGlobalAudio = null;
+          onEnd?.();
+        }
       };
-      audio.onerror = () => {
-        onEnd?.();
-        activeGlobalAudio = null;
+
+      audio.onerror = (e) => {
+        console.warn("Audio playback error", e);
+        if (thisRequestId === currentSpeechRequestId) {
+          activeGlobalAudio = null;
+          onEnd?.();
+        }
       };
+
       try {
         await audio.play();
         return;
       } catch (playErr) {
         console.warn("Audio play rejected, falling back to Web Speech API", playErr);
+        if (thisRequestId !== currentSpeechRequestId) return;
         activeGlobalAudio = null;
-        // fall through to native fallback
       }
     }
   } catch (e) {
     console.warn("Neural TTS failed, falling back to Web Speech API", e);
   }
 
-  // 2. Web Speech API Fallback
-  const fallbackLocale = getLocaleHelper(langCode);
-  const voices = window.speechSynthesis.getVoices();
-  const voiceExists = voices.some(v => v.lang.toLowerCase().replace('_', '-') === fallbackLocale.toLowerCase());
+  // If superseded while trying TTS, do not trigger fallback
+  if (thisRequestId !== currentSpeechRequestId) {
+    return;
+  }
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  // If native voice is missing, fallback to hi-IN
-  utterance.lang = voiceExists ? fallbackLocale : 'hi-IN';
-  utterance.onend = () => {
+  // 2. Web Speech API Fallback
+  try {
+    window.speechSynthesis.cancel(); // Clear queue before speaking
+    const fallbackLocale = getLocaleHelper(langCode);
+    const voices = window.speechSynthesis.getVoices();
+    const voiceExists = voices.some(
+      v => v.lang.toLowerCase().replace('_', '-') === fallbackLocale.toLowerCase()
+    );
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = voiceExists ? fallbackLocale : 'hi-IN';
+
+    utterance.onend = () => {
+      if (thisRequestId === currentSpeechRequestId) {
+        onEnd?.();
+      }
+    };
+
+    utterance.onerror = (e) => {
+      console.warn("SpeechSynthesis utterance error", e);
+      if (thisRequestId === currentSpeechRequestId) {
+        onEnd?.();
+      }
+    };
+
+    window.speechSynthesis.speak(utterance);
+  } catch (synthErr) {
+    console.error("Web Speech API fallback error", synthErr);
     onEnd?.();
-  };
-  utterance.onerror = () => {
-    onEnd?.();
-  };
-  window.speechSynthesis.speak(utterance);
+  }
 };

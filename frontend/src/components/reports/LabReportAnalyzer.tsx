@@ -373,6 +373,22 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
         explanation: backendData.patient_summary || 'Report analyzed successfully.'
       };
       setAnalysisResult(mappedResult);
+
+      // Save report to local storage for guest/instant history retrieval
+      try {
+        const localReportItem = {
+          id: Date.now(),
+          filename: file.name,
+          extracted_data,
+          explanation: backendData.patient_summary || 'Report analyzed successfully.',
+          created_at: new Date().toISOString()
+        };
+        const existing = JSON.parse(localStorage.getItem('guest_reports') || '[]');
+        localStorage.setItem('guest_reports', JSON.stringify([localReportItem, ...existing.slice(0, 19)]));
+        window.dispatchEvent(new Event('history_updated'));
+      } catch (err) {
+        console.warn('Failed to cache report locally', err);
+      }
     } catch (err) {
       console.error(err);
       setErrorMsg(trans.error_fail);

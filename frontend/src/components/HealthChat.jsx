@@ -236,19 +236,30 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
 
           // Auto-save triage session if user is logged in
           const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+          const conversation_history = updatedMessages.map(m => ({
+            role: m.sender === 'user' ? 'user' : 'assistant',
+            content: m.text
+          }));
+          const savePayload = {
+            session_id: Date.now(),
+            language: selectedLangConfig.code.split('-')[0],
+            conversation_history,
+            risk_level: response.risk_level,
+            reasons: triageReasons,
+            recommendation: response.recommendation || `Please consult a ${response.recommended_specialist || 'Physician'} as soon as possible.`,
+            created_at: new Date().toISOString()
+          };
+
+          // Cache in local storage for instant retrieval
+          try {
+            const existing = JSON.parse(localStorage.getItem('guest_consultations') || '[]');
+            localStorage.setItem('guest_consultations', JSON.stringify([savePayload, ...existing.slice(0, 19)]));
+            window.dispatchEvent(new Event('history_updated'));
+          } catch (e) {
+            console.warn('Local chat history cache error', e);
+          }
+
           if (token && user) {
-            const conversation_history = updatedMessages.map(m => ({
-              role: m.sender === 'user' ? 'user' : 'assistant',
-              content: m.text
-            }));
-            const savePayload = {
-              session_id: Date.now(),
-              language: selectedLangConfig.code.split('-')[0],
-              conversation_history,
-              risk_level: response.risk_level,
-              reasons: triageReasons,
-              recommendation: response.recommendation || `Please consult a ${response.recommended_specialist || 'Physician'} as soon as possible.`
-            };
             historyService.saveConsultation(savePayload).catch(err => {
               console.error('Failed to auto-save consultation to history', err);
             });

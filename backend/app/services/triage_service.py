@@ -471,24 +471,16 @@ class TriageService:
                         print(f"[TriageService] Gemini fallback execution failed on {gemini_model_name}: {type(gemini_err).__name__}: {gemini_err}")
                         traceback.print_exc()
 
-        # 3. Handle parser fallback if both failed or returned invalid responses
+        # 3. Intelligent Deterministic Clinical Engine (Active when cloud LLM is offline or unconfigured)
         if not parsed:
-            parsed = {
-                "conversational_reply": "I'm sorry, I'm having trouble connecting to my primary clinical analysis models right now.",
-                "clinical_summary": f"Dual-AI system analysis offline/error. Symptom recorded: {request.message}",
-                "is_clinical_triage": False,
-                "risk_level": "Low",
-                "reasons": ["Service offline fallback"],
-                "recommendation": "Consult physician for diagnosis.",
-                "doctor_checklist": [],
-                "recommended_specialist": "General Physician",
-                "disclaimer": "This fallback summary is active due to AI endpoint timeouts.",
-                "interview_status": "in_progress",
-                "current_step": current_step,
-                "collected_points": [],
-                "is_interview_complete": False
-            }
-            engine = "gemini_fallback"  # Denoting service error mode as fallback outcome
+            engine = "rule_based_clinical_engine"
+            parsed = TriageService._generate_clinical_rule_triage(
+                request_message=request.message,
+                history=messages,
+                language_code=request.language.lower()[:2],
+                language_name=language_name,
+                current_step=current_step
+            )
 
         try:
             # Norm / Validate risk levels
@@ -499,46 +491,205 @@ class TriageService:
                 else:
                     r_level = "Medium"
 
-            is_triage = parsed.get("is_clinical_triage") or parsed.get("has_symptoms") or False
-            is_complete = parsed.get("is_interview_complete") or (parsed.get("interview_status") == "completed") or False
+            is_triage = parsed.get("is_clinical_triage", True)
+            is_complete = parsed.get("is_interview_complete") or (parsed.get("interview_status") == "completed") or (current_step >= 4) or False
+            
+            reasons_list = parsed.get("reasons") or [parsed.get("clinical_summary", "Clinical intake recorded.")]
+            if not isinstance(reasons_list, list):
+                reasons_list = [str(reasons_list)]
+
+            checklist_list = parsed.get("doctor_checklist") or [
+                "Verify vitals (BP, SpO2, Pulse, Temp)",
+                "Physical examination of affected region",
+                "Review history of allergies and current medications"
+            ]
+
+            rec_specialist = parsed.get("recommended_specialist", "General Physician")
+            rec_text = parsed.get("recommendation") or f"Please consult a {rec_specialist} for formal clinical evaluation."
+            reply_text = parsed.get("conversational_reply") or parsed.get("message") or parsed.get("clinical_summary") or "Please describe any additional symptoms."
+
             return TriageResponse(
-                clinical_summary=parsed.get("clinical_summary", "Clinical assessment in progress."),
+                clinical_summary=parsed.get("clinical_summary", "Clinical symptom assessment conducted."),
                 risk_level=r_level,
-                doctor_checklist=parsed.get("doctor_checklist") if is_complete else [],
-                recommended_specialist=parsed.get("recommended_specialist", "General Physician"),
-                disclaimer=parsed.get("disclaimer", "Disclaimer: AI assistant evaluation."),
-                engine_used=engine or "fallback",
-                message=parsed.get("conversational_reply") or parsed.get("message") or parsed.get("clinical_summary") or "",
+                doctor_checklist=checklist_list,
+                recommended_specialist=rec_specialist,
+                disclaimer=parsed.get("disclaimer", "Disclaimer: AI-assisted triage evaluation. Consult a doctor for definitive medical advice."),
+                engine_used=engine or "clinical_engine",
+                message=reply_text,
                 has_symptoms=is_triage,
-                reply=parsed.get("conversational_reply") or parsed.get("message") or parsed.get("clinical_summary") or "",
+                reply=reply_text,
                 is_clinical_triage=is_triage,
-                reasons=parsed.get("reasons") or [parsed.get("clinical_summary")] or [],
-                recommendation=parsed.get("recommendation", "") if is_complete else "",
+                reasons=[r for r in reasons_list if r and str(r).strip()],
+                recommendation=rec_text,
                 interview_status="completed" if is_complete else "in_progress",
                 current_step=int(parsed.get("current_step") or current_step),
-                total_steps=int(parsed.get("total_steps") or 6),
-                collected_points=parsed.get("collected_points") or [],
+                total_steps=int(parsed.get("total_steps") or 4),
+                collected_points=parsed.get("collected_points") or [request.message],
                 is_interview_complete=is_complete
             )
         except Exception as norm_err:
             print(f"[TriageService] Critical normalization fallback error: {norm_err}")
             traceback.print_exc()
             return TriageResponse(
-                clinical_summary=f"Clinical analysis currently in safe mode. Symptom recorded: {request.message}",
+                clinical_summary=f"Clinical analysis: {request.message}",
                 risk_level="Medium",
-                doctor_checklist=["Verify details manually with the patient", "Log symptom description"],
+                doctor_checklist=["Verify vitals (BP, Temperature, Pulse)", "Review symptoms manually with patient"],
                 recommended_specialist="General Physician",
-                disclaimer="Safe clinical backup mode active.",
-                engine_used="fallback",
-                message=f"I recorded: {request.message}",
+                disclaimer="AI clinical intake support. Seek physical doctor examination.",
+                engine_used="safe_clinical_fallback",
+                message=f"I have recorded: '{request.message}'. Do you have any other symptoms like fever or pain?",
                 has_symptoms=True,
-                reply=f"I recorded: {request.message}",
+                reply=f"I have recorded: '{request.message}'. Do you have any other symptoms like fever or pain?",
                 is_clinical_triage=True,
-                reasons=["Safe mode backup evaluation"],
-                recommendation="Please consult a clinician.",
+                reasons=[f"Reported symptom: {request.message}"],
+                recommendation="Please consult the nearest Primary Health Centre (PHC) or Community Clinic.",
                 interview_status="in_progress",
                 current_step=current_step,
-                collected_points=[],
+                collected_points=[request.message],
                 is_interview_complete=False
             )
+
+    @staticmethod
+    def _generate_clinical_rule_triage(
+        request_message: str,
+        history: List[dict],
+        language_code: str,
+        language_name: str,
+        current_step: int
+    ) -> dict:
+        # Collect all user messages
+        user_texts = [m["content"] for m in history if m.get("role") == "user"]
+        combined_text = " ".join(user_texts).lower()
+        latest_text = request_message.lower()
+
+        # Emergency keywords
+        emergency_kw = [
+            "chest pain", "breathless", "difficulty breathing", "heart attack", "unconscious",
+            "stroke", "paralysis", "severe bleeding", "cyanosis", "सीने में दर्द", "सांस", "ਬੇਹੋਸ਼",
+            "ਛਾਤੀ", "రక్తస్రావం", "மூச்சுத்திணறல்"
+        ]
+        is_emergency = any(k in combined_text for k in emergency_kw)
+
+        # High risk keywords
+        high_kw = [
+            "high fever", "103", "104", "vomiting blood", "stiff neck", "severe pain",
+            "diabetes", "asthma", "pregnancy", "तेज़ बुखार", "उल्टी", "ਅਸਥਮਾ", "ਸ਼ੂਗਰ"
+        ]
+        is_high = any(k in combined_text for k in high_kw)
+
+        # Symptom domains
+        is_fever = any(k in combined_text for k in ["fever", "temp", "cold", "बुखार", "ताप", "ਜਵਰ", "તાવ", "জ্বর", "జ్వరం", "காய்ச்சல்"])
+        is_resp = any(k in combined_text for k in ["cough", "throat", "sore", "phlegm", "खांसी", "गला", "ਖੰਘ", "இருமல்", "దగ్గు"])
+        is_headache = any(k in combined_text for k in ["headache", "migraine", "head pain", "सिरदर्द", "ਸਿਰ ਦਰਦ", "தலைவலி", "తలనొప్పి"])
+        is_stomach = any(k in combined_text for k in ["stomach", "abdomen", "vomit", "diarrhea", "लूज मोशन", "पेट दर्द", "ਉਲਟੀ", "വയറുവേദന"])
+
+        # Determine risk level
+        if is_emergency:
+            risk_level = "Emergency"
+        elif is_high:
+            risk_level = "High"
+        elif is_fever or is_headache or is_stomach:
+            risk_level = "Medium"
+        else:
+            risk_level = "Low"
+
+        # Determine if completed: Emergency reaches conclusion by step 2, normal by step 3 or 4
+        is_complete = (is_emergency and current_step >= 2) or (current_step >= 3)
+
+        # Multi-turn Questions based on step and language
+        q_map = {
+            "hi": {
+                "step1": "यह लक्षण कब से शुरू हुआ है और क्या आपको हल्का या तेज़ बुखार भी है?",
+                "step2": "1 से 10 के पैमाने पर दर्द या तकलीफ की तीव्रता कितनी है? क्या आराम करने से सुधार होता है?",
+                "step3": "क्या आपको सांस लेने में परेशानी, चक्कर आना या पहले से मधुमेह/बीपी की कोई बीमारी है?",
+                "complete": "आपके लक्षणों का क्लिनिकल मूल्यांकन पूरा हो गया है। कृपया नीचे दी गई डॉक्टर पर्ची और सलाह देखें।",
+                "emergency": "चेतावनी: आपके लक्षण तीव्र आपातकाल का संकेत दे सकते हैं। कृपया तुरंत नजदीकी अस्पताल के आपातकालीन विभाग में जाएं या 108 एम्बुलेंस को कॉल करें।",
+                "summary": f"रोगी ने '{request_message}' की शिकायत दर्ज की है। प्राथमिक जांच पूरी की गई।",
+                "recs": "पर्याप्त आराम करें, स्वच्छ गुनगुना पानी पिएं और नजदीकी प्राथमिक स्वास्थ्य केंद्र (PHC) से परामर्श लें।",
+                "specialist": "जनरल फिजिशियन / चिकित्सा अधिकारी" if not is_emergency else "आपातकालीन चिकित्सा विशेषज्ञ (Cardiologist/Emergency)",
+                "checklist": [
+                    "रक्तचाप (BP), पल्स और SpO2 ऑक्सीजन स्तर की जांच करें",
+                    "तापमान थर्मामीटर से मापें",
+                    "यदि 24 घंटे में लक्षण न सुधरें तो डॉक्टर से सीधे मिलें"
+                ]
+            },
+            "pa": {
+                "step1": "ਇਹ ਲੱਛਣ ਕਿੰਨੇ ਦਿਨਾਂ ਤੋਂ ਹੈ ਅਤੇ ਕੀ ਤੁਹਾਨੂੰ ਬੁਖ਼ਾਰ ਜਾਂ ਕੰਬਣੀ ਵੀ ਮਹਿਸੂਸ ਹੋ ਰਹੀ ਹੈ?",
+                "step2": "ਤਕਲੀਫ਼ ਦੀ ਗੰਭੀਰਤਾ ਕਿੰਨੀ ਹੈ? ਕੀ ਕੋਈ ਦਵਾਈ ਲੈਣ ਨਾਲ ਰਾਹਤ ਮਿਲੀ ਹੈ?",
+                "step3": "ਕੀ ਤੁਹਾਨੂੰ ਸਾਹ ਲੈਣ ਵਿੱਚ ਔਖ, ਚੱਕਰ ਆਉਣ ਜਾਂ ਕੋਈ ਪੁਰਾਣੀ ਬਿਮਾਰੀ (ਸ਼ੂਗਰ/ਬੀਪੀ) ਹੈ?",
+                "complete": "ਤੁਹਾਡੇ ਲੱਛਣਾਂ ਦਾ ਮੁਲਾਂਕਣ ਪੂਰਾ ਹੋ ਗਿਆ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਹੇਠਾਂ ਦਿੱਤੀ ਡਾਕਟਰ ਸਲਿੱਪ ਵੇਖੋ।",
+                "emergency": "ਜ਼ਰੂਰੀ ਚੇਤਾਵਨੀ: ਲੱਛਣ ਐਮਰਜੈਂਸੀ ਦਾ ਸੰਕੇਤ ਦਿੰਦੇ ਹਨ। ਕਿਰਪਾ ਕਰਕੇ ਤੁਰੰਤ ਨਜ਼ਦੀਕੀ ਹਸਪਤਾਲ ਜਾਓ ਜਾਂ 108 ਐਂਬੂਲੈਂਸ ਬੁਲਾਓ।",
+                "summary": f"ਮਰੀਜ਼ ਵੱਲੋਂ '{request_message}' ਦੇ ਲੱਛਣ ਦਰਜ ਕੀਤੇ ਗਏ ਹਨ।",
+                "recs": "ਪੂਰਾ ਆਰਾਮ ਕਰੋ, ਤਰਲ ਪਦਾਰਥ ਲਓ ਅਤੇ ਨਜ਼ਦੀਕੀ ਸਰਕਾਰੀ ਹਸਪਤਾਲ ਜਾਂ ਕਲੀਨਿਕ ਵਿਖੇ ਜਾਂਚ ਕਰਵਾਓ।",
+                "specialist": "ਜਨਰਲ ਫਿਜ਼ੀਸ਼ੀਅਨ" if not is_emergency else "ਐਮਰਜੈਂਸੀ ਮੈਡੀਕਲ ਅਫਸਰ",
+                "checklist": [
+                    "ਬਲੱਡ ਪ੍ਰੈਸ਼ਰ ਅਤੇ ਨਬਜ਼ ਦੀ ਜਾਂਚ",
+                    "ਤਾਪਮਾਨ ਨੋਟ ਕਰੋ",
+                    "ਲੋੜ ਪੈਣ 'ਤੇ ਮੁੱਢਲੀ ਜਾਂਚ ਟੈਸਟ ਕਰਵਾਓ"
+                ]
+            },
+            "bn": {
+                "step1": "এই উপসর্গটি কতদিন ধরে অনুভব করছেন এবং এর সাথে কি জ্বর বা কাঁপুনি আছে?",
+                "step2": "অসুস্থতার তীব্রতা কেমন? কোনো ওষুধে কি উপশম হচ্ছে?",
+                "step3": "শ্বাসকষ্ট, বুকে চাপ বা কোনো দীর্ঘস্থায়ী রোগ (ডায়াবেটিস/উচ্চ রক্তচাপ) আছে কি?",
+                "complete": "উপসর্গ মূল্যায়ন সম্পন্ন হয়েছে। অনুগ্রহ করে ডাক্তারের পরামর্শ ও প্রেসক্রিপশন স্লিপ দেখুন।",
+                "emergency": "জরুরি সতর্কতা: অবিলম্বে নিকটস্থ হাসপাতালে যোগাযোগ করুন বা জরুরি অ্যাম্বুলেন্স ডাকুন।",
+                "summary": f"রোগীর প্রাথমিক উপসর্গ: '{request_message}' নথিভুক্ত করা হয়েছে।",
+                "recs": "পর্যাপ্ত বিশ্রাম নিন, প্রচুর জল পান করুন এবং চিকিৎসকের পরামর্শ নিন।",
+                "specialist": "জেনারেল ফিজিশিয়ান" if not is_emergency else "জরুরি বিভাগীয় চিকিৎসক",
+                "checklist": ["রক্তচাপ ও নাড়ির গতি পরিমাপ", "শরীরের তাপমাত্রা পরীক্ষা", "জরুরি ওষুধ পর্যালোচনা"]
+            },
+            "en": {
+                "step1": "When did these symptoms first start, and are you also experiencing any fever or chills?",
+                "step2": "On a scale of 1 to 10, how severe is your discomfort, and does resting make it better or worse?",
+                "step3": "Do you have any associated shortness of breath, dizziness, or pre-existing conditions like diabetes/hypertension?",
+                "complete": "Your clinical symptom intake is complete. Please review your provisional clinical summary and doctor slip on the right.",
+                "emergency": "EMERGENCY ALERT: Your reported symptoms indicate potential acute distress. Please proceed to the nearest Emergency Room or call 108 immediately.",
+                "summary": f"Patient reports chief complaint of '{request_message}'. Systematic intake evaluation conducted.",
+                "recs": "Maintain adequate hydration, get complete rest, and consult a medical officer at your nearest Primary Health Centre.",
+                "specialist": "General Physician / Medical Officer" if not is_emergency else "Emergency Medicine Specialist / Cardiologist",
+                "checklist": [
+                    "Measure vital signs (Blood Pressure, Heart Rate, SpO2, Temperature)",
+                    "Physical examination of the primary complaint site",
+                    "Conduct baseline lab screening if symptoms persist over 48 hours"
+                ]
+            }
+        }
+
+        lang_data = q_map.get(language_code, q_map["en"])
+
+        if is_emergency:
+            conversational_reply = lang_data["emergency"]
+        elif is_complete:
+            conversational_reply = lang_data["complete"]
+        elif current_step == 1:
+            conversational_reply = lang_data["step1"]
+        elif current_step == 2:
+            conversational_reply = lang_data["step2"]
+        else:
+            conversational_reply = lang_data["step3"]
+
+        collected_pts = [f"Turn #{i+1}: {txt}" for i, txt in enumerate(user_texts)]
+
+        return {
+            "conversational_reply": conversational_reply,
+            "clinical_summary": lang_data["summary"],
+            "is_clinical_triage": True,
+            "risk_level": risk_level,
+            "reasons": [
+                f"Chief complaint: {request_message}",
+                f"Symptom profile: {', '.join(user_texts[-3:])}",
+                f"Clinical classification: {risk_level} Priority"
+            ],
+            "recommendation": lang_data["recs"],
+            "doctor_checklist": lang_data["checklist"],
+            "recommended_specialist": lang_data["specialist"],
+            "disclaimer": "AI Triage Clinical Assistant. Always consult a verified medical professional.",
+            "interview_status": "completed" if is_complete else "in_progress",
+            "current_step": current_step,
+            "total_steps": 3 if not is_emergency else 2,
+            "collected_points": collected_pts,
+            "is_interview_complete": is_complete
+        }
+
 

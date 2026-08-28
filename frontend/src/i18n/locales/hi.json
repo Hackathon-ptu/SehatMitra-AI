@@ -88,6 +88,9 @@
   "reset": "रीसेट",
   "generated_just_now": "तैयार किया गया समय: अभी",
   "risk_report_placeholder_title": "लक्षणों की प्रतीक्षा है",
-  "risk_report_placeholder_desc": "स्वास्थ्य जोखिम मूल्यांकन उत्पन्न करने के लिए चैट में अपने लक्षणों का वर्णन करें।",
+  "initial_intake_prompt": "प्रारंभिक क्लिनिकल पूछताछ (Initial Intake Prompt)",
+  "replay_question": "आवाज दोबारा सुनें",
+  "active_turn": "सक्रिय चरण",
+  "stop_voice": "आवाज रोकें",
   "disclaimer": "© 2026 SehatMitra AI. सभी अधिकार सुरक्षित हैं। AI परामर्श केवल मार्गदर्शन के लिए है, आपातकालीन स्थिति में तुरंत डॉक्टर से संपर्क करें।"
 }

@@ -88,6 +88,9 @@
   "reset": "Reset",
   "generated_just_now": "Generated: Just now",
   "risk_report_placeholder_title": "Awaiting Symptoms",
-  "risk_report_placeholder_desc": "Describe your symptoms in the chat to generate your health risk assessment.",
+  "initial_intake_prompt": "Initial Clinical Intake Prompt",
+  "replay_question": "Replay Question",
+  "active_turn": "Active Turn",
+  "stop_voice": "Stop Voice",
   "disclaimer": "© 2026 SehatMitra AI. All rights reserved. AI consultation is for guidance only. In case of emergency, contact a doctor immediately."
 }

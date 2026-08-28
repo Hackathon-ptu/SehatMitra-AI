@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { apiClient } from '../../services/api';
+import { apiClient, historyService } from '../../services/api';
 import { playGlobalSpeech, stopAllSpeech } from '../../utils/speech';
 import { Mic, MicOff, Volume2, ShieldAlert, Loader2, RefreshCw, Sparkles, AlertTriangle } from 'lucide-react';
 import { Button } from '../common/Button';
@@ -58,11 +58,11 @@ export const TriageAssistant: React.FC = () => {
       case 'kn':
         return 'ನಮಸ್ತೆ! ನಾನು ಸೇಹತ್ ಮಿತ್ರ, ನಿಮ್ಮ ಕ್ಲಿನಿಕಲ್ ವಾಯ್ಸ್ ಅಸಿಸ್ಟೆಂಟ್. ಇಂದು ನಿಮಗೆ ಹೇಗೆನಿಸುತ್ತಿದೆ? ದಯವಿಟ್ಟು ನಿಮ್ಮ ಲಕ್ಷಣಗಳನ್ನು ವಿವರಿಸಿ.';
       case 'ml':
-        return 'നമസ്തേ! ഞാൻ സേഹത് മിത്ര, നിങ്ങളുടെ ക്ലിനിക്കൽ വോയ്‌സ് അസിസ്റ്റന്റ്. ഇന്ന് നിങ്ങൾക്ക് എങ്ങനെയുണ്ട്? ദയവായി നിങ്ങളുടെ ലക്ഷണങ്ങൾ വിശദീകരിക്കുക.';
+        return 'നമസ്തേ! ഞാൻ സേഹത് മിത്ര, നിങ്ങളുടെ ക്ലിനിക്കൽ വോയ്‌സ് അസിസ്റ്റന്റ്. ഇന്ന് നിങ്ങൾക്ക് എങ്ങനെയുണ്ട്? ദয়വായി നിങ്ങളുടെ ലക്ഷണങ്ങൾ വിശദീകരിക്കുക.';
       case 'or':
         return 'ନମସ୍କାର! ମୁଁ ସେହତମିତ୍ର, ଆପଣଙ୍କ କ୍ଲିନିକାଲ୍ ଭଏସ୍ ଆସିଷ୍ଟାଣ୍ଟ। ଆଜି ଆପଣ କେମିତି ଅଛନ୍ତି? ଦୟାକରି ଆପଣଙ୍କର ଲକ୍ଷଣ ବର୍ଣ୍ଣନା କରନ୍ତୁ।';
       case 'ur':
-        return 'ہیلو! میں صحت مترا ہوں، آپ کا کلینیکل وائس اسسٹنٹ۔ آج آپ کیسا محسوس کر رہے ہیں؟ براہ کرم اپنی علامات بیان کریں۔';
+        return 'ہیلو! میں صحت مترا ہوں، آپ کا کلینیکل وائس اسسٹنٹ۔ آج آپ کیسا محسوس کر رہے ہیں؟ براہ کرਮ اپنی علامات بیان کریں۔';
       case 'en':
       default:
         return 'Hello! I am SehatMitra, your clinical voice assistant. How are you feeling today? Please describe your symptoms.';
@@ -119,7 +119,7 @@ export const TriageAssistant: React.FC = () => {
               : 'Microphone permission denied. Please allow microphone access in your browser settings.'
           );
         } else {
-          setErrorMsg(`Speech recognition error: ${e.error}`);
+          setErrorMsg(`Speech recognition status: ${e.error}`);
         }
         setIsRecording(false);
       };
@@ -132,17 +132,16 @@ export const TriageAssistant: React.FC = () => {
     }
   }, [language]);
 
-  // Stop audio if language changes or unmounted
+  // Stop audio on component unmount
   useEffect(() => {
-    stopAudioPlayback();
     return () => {
       stopAudioPlayback();
     };
-  }, [language]);
+  }, []);
 
   const toggleRecording = () => {
     if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in this browser. Please type your symptoms instead.');
+      alert('Speech recognition is not supported in this browser. Please type or select symptoms below.');
       return;
     }
 
@@ -150,9 +149,7 @@ export const TriageAssistant: React.FC = () => {
       recognitionRef.current.stop();
       setIsRecording(false);
     } else {
-      // Automatically stop TTS playback when user starts to record
       stopAudioPlayback();
-
       try {
         recognitionRef.current.start();
         setIsRecording(true);
@@ -163,21 +160,42 @@ export const TriageAssistant: React.FC = () => {
     }
   };
 
-  const playAudio = async (text: string) => {
-    stopAudioPlayback();
-    if (!text) return;
+  const saveCompletedConsultation = async (result: TriageResult, convoHistory: any[]) => {
+    const primaryDiag = result.recommended_specialist || result.clinical_summary || 'Clinical Triage Evaluation';
+    const consultationPayload = {
+      session_id: Date.now(),
+      language: language.split('-')[0],
+      conversation_history: convoHistory,
+      risk_level: result.risk_level,
+      reasons: result.reasons && result.reasons.length > 0 ? result.reasons : [result.clinical_summary || primaryDiag],
+      recommendation: result.recommendation || `Please consult a ${result.recommended_specialist || 'Physician'} as soon as possible.`,
+      created_at: new Date().toISOString()
+    };
 
-    setIsSpeaking(true);
-    await playGlobalSpeech(
-      text,
-      language,
-      () => setIsSpeaking(true),
-      () => setIsSpeaking(false)
-    );
+    // 1. Save to localStorage for instant local/guest history retrieval
+    try {
+      const existing = JSON.parse(localStorage.getItem('guest_consultations') || '[]');
+      const updated = [consultationPayload, ...existing.slice(0, 29)];
+      localStorage.setItem('guest_consultations', JSON.stringify(updated));
+      window.dispatchEvent(new Event('history_updated'));
+    } catch (err) {
+      console.warn('Local history storage failed', err);
+    }
+
+    // 2. Save to backend database if token is available
+    const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+    if (token) {
+      try {
+        await historyService.saveConsultation(consultationPayload);
+      } catch (err) {
+        console.warn('Backend history save error', err);
+      }
+    }
   };
 
-  const handleTriageSubmit = async () => {
-    if (!symptomInput.trim()) {
+  const handleTriageSubmit = async (customInput?: string) => {
+    const textToSubmit = (customInput !== undefined ? customInput : symptomInput).trim();
+    if (!textToSubmit) {
       setErrorMsg(
         language.split('-')[0] === 'hi'
           ? 'कृपया विश्लेषण शुरू करने के लिए अपने लक्षण दर्ज करें।'
@@ -192,7 +210,7 @@ export const TriageAssistant: React.FC = () => {
 
     try {
       const payload = {
-        message: symptomInput,
+        message: textToSubmit,
         language: language.split('-')[0],
         history: history.map(h => ({ role: h.role, content: h.content }))
       };
@@ -203,10 +221,9 @@ export const TriageAssistant: React.FC = () => {
 
       const botReplyText = data.reply || data.message || data.clinical_summary || '';
       
-      // Update history
       const updatedHistory = [
         ...history,
-        { role: 'user', content: symptomInput },
+        { role: 'user', content: textToSubmit },
         { role: 'assistant', content: botReplyText }
       ];
       setHistory(updatedHistory);
@@ -216,12 +233,19 @@ export const TriageAssistant: React.FC = () => {
         setCollectedPoints(data.collected_points);
       }
 
+      // If triage is complete, save to history and check for SOS alert
+      if (data.is_interview_complete === true) {
+        await saveCompletedConsultation(data, updatedHistory);
+        if (data.risk_level === 'Emergency' || data.risk_level === 'High') {
+          window.dispatchEvent(new CustomEvent('open-sos'));
+        }
+      }
+
       // Speak question aloud
       if (botReplyText) {
         playAudio(botReplyText);
       }
 
-      // Reset symptom input for next turn
       setSymptomInput('');
     } catch (err: any) {
       console.error(err);
@@ -231,19 +255,35 @@ export const TriageAssistant: React.FC = () => {
     }
   };
 
+  const playAudio = async (text: string, overrideLang?: string) => {
+    stopAudioPlayback();
+    if (!text) return;
+
+    const targetLang = overrideLang || language;
+    setIsSpeaking(true);
+    await playGlobalSpeech(
+      text,
+      targetLang,
+      () => setIsSpeaking(true),
+      () => setIsSpeaking(false)
+    );
+  };
+
+  const handleLanguageChange = (newLangCode: string) => {
+    stopAudioPlayback();
+    setLanguage(newLangCode);
+    setTriageResult(null);
+    setHistory([]);
+    setCurrentStep(1);
+    setSymptomInput('');
+  };
+
   const handleVoiceControl = () => {
     if (isSpeaking) {
       stopAudioPlayback();
     } else {
-      if (triageResult) {
-        const lastReplyText = triageResult.reply || triageResult.message || triageResult.clinical_summary || '';
-        if (lastReplyText) {
-          playAudio(lastReplyText);
-        }
-      } else {
-        const welcomeText = getInitialGreeting(language);
-        playAudio(welcomeText);
-      }
+      const textToSpeak = triageResult?.reply || triageResult?.message || triageResult?.clinical_summary || getInitialGreeting(language);
+      playAudio(textToSpeak, language);
     }
   };
 
@@ -475,7 +515,7 @@ export const TriageAssistant: React.FC = () => {
                 <button
                   key={lang.code}
                   type="button"
-                  onClick={() => setLanguage(lang.code)}
+                  onClick={() => handleLanguageChange(lang.code)}
                   className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
                     language.split('-')[0] === lang.code ? 'bg-brand-600 text-white shadow-sm' : 'text-content-secondary hover:text-content-primary hover:bg-surface-border'
                   }`}
@@ -491,7 +531,7 @@ export const TriageAssistant: React.FC = () => {
               </span>
               <div className="flex items-center gap-1.5 text-xs text-content-muted">
                 <span className={`w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-red-500 animate-ping' : 'bg-surface-border'}`} />
-                <span>{isRecording ? t('listening') || 'Listening...' : 'Idle'}</span>
+                <span>{isRecording ? (language.split('-')[0] === 'hi' ? 'सुन रहे हैं...' : 'Listening...') : 'Idle'}</span>
               </div>
             </div>
           </div>
@@ -499,12 +539,14 @@ export const TriageAssistant: React.FC = () => {
           {!isComplete ? (
             <>
               {/* Bot Voice Question Area */}
-              <div className="p-4 bg-brand-50 border border-brand-200 rounded-xl flex items-center justify-between gap-3 text-left">
+              <div className="p-4 bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900 rounded-xl flex items-center justify-between gap-3 text-left">
                 <div className="flex flex-col gap-1">
-                  <span className="text-[10px] uppercase font-bold text-brand-600 tracking-wider">
-                    {triageResult ? `${t('active_turn') || 'Active Turn'} #${currentStep}` : t('initial_intake_prompt') || 'Initial Intake Prompt'}
+                  <span className="text-[10px] uppercase font-bold text-brand-600 dark:text-brand-400 tracking-wider">
+                    {triageResult 
+                      ? (language.split('-')[0] === 'hi' ? `सक्रिय चरण #${currentStep}` : language.split('-')[0] === 'pa' ? `ਸਰਗਰਮ ਪੜਾਅ #${currentStep}` : `Active Turn #${currentStep}`)
+                      : (language.split('-')[0] === 'hi' ? 'प्रारंभिक क्लिनिकल पूछताछ (Initial Prompt)' : language.split('-')[0] === 'pa' ? 'ਸ਼ੁਰੂਆਤੀ ਕਲੀਨਿਕਲ ਪੁੱਛਗਿੱਛ' : language.split('-')[0] === 'bn' ? 'প্রাথমিক ক্লিনিকাল প্রশ্ন' : language.split('-')[0] === 'te' ? 'ప్రారంభ క్లినికల్ ప్రశ్న' : 'Initial Clinical Intake Prompt')}
                   </span>
-                  <p className="text-sm font-semibold text-brand-950">
+                  <p className="text-sm font-semibold text-brand-950 dark:text-brand-100">
                     {triageResult?.reply || triageResult?.message || getInitialGreeting(language)}
                   </p>
                 </div>
@@ -514,13 +556,13 @@ export const TriageAssistant: React.FC = () => {
                   className={`px-4 py-2 rounded-xl shadow-md transition-colors flex items-center justify-center shrink-0 gap-1.5 ${
                     isSpeaking ? 'bg-red-600 hover:bg-red-700 animate-pulse text-white' : 'bg-brand-600 hover:bg-brand-700 text-white'
                   }`}
-                  title={isSpeaking ? t('stop_voice') || "Stop Voice" : t('replay_question') || "Replay Question"}
+                  title={isSpeaking ? "Stop Voice" : "Replay Question"}
                 >
                   <Volume2 className={`w-4 h-4 ${isSpeaking ? 'animate-bounce' : ''}`} />
                   <span className="text-xs font-bold whitespace-nowrap">
                     {isSpeaking 
-                      ? (language.split('-')[0] === 'hi' ? '⏹️ आवाज रोकें' : t('stop_voice') || '⏹️ Stop Voice')
-                      : `🔊 ${t('replay_question') || 'Replay Question'}`}
+                      ? (language.split('-')[0] === 'hi' ? '⏹️ आवाज रोकें' : language.split('-')[0] === 'pa' ? '⏹️ ਆਵਾਜ਼ ਰੋਕੋ' : '⏹️ Stop Voice')
+                      : (language.split('-')[0] === 'hi' ? '🔊 आवाज दोबारा सुनें' : language.split('-')[0] === 'pa' ? '🔊 ਸਵਾਲ ਸੁਣੋ' : language.split('-')[0] === 'bn' ? '🔊 আবার শুনুন' : language.split('-')[0] === 'te' ? '🔊 మళ్లీ వినండి' : '🔊 Replay Question')}
                   </span>
                 </button>
               </div>
@@ -538,8 +580,47 @@ export const TriageAssistant: React.FC = () => {
                   {isRecording ? <MicOff className="w-10 h-10" /> : <Mic className="w-10 h-10" />}
                 </button>
                 <span className="text-xs font-semibold text-content-muted">
-                  {isRecording ? t('stop') || 'Stop Listening' : t('speak_btn') || 'Press to Speak Your Answer'}
+                  {isRecording 
+                    ? (language.split('-')[0] === 'hi' ? 'सुन रहे हैं... (Listening)' : language.split('-')[0] === 'pa' ? 'ਸੁਣ ਰਿਹਾ ਹੈ...' : 'Listening...') 
+                    : (language.split('-')[0] === 'hi' ? 'बोलने के लिए माइक दबाएं' : language.split('-')[0] === 'pa' ? 'ਬੋਲਣ ਲਈ ਮਾਈਕ ਦਬਾਓ' : 'Tap to speak symptoms')}
                 </span>
+              </div>
+
+              {/* Quick Symptom Test Chips */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[11px] font-bold text-content-muted uppercase tracking-wider">
+                  {language.split('-')[0] === 'hi' ? 'त्वरित लक्षण चयन (Quick Symptom Presets)' : language.split('-')[0] === 'pa' ? 'ਤੁਰੰਤ ਲੱਛਣ ਚੋਣ (Quick Presets)' : 'Quick Symptom Presets'}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(language.split('-')[0] === 'hi' ? [
+                    { label: "🌡️ 2 दिन से तेज़ बुखार", text: "मुझे 2 दिनों से तेज़ बुखार और सिरदर्द है।" },
+                    { label: "🫁 सीने में तेज दर्द व सांस फूलना", text: "सीने में बहुत तेज दर्द है और सांस लेने में भारीपन महसूस हो रहा है।" },
+                    { label: "🤢 पेट दर्द और उल्टी", text: "सुबह से पेट के ऊपरी हिस्से में तेज दर्द और उल्टी हो रही है।" },
+                    { label: "🤧 लगातार सूखी खांसी व खराश", text: "गले में खराश और 4 दिनों से लगातार खांसी आ रही है।" }
+                  ] : language.split('-')[0] === 'pa' ? [
+                    { label: "🌡️ 2 ਦਿਨਾਂ ਤੋਂ ਤੇਜ਼ ਬੁਖ਼ਾਰ", text: "ਮੈਨੂੰ 2 ਦਿਨਾਂ ਤੋਂ ਤੇਜ਼ ਬੁਖ਼ਾਰ ਅਤੇ ਸਿਰ ਦਰਦ ਹੈ।" },
+                    { label: "🫁 ਛਾਤੀ ਵਿੱਚ ਦਰਦ ਤੇ ਸਾਹ ਦੀ ਤਕਲੀਫ਼", text: "ਛਾਤੀ ਵਿੱਚ ਬਹੁਤ ਤੇਜ਼ ਦਰਦ ਹੈ ਅਤੇ ਸਾਹ ਲੈਣ 'ਚ ਔਖ ਹੋ ਰਹੀ ਹੈ।" },
+                    { label: "🤢 ਪੇਟ ਦਰਦ ਤੇ ਉਲਟੀ", text: "ਸਵੇਰ ਤੋਂ ਪੇਟ ਵਿੱਚ ਤੇਜ਼ ਦਰਦ ਅਤੇ ਉਲਟੀਆਂ ਆ ਰਹੀਆਂ ਹਨ।" },
+                    { label: "🤧 ਲਗਾਤਾਰ ਖੰਘ", text: "ਗਲੇ ਵਿੱਚ ਖਰਾਸ਼ ਅਤੇ ਪਿਛਲੇ 3 ਦਿਨਾਂ ਤੋਂ ਖੰਘ ਹੈ।" }
+                  ] : [
+                    { label: "🌡️ High Fever & Shivering (2 days)", text: "I have had a high fever with body chills and headache for 2 days." },
+                    { label: "🫁 Severe Chest Pain & Breathlessness", text: "I have sharp chest tightness and severe difficulty breathing." },
+                    { label: "🤢 Acute Stomach Cramps & Nausea", text: "Experiencing severe abdominal pain with vomiting since morning." },
+                    { label: "🤧 Persistent Cough & Sore Throat", text: "Persistent dry cough, sore throat and fatigue for 4 days." }
+                  ]).map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => {
+                        setSymptomInput(item.text);
+                        handleTriageSubmit(item.text);
+                      }}
+                      className="px-2.5 py-1.5 bg-surface-elevated hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 border border-surface-border rounded-lg text-xs font-semibold text-content-secondary transition-all"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Input box */}
