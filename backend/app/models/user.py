@@ -5,6 +5,7 @@ from app.db.base import Base
 
 class UserRole(str, enum.Enum):
     PATIENT = "patient"
+    ASHA = "asha"
     DOCTOR = "doctor"
     ADMIN = "admin"
 

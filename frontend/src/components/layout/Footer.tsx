@@ -62,13 +62,24 @@ export const Footer: React.FC = () => {
         </div>
 
         {/* Disclaimer & Copyright */}
-        <div className="pt-6 border-t border-surface-border flex flex-col sm:flex-row justify-between items-center gap-4 text-[11px] text-content-muted">
-          <p>
-            © {new Date().getFullYear()} SehatMitra AI. Built with React, TypeScript & Tailwind CSS.
+        <div className="pt-6 border-t border-surface-border flex flex-col gap-3 text-[11px] text-content-muted">
+          <p className="text-center text-[10px] text-content-muted/70 tracking-wide">
+            Engineered end-to-end using{' '}
+            <span className="font-semibold text-blue-400/80">IBM Bob Developer Workbench</span>
+            {' '}•{' '}
+            Powered by{' '}
+            <span className="font-semibold text-emerald-400/80">IBM Granite-3.0</span>
+            {' '}&amp;{' '}
+            <span className="font-semibold text-content-muted">ABDM Health Protocol</span>
           </p>
-          <p className="text-center sm:text-right max-w-md">
-            <strong>Medical Disclaimer:</strong> SehatMitra AI is an assistant tool for informational triage only and does not provide formal medical diagnosis or emergency treatment.
-          </p>
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p>
+              © {new Date().getFullYear()} SehatMitra AI. Built with React, TypeScript &amp; Tailwind CSS.
+            </p>
+            <p className="text-center sm:text-right max-w-md">
+              <strong>Medical Disclaimer:</strong> SehatMitra AI is an assistant tool for informational triage only and does not provide formal medical diagnosis or emergency treatment.
+            </p>
+          </div>
         </div>
       </div>
     </footer>

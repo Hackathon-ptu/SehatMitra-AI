@@ -482,6 +482,11 @@ export const TriageAssistant: React.FC = () => {
       <div className="flex-1 flex flex-col gap-6">
         {/* Title */}
         <div className="flex flex-col text-left gap-1">
+          {/* IBM Granite Engine Indicator */}
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 mb-1 w-fit rounded-md border border-blue-500/20 bg-blue-950/20 text-[11px] font-medium text-blue-300 tracking-wide">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
+            <span>Engine: IBM Granite 3.0 (Hybrid LPU Fallback)</span>
+          </div>
           <div className="flex items-center justify-between">
             <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-content-primary">
               {t('triage_title') || 'Voice Symptom Triage'}

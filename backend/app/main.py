@@ -1,3 +1,8 @@
+"""
+SehatMitra-AI Clinical Engine
+Scaffolded and optimized using IBM Bob IDE (Granite-Code-Instruct)
+Architecture: Dual-Engine Triage (Groq LPU Primary + IBM Granite-3.0 Fallback)
+"""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router

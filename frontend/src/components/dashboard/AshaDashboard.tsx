@@ -109,7 +109,15 @@ interface SupplyItem {
 }
 
 export const AshaDashboard: React.FC = () => {
-  const { isAuthenticated, showAuthModal } = useAuth();
+  const { isAuthenticated, user, showAuthModal } = useAuth();
+
+  // Derive the role from the in-context user OR from localStorage as fallback
+  // (needed during the brief window after login before React re-renders)
+  const storedUser = user || (() => {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+  })();
+  const userRole: string = (storedUser?.role || '').toLowerCase();
+  const isAshaOrAdmin = userRole === 'asha' || userRole === 'admin';
 
   // Main Tab State
   const [activeSubTab, setActiveSubTab] = useState<'surveillance' | 'screening' | 'mch' | 'supplies' | 'outbreak'>('surveillance');
@@ -516,6 +524,7 @@ export const AshaDashboard: React.FC = () => {
     "Yellowish Eyes (Jaundice)"
   ];
 
+  // ── Gate 1: Not logged in ─────────────────────────────────────────────────
   if (!isAuthenticated) {
     return (
       <div className="w-full max-w-xl mx-auto my-12 p-8 bg-surface-card border border-surface-border rounded-3xl shadow-elevated text-center flex flex-col items-center gap-6 animate-fade-in">
@@ -528,7 +537,7 @@ export const AshaDashboard: React.FC = () => {
             ASHA Portal Access Restricted
           </h2>
           <p className="text-xs sm:text-sm text-content-muted leading-relaxed">
-            The ASHA & Community Health Worker Portal contains confidential community health records, maternal (MCH) tracking, child immunization schedules, and medicine supplies. Please log in or register an account to access this portal.
+            The ASHA &amp; Community Health Worker Portal contains confidential community health records, maternal (MCH) tracking, child immunization schedules, and medicine supplies. Please log in with a certified ASHA worker account to access this portal.
           </p>
         </div>
 
@@ -550,6 +559,39 @@ export const AshaDashboard: React.FC = () => {
 
         <div className="pt-4 border-t border-surface-border/60 text-[11px] text-content-muted">
           National Health Mission (NHM) • Verified Community Health Worker Gateway
+        </div>
+      </div>
+    );
+  }
+
+  // ── Gate 2: Logged in but wrong role (patient / doctor) ───────────────────
+  if (!isAshaOrAdmin) {
+    return (
+      <div className="w-full max-w-xl mx-auto my-12 p-8 bg-surface-card border border-red-200 dark:border-red-800 rounded-3xl shadow-elevated text-center flex flex-col items-center gap-6 animate-fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-600 flex items-center justify-center shadow-inner">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+
+        <div className="flex flex-col gap-2 max-w-md">
+          <h2 className="text-xl sm:text-2xl font-extrabold text-content-primary">
+            Access Denied
+          </h2>
+          <p className="text-xs sm:text-sm text-content-muted leading-relaxed">
+            The <span className="font-semibold text-red-600">ASHA Worker Portal</span> is exclusively available to certified Accredited Social Health Activists (ASHA) and administrators.
+            Regular patient accounts <span className="font-semibold">cannot</span> access this section.
+          </p>
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs font-bold self-center">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            Your role: <span className="uppercase tracking-wide">{userRole || 'patient'}</span>
+          </div>
+        </div>
+
+        <p className="text-[11px] text-content-muted">
+          If you are an ASHA worker, please contact your Block Health Officer (BHO) to upgrade your account.
+        </p>
+
+        <div className="pt-4 border-t border-surface-border/60 text-[11px] text-content-muted">
+          National Health Mission (NHM) • RBAC v2 — Role: {userRole || 'patient'}
         </div>
       </div>
     );

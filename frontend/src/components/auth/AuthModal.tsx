@@ -14,10 +14,18 @@ import { Button } from "../common/Button";
 const API_BASE_URL = 
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || "https://sehatmitra-ai.onrender.com/api/v1";
 
+// Valid ASHA passcodes for hackathon evaluation
+const VALID_ASHA_CODES = ["ASHA2026", "ASHA"];
+
 export const AuthModal: React.FC = () => {
   const { authModalMode, hideAuthModal, loginWithGoogle, setUser } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
-  
+
+  // Sign-up role toggle
+  const [signUpRole, setSignUpRole] = useState<"patient" | "asha">("patient");
+  const [ashaPasscode, setAshaPasscode] = useState("");
+  const [ashaPasscodeError, setAshaPasscodeError] = useState("");
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,6 +45,9 @@ export const AuthModal: React.FC = () => {
       setEmail("");
       setPassword("");
       setShowResend(false);
+      setSignUpRole("patient");
+      setAshaPasscode("");
+      setAshaPasscodeError("");
     }
   }, [authModalMode]);
 
@@ -51,6 +62,17 @@ export const AuthModal: React.FC = () => {
 
     try {
       if (isSignUp) {
+        // Validate ASHA passcode before doing any Firebase work
+        let resolvedRole: "patient" | "asha" = "patient";
+        if (signUpRole === "asha") {
+          if (!VALID_ASHA_CODES.includes(ashaPasscode.trim().toUpperCase())) {
+            setAshaPasscodeError("Invalid passcode. For Hackathon Evaluation Demo, use code: ASHA2026");
+            setLoading(false);
+            return;
+          }
+          resolvedRole = "asha";
+        }
+
         // Step A: Create User in Firebase
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
@@ -58,10 +80,22 @@ export const AuthModal: React.FC = () => {
         // Step B: Set Display Name
         await updateProfile(user, { displayName: name });
 
-        // Step C: Send Official Firebase Verification Email
+        // Step C: Sync role to backend before sign out
+        try {
+          await axios.post(`${API_BASE_URL}/auth/firebase-login`, {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || email.split("@")[0],
+            role: resolvedRole,
+          });
+        } catch (_) {
+          // Non-blocking — role will default to patient if backend unreachable
+        }
+
+        // Step D: Send Official Firebase Verification Email
         await sendEmailVerification(user);
 
-        // Step D: Force Sign Out (hard verification gate)
+        // Step E: Force Sign Out (hard verification gate)
         await auth.signOut();
 
         setSuccessMsg(`Verification email sent to ${email}! Please click the link in your inbox before logging in.`);
@@ -179,17 +213,68 @@ export const AuthModal: React.FC = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
-              <div>
-                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Vinit Kumar"
-                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 dark:text-white"
-                />
-              </div>
+              <>
+                {/* Role Segmented Toggle */}
+                <div className="flex rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 mb-1">
+                  <button
+                    type="button"
+                    onClick={() => { setSignUpRole("patient"); setAshaPasscode(""); setAshaPasscodeError(""); }}
+                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+                      signUpRole === "patient"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    🙋 Citizen / Patient
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSignUpRole("asha")}
+                    className={`flex-1 py-2 text-xs font-semibold transition-colors ${
+                      signUpRole === "asha"
+                        ? "bg-teal-600 text-white"
+                        : "bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
+                    }`}
+                  >
+                    👩‍⚕️ Certified ASHA Worker
+                  </button>
+                </div>
+
+                {/* ASHA Passcode field */}
+                {signUpRole === "asha" && (
+                  <div>
+                    <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">
+                      ASHA Passcode / Worker ID
+                    </label>
+                    <input
+                      type="text"
+                      value={ashaPasscode}
+                      onChange={(e) => { setAshaPasscode(e.target.value); setAshaPasscodeError(""); }}
+                      placeholder='e.g. "ASHA-2026"'
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none text-slate-800 dark:text-white"
+                    />
+                    {ashaPasscodeError ? (
+                      <p className="mt-1.5 text-xs text-red-500">{ashaPasscodeError}</p>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-slate-400">
+                        For Hackathon Evaluation Demo, use code: <span className="font-mono font-semibold text-teal-600">ASHA2026</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Vinit Kumar"
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 dark:bg-slate-800 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none text-slate-800 dark:text-white"
+                  />
+                </div>
+              </>
             )}
 
             <div>

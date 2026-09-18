@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 import jwt
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.core.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
@@ -122,3 +122,40 @@ async def get_current_user_optional(
             pass
 
     return user
+
+
+# ---------------------------------------------------------------------------
+# Role-based access dependencies
+# ---------------------------------------------------------------------------
+
+def require_asha(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Permits access only to certified ASHA workers and administrators.
+    All other roles (patient, doctor) receive HTTP 403.
+    """
+    if current_user.role not in (UserRole.ASHA, UserRole.ADMIN, "asha", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: Exclusive to certified ASHA Health Workers.",
+        )
+    return current_user
+
+
+def require_doctor(current_user: User = Depends(get_current_user)) -> User:
+    """Permits access only to doctors and administrators."""
+    if current_user.role not in (UserRole.DOCTOR, UserRole.ADMIN, "doctor", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: Exclusive to verified Doctors.",
+        )
+    return current_user
+
+
+def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """Permits access only to administrators."""
+    if current_user.role not in (UserRole.ADMIN, "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: Requires Administrator privileges.",
+        )
+    return current_user

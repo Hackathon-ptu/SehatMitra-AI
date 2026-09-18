@@ -1,3 +1,8 @@
+"""
+SehatMitra-AI Clinical Engine
+Scaffolded and optimized using IBM Bob IDE (Granite-Code-Instruct)
+Architecture: Dual-Engine Triage (Groq LPU Primary + IBM Granite-3.0 Fallback)
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db

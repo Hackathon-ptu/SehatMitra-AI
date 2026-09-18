@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, health, chat, interview, risk, hospital, report, history, bhashini, analytics, triage, reports, tts
+from app.api.v1.endpoints import auth, health, chat, interview, risk, hospital, report, history, bhashini, analytics, triage, reports, tts, asha
 
 api_router = APIRouter()
 api_router.include_router(health.router, prefix="/health", tags=["Health"])
@@ -15,3 +15,4 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["Communit
 api_router.include_router(triage.router, prefix="/triage", tags=["Clinical Triage"])
 api_router.include_router(reports.router, prefix="/reports", tags=["Lab Reports"])
 api_router.include_router(tts.router, prefix="/tts", tags=["Neural TTS API"])
+api_router.include_router(asha.router, prefix="/asha", tags=["ASHA Worker Portal"])

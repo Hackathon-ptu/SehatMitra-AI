@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Heart, 
-  MessageSquare, 
-  ClipboardList, 
-  ShieldAlert, 
-  Building2, 
-  FileText, 
-  Menu, 
+import {
+  Heart,
+  MessageSquare,
+  ClipboardList,
+  ShieldAlert,
+  Building2,
+  FileText,
+  Menu,
   X,
   User as UserIcon,
-  Activity
+  Activity,
+  RefreshCw,
 } from 'lucide-react';
 import { NavItem, PageMode } from '../../types/navigation';
 import { IconButton } from '../common/IconButton';
@@ -20,6 +21,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { MedicalProfileModal } from '../profile/MedicalProfileModal';
 import { LanguageSelector } from '../language/LanguageSelector';
+import { authService } from '../../services/api';
 
 export interface NavbarProps {
   pageMode?: PageMode;
@@ -42,6 +44,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
     }
   });
   const [dropdown, setDropdown] = useState(false);
+  const [roleSwitching, setRoleSwitching] = useState(false);
 
   useEffect(() => {
     const sync = () => {
@@ -89,6 +92,32 @@ export const Navbar: React.FC<NavbarProps> = () => {
   const toggleMobileMenu = () => setMobileMenuOpen((prev) => !prev);
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
+  const handleSwitchRole = useCallback(async () => {
+    if (roleSwitching) return;
+    setRoleSwitching(true);
+    try {
+      const data = await authService.switchRole();
+      if (data?.access_token) {
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("access_token", data.access_token);
+      }
+      // Refresh user object from backend
+      const me = await authService.getMe();
+      if (me) {
+        const updated = { ...user, ...me, role: data.new_role };
+        localStorage.setItem("user", JSON.stringify(updated));
+        localStorage.setItem("sehat_user", JSON.stringify(updated));
+        setUser(updated);
+        window.dispatchEvent(new Event("auth_state_changed"));
+        window.dispatchEvent(new Event("storage"));
+      }
+    } catch (err) {
+      console.error("Role switch failed:", err);
+    } finally {
+      setRoleSwitching(false);
+    }
+  }, [roleSwitching, user]);
+
   return (
     <header className="sticky top-0 z-40 w-full bg-surface-card/95 backdrop-blur border-b border-surface-border shadow-subtle">
       <div className="max-w-content-container mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -132,6 +161,17 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
         {/* Right Action Controls */}
         <div className="hidden lg:flex items-center gap-3">
+          {/* IBM Bob / Granite Status Pill */}
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-blue-950/40 border border-blue-500/30 rounded-full text-xs font-medium text-blue-200 shadow-sm backdrop-blur-md">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            <span>IBM Bob Architecture</span>
+            <span className="text-gray-400">|</span>
+            <span className="text-emerald-400 font-semibold">IBM Granite-3.0 Active</span>
+          </div>
+
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('open-sos'))}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-full shadow-lg shadow-red-500/30 animate-pulse transition-all"
@@ -155,39 +195,72 @@ export const Navbar: React.FC<NavbarProps> = () => {
 
           {/* Authentication section */}
           {user ? (
-            <div className="relative">
+            <div className="flex items-center gap-2">
+              {/* Live Demo Role Switcher Pill */}
               <button
-                onClick={() => setDropdown(!dropdown)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 focus:outline-none"
+                onClick={handleSwitchRole}
+                disabled={roleSwitching}
+                title="Hackathon Demo: Toggle role between PATIENT and ASHA"
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all focus:outline-none",
+                  user.role === "asha"
+                    ? "bg-teal-50 border-teal-400 text-teal-700 dark:bg-teal-900/30 dark:border-teal-500 dark:text-teal-300 hover:bg-teal-100"
+                    : "bg-slate-100 border-slate-300 text-slate-600 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700",
+                  roleSwitching && "opacity-60 cursor-wait"
+                )}
               >
-                <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm">
-                  {user.displayName ? user.displayName[0].toUpperCase() : user.email ? user.email[0].toUpperCase() : "U"}
-                </div>
-                <span className="text-xs font-semibold max-w-[100px] truncate text-slate-700 dark:text-slate-200">
-                  {user.displayName || user.email?.split("@")[0]}
-                </span>
-                <span className="text-xs text-slate-400">▼</span>
+                <RefreshCw className={cn("w-3 h-3", roleSwitching && "animate-spin")} />
+                <span>Role: {(user.role || "patient").toUpperCase()}</span>
               </button>
-              {dropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1 z-50 text-left">
-                  <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200">
-                    <p className="font-semibold truncate">{user.displayName || "Patient"}</p>
-                    <p className="text-slate-400 truncate">{user.email}</p>
+
+              <div className="relative">
+                <button
+                  onClick={() => setDropdown(!dropdown)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 focus:outline-none"
+                >
+                  <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-sm">
+                    {user.displayName ? user.displayName[0].toUpperCase() : user.email ? user.email[0].toUpperCase() : "U"}
                   </div>
-                  <button
-                    onClick={() => {
-                      localStorage.removeItem("sehat_user");
-                      localStorage.removeItem("user");
-                      setUser(null);
-                      if (logout) logout();
-                      window.location.reload();
-                    }}
-                    className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              )}
+                  <span className="text-xs font-semibold max-w-[100px] truncate text-slate-700 dark:text-slate-200">
+                    {user.displayName || user.email?.split("@")[0]}
+                  </span>
+                  <span className="text-xs text-slate-400">▼</span>
+                </button>
+                {dropdown && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1 z-50 text-left">
+                    <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200">
+                      <p className="font-semibold truncate">{user.displayName || "Patient"}</p>
+                      <p className="text-slate-400 truncate">{user.email}</p>
+                      <p className="mt-0.5 font-mono text-[10px] text-slate-400 uppercase tracking-wide">
+                        Role: <span className={user.role === "asha" ? "text-teal-500" : "text-emerald-500"}>{user.role || "patient"}</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setDropdown(false);
+                        handleSwitchRole();
+                      }}
+                      disabled={roleSwitching}
+                      className="w-full text-left px-3 py-2 text-xs text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/30 flex items-center gap-1.5"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      Switch to {user.role === "asha" ? "Patient" : "ASHA Worker"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem("sehat_user");
+                        localStorage.removeItem("user");
+                        setUser(null);
+                        if (logout) logout();
+                        window.location.reload();
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex items-center gap-2">

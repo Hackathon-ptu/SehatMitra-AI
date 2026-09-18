@@ -11,7 +11,7 @@ import { LanguageSelectorModal } from './components/LanguageSelectorModal';
 import { LanguageSelector } from './components/language/LanguageSelector';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
-import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIcon, Sun, Moon, Mic, Activity, Menu, X } from 'lucide-react';
+import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIcon, Sun, Moon, Mic, Activity, Menu, X, Lock } from 'lucide-react';
 import { UI_TRANSLATIONS } from './constants/translations';
 import { EmergencySOSModal } from './components/EmergencySOSModal';
 import { OfflineBanner } from './components/common/OfflineBanner';
@@ -19,6 +19,13 @@ import { OfflineBanner } from './components/common/OfflineBanner';
 export const App = () => {
   const [activeTab, setActiveTab] = useState('chat');
   const { isAuthenticated, user, logout, showAuthModal, authModalMode, hideAuthModal } = useAuth();
+
+  // Resolve the current user role — support both in-context and localStorage
+  const resolvedUser = user || (() => {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
+  })();
+  const currentRole: string = (resolvedUser?.role || 'patient').toLowerCase();
+  const isAshaOrAdmin = currentRole === 'asha' || currentRole === 'admin';
   const [isSosOpen, setIsSosOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -131,6 +138,8 @@ export const App = () => {
       id: 'asha',
       label: t.ashaTab || 'ASHA Portal',
       icon: <Activity className="w-4 h-4" />,
+      // Show a lock icon in the tab when the user is authenticated but lacks ASHA role
+      locked: isAuthenticated && !isAshaOrAdmin,
     },
     ...(isAuthenticated ? [{
       id: 'profile',
@@ -367,12 +376,17 @@ export const App = () => {
                 <button
                   key={tab.id}
                   onClick={() => {
-                    if (tab.id === 'asha' && !isAuthenticated) {
-                      showAuthModal('login');
-                      return;
-                    }
-                    setActiveTab(tab.id);
-                  }}
+                      if (tab.id === 'asha') {
+                        if (!isAuthenticated) {
+                          showAuthModal('login');
+                          return;
+                        }
+                        // Patients and doctors cannot navigate to the ASHA portal;
+                        // AshaDashboard will display the Access Denied screen instead,
+                        // but we still allow the tab switch so they see that message.
+                      }
+                      setActiveTab(tab.id);
+                    }}
                   className={`flex items-center gap-2 py-3.5 px-4 border-b-2 text-xs sm:text-sm transition-all duration-150 focus:outline-none shrink-0 ${
                     isActive
                       ? 'border-brand-600 text-brand-700 font-semibold bg-brand-50/60 dark:bg-brand-950/20 rounded-t-lg'
@@ -381,6 +395,9 @@ export const App = () => {
                 >
                   <span className={`${isActive ? 'text-brand-600' : 'text-content-muted'}`}>{tab.icon}</span>
                   <span>{tab.label}</span>
+                  {(tab as any).locked && (
+                    <Lock className="w-3 h-3 text-red-400 ml-0.5" aria-label="Requires ASHA role" />
+                  )}
                 </button>
               );
             })}

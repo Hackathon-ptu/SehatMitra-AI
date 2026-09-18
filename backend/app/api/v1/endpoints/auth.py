@@ -494,6 +494,10 @@ async def firebase_login_handler(request: Request, db: Session = Depends(get_db)
                 username = f"{base_username}_{counter}"
                 counter += 1
 
+            # Allow sign-up to set role=asha when a valid passcode was used on the frontend
+            requested_role_str = str(body.get("role", "patient")).lower()
+            assigned_role = UserRole.ASHA if requested_role_str == "asha" else UserRole.PATIENT
+
             user = User(
                 full_name=name or username,
                 email=email,
@@ -504,7 +508,7 @@ async def firebase_login_handler(request: Request, db: Session = Depends(get_db)
                 patient_id=patient_id,
                 is_email_verified=True,
                 is_profile_completed=False,
-                role=UserRole.PATIENT,
+                role=assigned_role,
             )
             db.add(user)
             db.commit()
@@ -607,4 +611,27 @@ async def verify_otp_endpoint(request: Request, db: Session = Depends(get_db)):
             "username": user.username,
             "is_profile_completed": user.is_profile_completed
         }
+    }
+
+
+@router.post("/switch-role")
+def switch_role(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """
+    Hackathon demo helper: toggles the authenticated user's role between 'patient' and 'asha'.
+    Allows live RBAC demonstration without re-registering.
+    """
+    try:
+        db.rollback()
+    except Exception:
+        pass
+    new_role = UserRole.ASHA if current_user.role in (UserRole.PATIENT, "patient") else UserRole.PATIENT
+    current_user.role = new_role
+    db.commit()
+    db.refresh(current_user)
+    new_token = create_access_token(data={"sub": str(current_user.id), "role": current_user.role})
+    return {
+        "status": "success",
+        "new_role": current_user.role,
+        "access_token": new_token,
+        "token_type": "bearer",
     }
