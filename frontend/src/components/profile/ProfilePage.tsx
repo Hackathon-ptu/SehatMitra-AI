@@ -2,17 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { authService } from '../../services/api';
-import { 
-  ShieldCheck, 
-  Lock, 
-  Unlock, 
-  LogOut, 
-  Heart, 
+import {
+  ShieldCheck,
+  Lock,
+  Unlock,
+  LogOut,
+  Heart,
   QrCode,
   Edit3,
-  Loader2,
-  Eye,
-  EyeOff
+  Loader2
 } from 'lucide-react';
 import { Button } from '../common/Button';
 
@@ -22,11 +20,6 @@ export const ProfilePage: React.FC = () => {
 
   // Mode States
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [password, setPassword] = useState('');
-  const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
   // Edit States
   const [age, setAge] = useState<number | ''>(user?.age || '');
@@ -60,23 +53,6 @@ export const ProfilePage: React.FC = () => {
       setEmergencyPhone(user.emergency_contact_phone || '');
     }
   }, [user]);
-
-  const handleVerifyPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsVerifying(true);
-    setVerifyError(null);
-    try {
-      await authService.verifyPassword(password);
-      setIsUnlocked(true);
-      setShowPasswordPrompt(false);
-      setPassword('');
-    } catch (err: any) {
-      console.error(err);
-      setVerifyError(err.response?.data?.detail || 'Incorrect password. Access denied.');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
@@ -211,82 +187,19 @@ export const ProfilePage: React.FC = () => {
             </div>
           ) : (
             <Button
-              onClick={() => setShowPasswordPrompt(true)}
-              variant="outline"
-              className="flex items-center gap-1.5 text-xs font-bold"
-              leftIcon={<Edit3 className="w-3.5 h-3.5" />}
-            >
-              {t('edit')}
-            </Button>
+                onClick={() => setIsUnlocked(true)}
+                variant="outline"
+                className="flex items-center gap-1.5 text-xs font-bold"
+                leftIcon={<Edit3 className="w-3.5 h-3.5" />}
+              >
+                {t('edit')}
+              </Button>
           )}
         </div>
 
         {saveSuccess && (
           <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-semibold">
             Profile changes saved successfully!
-          </div>
-        )}
-
-        {/* Password Verification Dialog Overlay */}
-        {showPasswordPrompt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <form 
-              onSubmit={handleVerifyPassword}
-              className="w-full max-w-sm bg-surface-card border border-surface-border rounded-2xl p-6 shadow-elevated flex flex-col gap-4 text-left"
-            >
-              <h3 className="text-base font-bold text-content-primary flex items-center gap-2">
-                <Lock className="w-5 h-5 text-brand-600 animate-pulse" />
-                {t('verifyPasswordTitle')}
-              </h3>
-              
-              <div className="flex flex-col gap-1.5 relative">
-                <label className="text-xs font-semibold text-content-secondary">{t('passwordLabel')}</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={t('passwordPlaceholder')}
-                    className="w-full pl-3 pr-10 py-2 border border-surface-border bg-surface-elevated rounded-lg text-sm text-content-primary focus:border-brand-600 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-content-muted hover:text-content-primary focus:outline-none"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {verifyError && (
-                <div className="p-2.5 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-lg text-[11px] text-red-700 dark:text-red-300">
-                  {verifyError}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 mt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPasswordPrompt(false);
-                    setPassword('');
-                    setVerifyError(null);
-                  }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-surface-border text-content-secondary"
-                >
-                  {t('cancel')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isVerifying}
-                  className="px-4 py-1.5 bg-brand-600 text-white font-bold text-xs rounded-lg hover:bg-brand-700 shadow-md flex items-center gap-1"
-                >
-                  {isVerifying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  {t('verify')}
-                </button>
-              </div>
-            </form>
           </div>
         )}
 

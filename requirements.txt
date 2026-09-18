@@ -28,8 +28,8 @@ edge-tts
 pillow
 numpy
 alembic
-sqlalchemy-libsql
-libsql-experimental
+# sqlalchemy-libsql
+#libsql-experimental
 email-validator
 edge-tts
 psycopg2-binary
