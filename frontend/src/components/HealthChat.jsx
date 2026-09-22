@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { healthService, historyService } from '../services/api';
 import { playGlobalSpeech, stopAllSpeech } from '../utils/speech';
-import { Mic, MicOff, Send, RefreshCw, AlertTriangle, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Send, RefreshCw, AlertTriangle, Sparkles, ImagePlus, X as XIcon, ClipboardList } from 'lucide-react';
 import { BHASHINI_LANGUAGES } from '../constants/languages';
 import { useAuth } from '../context/AuthContext';
 import { generateConsultationSlip } from '../utils/pdfGenerator';
@@ -73,6 +73,9 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [totalSteps, setTotalSteps] = useState(6);
   const [collectedPoints, setCollectedPoints] = useState([]);
+  // Image upload state for skin/wound visual analysis
+  const [selectedImage, setSelectedImage] = useState(null); // { file, base64, previewUrl }
+  const imageInputRef = useRef(null);
 
   const messagesEndRef = useRef(null);
 
@@ -167,11 +170,30 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
     }
   };
 
+  const handleImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setSelectedImage({
+        file,
+        base64: ev.target.result.split(',')[1], // strip data:image/...;base64, prefix
+        previewUrl: ev.target.result,
+        mime: file.type || 'image/jpeg',
+      });
+    };
+    reader.readAsDataURL(file);
+    // Reset so same file can be re-selected
+    e.target.value = '';
+  };
+
+  const handleRemoveImage = () => setSelectedImage(null);
+
   const handleSendMessage = async (e) => {
     e?.preventDefault();
-    if (!userInput.trim() || loading || isCompleted) return;
+    if ((!userInput.trim() && !selectedImage) || loading || isCompleted) return;
 
-    const userText = userInput.trim();
+    const userText = userInput.trim() || (selectedImage ? '[Image attached for skin/wound analysis]' : '');
     setUserInput('');
 
     // Append user message
@@ -185,6 +207,10 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
     setMessages(updatedMessages);
     setLoading(true);
 
+    // Clear the image attachment now that it's been included in the message
+    const attachedImage = selectedImage;
+    setSelectedImage(null);
+
     try {
       const payload = {
         message: userText,
@@ -192,7 +218,11 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
         history: updatedMessages.slice(0, -1).map(m => ({
           role: m.sender === 'user' ? 'user' : 'assistant',
           content: m.text
-        }))
+        })),
+        ...(attachedImage && {
+          image_base64: attachedImage.base64,
+          image_mime: attachedImage.mime,
+        }),
       };
 
       const response = await healthService.getDualAiTriage(payload);
@@ -227,7 +257,9 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
           engine_used: response.engine_used
         });
 
-        if (response.is_interview_complete === true) {
+        // Only auto-complete when the AI explicitly signals readiness —
+        // NOT on an arbitrary turn count.
+        if (response.is_triage_ready === true || response.is_interview_complete === true) {
           setIsCompleted(true);
           const normalizedRisk = response.risk_level?.toLowerCase();
           if (normalizedRisk === 'emergency' || normalizedRisk === 'high') {
@@ -447,8 +479,52 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
         </div>
 
         {/* Input Bar */}
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-surface-border bg-surface-card">
+        <form onSubmit={handleSendMessage} className="p-4 border-t border-surface-border bg-surface-card flex flex-col gap-2">
+
+          {/* Image preview strip */}
+          {selectedImage && (
+            <div className="flex items-center gap-2 p-2 bg-surface-bg border border-surface-border rounded-lg animate-fade-in">
+              <img
+                src={selectedImage.previewUrl}
+                alt="Attached"
+                className="w-12 h-12 object-cover rounded-md border border-surface-border shrink-0"
+              />
+              <div className="flex flex-col flex-1 min-w-0">
+                <span className="text-xs font-semibold text-content-primary truncate">{selectedImage.file.name}</span>
+                <span className="text-[10px] text-content-muted">Skin/wound image — will be analysed by AI</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRemoveImage}
+                className="p-1 rounded hover:bg-surface-border text-content-muted hover:text-red-500 transition-colors shrink-0"
+                title="Remove image"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2 bg-surface-bg border border-surface-border rounded-xl p-2 transition-colors focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-600/20">
+            {/* Hidden file input for camera/gallery */}
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleImageSelect}
+            />
+            {/* Image upload trigger */}
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={loading || isCompleted}
+              className="p-2.5 rounded-lg transition-all flex items-center justify-center bg-surface-elevated text-content-secondary hover:text-teal-600 hover:bg-teal-50 border border-surface-border"
+              title="Attach skin/wound photo for AI visual analysis"
+            >
+              <ImagePlus className="w-5 h-5" />
+            </button>
+
             <button
               type="button"
               onClick={toggleSpeech}
@@ -475,9 +551,9 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
             />
             <button
               type="submit"
-              disabled={!userInput.trim() || loading}
+              disabled={(!userInput.trim() && !selectedImage) || loading}
               className={`p-2.5 rounded-lg transition-all flex items-center justify-center ${
-                userInput.trim() && !loading
+                (userInput.trim() || selectedImage) && !loading
                   ? 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800'
                   : 'bg-surface-elevated text-content-disabled cursor-not-allowed border border-surface-border'
               }`}
@@ -485,8 +561,21 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
               <Send className="w-5 h-5" />
             </button>
           </div>
+
+          {/* On-demand "Generate Triage Slip" button — visible whenever some clinical data exists */}
+          {riskData && riskData.reasons && riskData.reasons.length > 0 && !isCompleted && (
+            <button
+              type="button"
+              onClick={() => setIsCompleted(true)}
+              className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-700 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+            >
+              <ClipboardList className="w-4 h-4" />
+              Generate Triage Slip Now
+            </button>
+          )}
+
           {isListening && (
-            <p className="text-[11px] text-red-500 font-semibold mt-2 animate-pulse text-left">
+            <p className="text-[11px] text-red-500 font-semibold animate-pulse text-left">
               🎙️ {t('listening') || 'Listening...'} ({selectedLangConfig.name})
             </p>
           )}

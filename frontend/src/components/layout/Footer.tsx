@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, ShieldCheck } from 'lucide-react';
+import { Heart, ShieldCheck, Activity } from 'lucide-react';
 import { APP_METADATA } from '../../data/mockData';
 
 export const Footer: React.FC = () => {
@@ -40,7 +40,7 @@ export const Footer: React.FC = () => {
               Health Interview
             </Link>
             <Link to="/risk-assessment" className="text-xs text-content-muted hover:text-brand-600 transition-colors">
-              Risk Assessment
+              Voice Triage
             </Link>
           </div>
 
@@ -59,6 +59,20 @@ export const Footer: React.FC = () => {
               Language Settings
             </Link>
           </div>
+        </div>
+
+        {/* Staff & Hospital Tools — subtle, separated section */}
+        <div className="pt-5 border-t border-surface-border/60 flex flex-wrap items-center gap-x-6 gap-y-2 mb-5">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-content-muted/60">
+            Staff &amp; Hospital Access
+          </span>
+          <Link
+            to="/asha-login"
+            className="inline-flex items-center gap-1.5 text-[11px] text-content-muted hover:text-teal-600 transition-colors group"
+          >
+            <Activity className="w-3 h-3 group-hover:text-teal-500" />
+            Staff &amp; ASHA Worker Login
+          </Link>
         </div>
 
         {/* Disclaimer & Copyright */}

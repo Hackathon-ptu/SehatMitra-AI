@@ -136,22 +136,61 @@ export const HospitalLocator = () => {
     }
   };
 
-  const handleManualSearch = (e) => {
+  const handleManualSearch = async (e) => {
     e?.preventDefault();
-    if (!searchQuery.trim()) return;
+    const rawQuery = searchQuery.trim();
+    if (!rawQuery) return;
 
-    // Check if matches preset
-    const query = searchQuery.trim().toLowerCase();
-    const match = QUICK_REGIONS.find(r => r.name.toLowerCase().includes(query) || query.includes(r.name.toLowerCase().split(' ')[0]));
+    // 1. Check preset regions first (instant, no network round-trip)
+    const queryLow = rawQuery.toLowerCase();
+    const match = QUICK_REGIONS.find(
+      r => r.name.toLowerCase().includes(queryLow) || queryLow.includes(r.name.toLowerCase().split(' ')[0])
+    );
     if (match) {
       setCoords({ lat: match.lat, lon: match.lon });
       getHospitalsList(match.lat, match.lon, selectedRisk, match.name);
-    } else {
-      // Default to approximate coordinates for recognized search
-      const baseLat = 28.6139; // Delhi center
-      const baseLon = 77.2090;
-      setCoords({ lat: baseLat, lon: baseLon });
-      getHospitalsList(baseLat, baseLon, selectedRisk, `Searched: "${searchQuery.trim()}"`);
+      return;
+    }
+
+    // 2. If the user has an active GPS fix and is searching for a hospital name
+    //    (not a city), keep using their current location rather than falling back to Delhi.
+    const looksLikeHospitalName = /hospital|clinic|dispensary|phc|chc|centre|center|ayurved/i.test(rawQuery);
+    if (coords && looksLikeHospitalName) {
+      // Re-query the backend using the already-known coordinates
+      getHospitalsList(coords.lat, coords.lon, selectedRisk, `Near you: "${rawQuery}"`);
+      return;
+    }
+
+    // 3. Geocode via OpenStreetMap Nominatim for any other city / locality query
+    setLoading(true);
+    setLocationError(null);
+    try {
+      const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(rawQuery)}, India`;
+      const res = await fetch(nominatimUrl, {
+        headers: { 'Accept-Language': 'en', 'User-Agent': 'SehatMitra-AI/1.0' }
+      });
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        setCoords({ lat, lon });
+        getHospitalsList(lat, lon, selectedRisk, data[0].display_name?.split(',')[0] || rawQuery);
+      } else {
+        setLoading(false);
+        setLocationError(
+          langCode === 'hi'
+            ? `"${rawQuery}" के लिए कोई स्थान नहीं मिला। कृपया पूरा शहर/जिले का नाम लिखें।`
+            : `No location found for "${rawQuery}". Try a full city or district name.`
+        );
+      }
+    } catch (geoErr) {
+      setLoading(false);
+      console.error('[HospitalLocator] Nominatim geocoding error:', geoErr);
+      setLocationError(
+        langCode === 'hi'
+          ? 'स्थान खोजने में त्रुटि आई। कृपया नीचे दिए क्षेत्रों में से चुनें।'
+          : 'Location lookup failed. Please select a preset region below.'
+      );
     }
   };
 

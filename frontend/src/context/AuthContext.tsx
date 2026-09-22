@@ -33,6 +33,8 @@ export interface UserPayload {
   email: string;
   role: string;
   full_name?: string;
+  /** Deterministic ABHA/patient ID — same as patient_id */
+  abha_id?: string;
   patient_id?: string;
   is_profile_completed?: boolean;
   username?: string;
@@ -54,6 +56,8 @@ interface AuthContextType {
   token: string | null;
   user: UserPayload | null;
   isAuthenticated: boolean;
+  /** True while the initial Firebase auth state + token validation is in flight. */
+  loading: boolean;
   login: (token: string, user?: UserPayload) => void;
   logout: () => Promise<void>;
   showAuthModal: (mode: 'login' | 'signup') => void;
@@ -69,7 +73,9 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Safe Base64 JWT decoder helper
+// Safe Base64 JWT decoder helper.
+// NOTE: our JWTs use `sub = str(user.id)` (an integer string), NOT the email.
+// Always prefer the `email` claim when available; never use `sub` as an email.
 const decodeToken = (token: string): { email: string; role: string } | null => {
   try {
     const base64Url = token.split('.')[1];
@@ -81,9 +87,11 @@ const decodeToken = (token: string): { email: string; role: string } | null => {
         .join('')
     );
     const decoded = JSON.parse(jsonPayload);
+    // `sub` is the numeric user ID; use explicit `email` claim if present
+    const email = decoded.email || (decoded.sub && decoded.sub.includes('@') ? decoded.sub : '');
     return {
-      email: decoded.sub || '',
-      role: decoded.role || '',
+      email,
+      role: decoded.role || 'patient',
     };
   } catch (e) {
     return null;
@@ -94,6 +102,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<UserPayload | null>(null);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | null>(null);
+  // loading=true until the Firebase onAuthStateChanged callback has resolved (including
+  // any backend token validation).  Components must NOT treat user=null as "guest" while
+  // loading is still true.
+  const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (authToken: string) => {
     try {
@@ -137,38 +149,60 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Synchronize with Firebase & localStorage on mount
+  // Synchronize with Firebase & localStorage on mount.
+  // loading stays true until this callback finishes so that downstream
+  // consumers never see a transient "not authenticated" flash.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      const isGoogleUser = currentUser?.providerData.some(p => p.providerId === "google.com");
-      const isVerified = currentUser && (currentUser.emailVerified || isGoogleUser);
+      try {
+        const isGoogleUser = currentUser?.providerData.some(p => p.providerId === "google.com");
+        const isVerified = currentUser && (currentUser.emailVerified || isGoogleUser);
 
-      if (isVerified) {
-        localStorage.setItem("user_id", currentUser.uid);
-        localStorage.setItem("user_email", currentUser.email || "");
-        
-        const savedToken = localStorage.getItem('token');
-        if (!savedToken) {
-          await syncWithBackend(currentUser);
-        } else {
-          setToken(savedToken);
-          const savedUser = localStorage.getItem('user');
-          if (savedUser) {
-            setUser(JSON.parse(savedUser));
+        if (isVerified) {
+          localStorage.setItem("user_id", currentUser.uid);
+          localStorage.setItem("user_email", currentUser.email || "");
+
+          const savedToken = localStorage.getItem('token') || localStorage.getItem('access_token');
+          if (!savedToken) {
+            await syncWithBackend(currentUser);
           } else {
-            await fetchProfile(savedToken);
+            setToken(savedToken);
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+              setUser(JSON.parse(savedUser));
+            } else {
+              await fetchProfile(savedToken);
+            }
+          }
+        } else {
+          // No verified Firebase user — but only clear state if there is no
+          // persisted backend token (e.g. email/password login without Firebase).
+          const savedToken = localStorage.getItem('token') || localStorage.getItem('access_token');
+          if (savedToken) {
+            // Backend-only session: restore state from localStorage
+            setToken(savedToken);
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+              setUser(JSON.parse(savedUser));
+            } else {
+              await fetchProfile(savedToken);
+            }
+          } else {
+            localStorage.removeItem("user_id");
+            localStorage.removeItem("user_email");
+            localStorage.removeItem("token");
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("user");
+            localStorage.removeItem("sehat_user");
+            setToken(null);
+            setUser(null);
+            window.dispatchEvent(new Event("auth_state_changed"));
+            window.dispatchEvent(new Event("storage"));
           }
         }
-      } else {
-        localStorage.removeItem("user_id");
-        localStorage.removeItem("user_email");
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        localStorage.removeItem("sehat_user");
-        setToken(null);
-        setUser(null);
-        window.dispatchEvent(new Event("auth_state_changed"));
-        window.dispatchEvent(new Event("storage"));
+      } finally {
+        // Always mark loading complete once the first auth check is done
+        setLoading(false);
       }
     });
     return () => unsubscribe();
@@ -178,6 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('token', newToken);
     localStorage.setItem('access_token', newToken);
     setToken(newToken);
+    setLoading(false);
     if (newUser) {
       setUser(newUser);
       localStorage.setItem('user', JSON.stringify(newUser));
@@ -241,6 +276,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         token,
         user,
         isAuthenticated: !!token,
+        loading,
         login,
         logout,
         showAuthModal,

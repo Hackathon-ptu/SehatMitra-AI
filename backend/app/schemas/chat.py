@@ -9,3 +9,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     session_id: Optional[int] = None
+    saved_to_history: bool = False

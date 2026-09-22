@@ -71,6 +71,9 @@ app.include_router(tts_router, prefix="/api/v1/tts", tags=["Neural TTS API"])
 from app.api.v1.endpoints.history import router as history_router
 app.include_router(history_router, prefix="/api/v1/history", tags=["Consultation & Report History"])
 
+from app.api.v1.endpoints import kiosk
+app.include_router(kiosk.router, prefix="/api/v1")
+
 import os
 from fastapi.staticfiles import StaticFiles
 

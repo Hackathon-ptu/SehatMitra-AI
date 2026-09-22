@@ -10,7 +10,6 @@ import {
   Menu,
   X,
   User as UserIcon,
-  Activity,
   RefreshCw,
 } from 'lucide-react';
 import { NavItem, PageMode } from '../../types/navigation';
@@ -35,9 +34,12 @@ export const Navbar: React.FC<NavbarProps> = () => {
   const { showAuthModal, logout } = useAuth();
   const { t } = useLanguage();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  // Use the canonical "user" key that AuthContext writes to.  "sehat_user" is a legacy
+  // key that is no longer written on login, so reading it first caused the Navbar to
+  // show "not logged in" even when the user was authenticated.
   const [user, setUser] = useState<any>(() => {
     try {
-      const raw = localStorage.getItem("sehat_user") || localStorage.getItem("user");
+      const raw = localStorage.getItem("user") || localStorage.getItem("sehat_user");
       return raw ? JSON.parse(raw) : null;
     } catch {
       return null;
@@ -49,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = () => {
   useEffect(() => {
     const sync = () => {
       try {
-        const raw = localStorage.getItem("sehat_user") || localStorage.getItem("user");
+        const raw = localStorage.getItem("user") || localStorage.getItem("sehat_user");
         setUser(raw ? JSON.parse(raw) : null);
       } catch {}
     };
@@ -61,14 +63,15 @@ export const Navbar: React.FC<NavbarProps> = () => {
     };
   }, []);
 
+  // Citizen-only nav items — ASHA Portal and Charak-Kiosk are intentionally
+  // excluded; they are accessed via the Footer / dedicated entry points.
   const NAV_ITEMS: NavItem[] = [
     { label: t('nav_home') || 'Overview', path: '/' },
     { label: t('nav_chat') || 'AI Chat', path: '/chat', icon: <MessageSquare className="w-4 h-4" /> },
     { label: t('nav_interview') || 'Health Interview', path: '/health-interview', icon: <ClipboardList className="w-4 h-4" /> },
-    { label: t('nav_triage') || 'Risk Assessment', path: '/risk-assessment', icon: <ShieldAlert className="w-4 h-4" /> },
+    { label: t('nav_triage') || 'Voice Triage', path: '/risk-assessment', icon: <ShieldAlert className="w-4 h-4" /> },
     { label: t('nav_hospitals') || 'Hospitals', path: '/hospitals', icon: <Building2 className="w-4 h-4" /> },
     { label: t('nav_reports') || 'Report Explanation', path: '/report', icon: <FileText className="w-4 h-4" /> },
-    { label: t('nav_asha') || 'ASHA Portal', path: '/asha-portal', icon: <Activity className="w-4 h-4" /> },
   ];
 
   useEffect(() => {

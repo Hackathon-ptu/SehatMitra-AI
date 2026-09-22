@@ -125,6 +125,14 @@ async def get_current_user_optional(
 
 
 # ---------------------------------------------------------------------------
+# Public alias: get_optional_current_user
+# Extracts Bearer token if present, resolves user from DB, returns None for
+# guests or on any validation error — never raises HTTP 401.
+# ---------------------------------------------------------------------------
+
+get_optional_current_user = get_current_user_optional
+
+# ---------------------------------------------------------------------------
 # Role-based access dependencies
 # ---------------------------------------------------------------------------
 

@@ -307,7 +307,10 @@ async def login(
 
 @router.get("/me", response_model=UserProfileResponse)
 def get_me(current_user: User = Depends(get_current_user)):
-    return current_user
+    # Run through UserProfileResponse.model_validate so that normalisation
+    # (full_name fallback, deterministic patient_id, abha_id) is always applied
+    # before FastAPI serialises the response, regardless of Pydantic v1/v2 path.
+    return UserProfileResponse.model_validate(current_user)
 
 @router.post("/profile")
 @router.put("/profile")
@@ -318,24 +321,38 @@ def update_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    # ── full_name ───────────────────────────────────────────────────────────
+    if payload.full_name is not None and payload.full_name.strip():
+        current_user.full_name = payload.full_name.strip()
+
+    # ── phone — accept phone or phone_number ────────────────────────────────
+    resolved_phone = payload.phone or payload.phone_number
+    if resolved_phone is not None:
+        current_user.phone = resolved_phone.strip() or None
+
+    # ── age ─────────────────────────────────────────────────────────────────
     if payload.age is not None:
         try:
             if isinstance(payload.age, str):
                 cleaned_age = payload.age.strip()
-                if cleaned_age:
-                    current_user.age = int(float(cleaned_age))
-                else:
-                    current_user.age = None
+                current_user.age = int(float(cleaned_age)) if cleaned_age else None
             else:
                 current_user.age = int(payload.age)
         except Exception:
             current_user.age = None
     else:
         current_user.age = None
+
+    # ── gender ───────────────────────────────────────────────────────────────
     if payload.gender is not None:
         current_user.gender = payload.gender
-    if payload.blood_group is not None:
-        current_user.blood_group = payload.blood_group
+
+    # ── blood_group — accept snake_case or camelCase ─────────────────────────
+    resolved_blood_group = payload.blood_group or payload.bloodGroup
+    if resolved_blood_group is not None:
+        current_user.blood_group = resolved_blood_group
+
+    # ── location fields ──────────────────────────────────────────────────────
     if payload.village_town is not None:
         current_user.village_town = payload.village_town
     if payload.district is not None:
@@ -344,30 +361,38 @@ def update_profile(
         current_user.state = payload.state
     if payload.pincode is not None:
         current_user.pincode = payload.pincode
+
+    # ── emergency contact ────────────────────────────────────────────────────
     if payload.emergency_contact_name is not None:
         current_user.emergency_contact_name = payload.emergency_contact_name
     if payload.emergency_contact_phone is not None:
         current_user.emergency_contact_phone = payload.emergency_contact_phone
+
+    # ── clinical history ─────────────────────────────────────────────────────
     if payload.chronic_conditions is not None:
         current_user.chronic_conditions = payload.chronic_conditions
     if payload.allergies is not None:
         current_user.allergies = payload.allergies
+
     current_user.is_profile_completed = True
 
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
     
+    resolved_patient_id = current_user.patient_id or f"SM-2026-{current_user.id:04d}"
     return {
         "success": True,
         "message": "Medical profile updated successfully.",
         "user": {
             "id": current_user.id,
-            "patient_id": getattr(current_user, "patient_id", f"SM-2026-{current_user.id:04d}"),
+            "patient_id": resolved_patient_id,
+            "abha_id": resolved_patient_id,
             "full_name": current_user.full_name,
             "username": current_user.username,
             "email": current_user.email,
             "phone": current_user.phone,
+            "role": str(current_user.role.value if hasattr(current_user.role, 'value') else current_user.role),
             "age": current_user.age,
             "gender": current_user.gender,
             "blood_group": current_user.blood_group,
@@ -516,16 +541,23 @@ async def firebase_login_handler(request: Request, db: Session = Depends(get_db)
 
         token = create_access_token(data={"sub": str(user.id), "role": user.role})
 
+        # Resolve full_name + patient_id with the same normalisation used by GET /me
+        resolved_full_name = user.full_name or email.split("@")[0]
+        resolved_patient_id = user.patient_id or f"SM-2026-{user.id:04d}"
+
         return {
             "success": True,
             "access_token": token,
             "token_type": "bearer",
             "user": {
-                "uid": str(body.get("uid", email)),
-                "email": email,
-                "displayName": user.full_name,
+                # Keys match UserPayload / UserProfileResponse so AuthContext
+                # can store this directly without shape mismatches.
                 "id": user.id,
-                "patient_id": user.patient_id,
+                "email": email,
+                "full_name": resolved_full_name,
+                "role": str(user.role.value if hasattr(user.role, 'value') else user.role),
+                "patient_id": resolved_patient_id,
+                "abha_id": resolved_patient_id,
                 "username": user.username,
                 "is_profile_completed": user.is_profile_completed,
             }

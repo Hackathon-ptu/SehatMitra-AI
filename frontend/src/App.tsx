@@ -4,32 +4,32 @@ import { LabReportAnalyzer } from './components/reports/LabReportAnalyzer';
 import { HospitalLocator } from './components/HospitalLocator';
 import { HistoryDashboard } from './components/HistoryDashboard';
 import { TriageAssistant } from './components/triage/TriageAssistant';
-import { AshaDashboard } from './components/dashboard/AshaDashboard';
 import { ProfilePage } from './components/profile/ProfilePage';
 import { AuthModal } from './components/AuthModal';
 import { LanguageSelectorModal } from './components/LanguageSelectorModal';
 import { LanguageSelector } from './components/language/LanguageSelector';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
-import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIcon, Sun, Moon, Mic, Activity, Menu, X, Lock } from 'lucide-react';
+import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIcon, Sun, Moon, Mic, Menu, X } from 'lucide-react';
 import { UI_TRANSLATIONS } from './constants/translations';
 import { EmergencySOSModal } from './components/EmergencySOSModal';
 import { OfflineBanner } from './components/common/OfflineBanner';
 
 export const App = () => {
   const [activeTab, setActiveTab] = useState('chat');
-  const { isAuthenticated, user, logout, showAuthModal, authModalMode, hideAuthModal } = useAuth();
+  const { isAuthenticated, loading: authLoading, user, logout, showAuthModal, authModalMode, hideAuthModal } = useAuth();
 
-  // Resolve the current user role — support both in-context and localStorage
+  // Resolve the current user role — support both in-context and localStorage.
+  // During auth loading we still check localStorage so the UI doesn't flicker.
   const resolvedUser = user || (() => {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; }
   })();
-  const currentRole: string = (resolvedUser?.role || 'patient').toLowerCase();
-  const isAshaOrAdmin = currentRole === 'asha' || currentRole === 'admin';
   const [isSosOpen, setIsSosOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const storedUser = user || JSON.parse(localStorage.getItem("user") || "null");
+  // storedUser: prefer in-context user; fall back to localStorage so header
+  // doesn't flash "Login" while the Firebase check is still in flight.
+  const storedUser = resolvedUser;
 
   useEffect(() => {
     const handleSetTab = (e: any) => {
@@ -108,10 +108,12 @@ export const App = () => {
     pdfDownload: translate('pdfDownload') || (UI_TRANSLATIONS as any)[selectedLanguage]?.pdfDownload
   };
 
+  // Citizen-facing tabs only. ASHA Portal and Charak-Kiosk are accessed
+  // via dedicated routes (/portal/asha-login and /kiosk) — not surfaced here.
   const tabs = [
     {
       id: 'chat',
-      label: t.chatTab || 'Symptom Chat',
+      label: t.chatTab || 'AI Chat',
       icon: <MessageSquare className="w-4 h-4" />,
     },
     {
@@ -121,12 +123,12 @@ export const App = () => {
     },
     {
       id: 'report',
-      label: t.reportTab || 'Report Analyzer',
+      label: t.reportTab || 'Report Explanation',
       icon: <FileSpreadsheet className="w-4 h-4" />,
     },
     {
       id: 'hospitals',
-      label: t.locatorTab || 'Hospital Locator',
+      label: t.locatorTab || 'Hospitals',
       icon: <MapPin className="w-4 h-4" />,
     },
     {
@@ -134,14 +136,9 @@ export const App = () => {
       label: t.historyTab || 'Health History',
       icon: <History className="w-4 h-4" />,
     },
-    {
-      id: 'asha',
-      label: t.ashaTab || 'ASHA Portal',
-      icon: <Activity className="w-4 h-4" />,
-      // Show a lock icon in the tab when the user is authenticated but lacks ASHA role
-      locked: isAuthenticated && !isAshaOrAdmin,
-    },
-    ...(isAuthenticated ? [{
+    // Show profile tab while auth is loading (so logged-in users don't lose the tab)
+    // or when confirmed authenticated.
+    ...((isAuthenticated || authLoading) ? [{
       id: 'profile',
       label: t.profileTab || 'My Profile',
       icon: <UserIcon className="w-4 h-4" />,
@@ -375,30 +372,16 @@ export const App = () => {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => {
-                      if (tab.id === 'asha') {
-                        if (!isAuthenticated) {
-                          showAuthModal('login');
-                          return;
-                        }
-                        // Patients and doctors cannot navigate to the ASHA portal;
-                        // AshaDashboard will display the Access Denied screen instead,
-                        // but we still allow the tab switch so they see that message.
-                      }
-                      setActiveTab(tab.id);
-                    }}
-                  className={`flex items-center gap-2 py-3.5 px-4 border-b-2 text-xs sm:text-sm transition-all duration-150 focus:outline-none shrink-0 ${
-                    isActive
-                      ? 'border-brand-600 text-brand-700 font-semibold bg-brand-50/60 dark:bg-brand-950/20 rounded-t-lg'
-                      : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-                  }`}
-                >
-                  <span className={`${isActive ? 'text-brand-600' : 'text-content-muted'}`}>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                  {(tab as any).locked && (
-                    <Lock className="w-3 h-3 text-red-400 ml-0.5" aria-label="Requires ASHA role" />
-                  )}
-                </button>
+                  onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 py-3.5 px-4 border-b-2 text-xs sm:text-sm transition-all duration-150 focus:outline-none shrink-0 ${
+                  isActive
+                    ? 'border-brand-600 text-brand-700 font-semibold bg-brand-50/60 dark:bg-brand-950/20 rounded-t-lg'
+                    : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
+                }`}
+              >
+                <span className={`${isActive ? 'text-brand-600' : 'text-content-muted'}`}>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
               );
             })}
           </nav>
@@ -413,8 +396,7 @@ export const App = () => {
           {activeTab === 'report' && <LabReportAnalyzer languageCode={selectedLanguage} />}
           {activeTab === 'hospitals' && <HospitalLocator />}
           {activeTab === 'history' && <HistoryDashboard />}
-          {activeTab === 'asha' && <AshaDashboard />}
-          {activeTab === 'profile' && isAuthenticated && <ProfilePage />}
+          {activeTab === 'profile' && (isAuthenticated || authLoading) && <ProfilePage />}
         </div>
       </main>
 

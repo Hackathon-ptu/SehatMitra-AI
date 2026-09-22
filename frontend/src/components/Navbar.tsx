@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
-import { 
-  Heart, 
-  MessageSquare, 
-  ClipboardList, 
-  ShieldAlert, 
-  Building2, 
-  FileText, 
-  Menu, 
+import {
+  Heart,
+  MessageSquare,
+  ClipboardList,
+  ShieldAlert,
+  Building2,
+  FileText,
+  Menu,
   X,
   User as UserIcon,
-  Activity
 } from 'lucide-react';
 import { NavItem, PageMode } from '../types/navigation';
 import { IconButton } from './common/IconButton';
@@ -58,14 +57,15 @@ export const Navbar: React.FC<NavbarProps> = () => {
     };
   }, []);
 
+  // Citizen-only nav items — ASHA Portal and Charak-Kiosk are intentionally
+  // excluded; they are accessed via the footer / dedicated entry points.
   const NAV_ITEMS: NavItem[] = [
     { label: t('nav_home') || 'Overview', path: '/' },
     { label: t('nav_chat') || 'AI Chat', path: '/chat', icon: <MessageSquare className="w-4 h-4" /> },
     { label: t('nav_interview') || 'Health Interview', path: '/health-interview', icon: <ClipboardList className="w-4 h-4" /> },
-    { label: t('nav_triage') || 'Risk Assessment', path: '/risk-assessment', icon: <ShieldAlert className="w-4 h-4" /> },
+    { label: t('nav_triage') || 'Voice Triage', path: '/risk-assessment', icon: <ShieldAlert className="w-4 h-4" /> },
     { label: t('nav_hospitals') || 'Hospitals', path: '/hospitals', icon: <Building2 className="w-4 h-4" /> },
     { label: t('nav_reports') || 'Report Explanation', path: '/report', icon: <FileText className="w-4 h-4" /> },
-    { label: t('nav_asha') || 'ASHA Portal', path: '/asha-portal', icon: <Activity className="w-4 h-4" /> },
   ];
 
   useEffect(() => {

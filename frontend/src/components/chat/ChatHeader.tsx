@@ -5,6 +5,7 @@ import { AiAvatar } from './AiAvatar';
 import { IconButton } from '../common/IconButton';
 import { Badge } from '../common/Badge';
 import { ThemeToggle } from '../common/ThemeToggle';
+import { AuthSessionBadge } from '../common/AuthSessionBadge';
 
 export interface ChatHeaderProps {
   onOpenMobileSidebar?: () => void;
@@ -46,8 +47,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Selected Language Badge & Theme Toggle */}
+      {/* Right: Auth badge + Selected Language Badge + Theme Toggle */}
       <div className="flex items-center gap-2">
+        <AuthSessionBadge className="hidden sm:inline-flex" />
         <ThemeToggle />
         <Link to="/language">
           <Badge

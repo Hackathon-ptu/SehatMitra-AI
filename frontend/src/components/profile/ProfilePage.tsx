@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { authService } from '../../services/api';
@@ -8,14 +9,13 @@ import {
   Unlock,
   LogOut,
   Heart,
-  QrCode,
   Edit3,
   Loader2
 } from 'lucide-react';
 import { Button } from '../common/Button';
 
 export const ProfilePage: React.FC = () => {
-  const { user, logout, updateUser, refreshUser } = useAuth();
+  const { user, logout, updateUser, refreshUser, loading } = useAuth();
   const { t } = useLanguage();
 
   // Mode States
@@ -25,6 +25,7 @@ export const ProfilePage: React.FC = () => {
   const [age, setAge] = useState<number | ''>(user?.age || '');
   const [gender, setGender] = useState(user?.gender || '');
   const [bloodGroup, setBloodGroup] = useState(user?.blood_group || '');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [villageTown, setVillageTown] = useState(user?.village_town || '');
   const [district, setDistrict] = useState(user?.district || '');
   const [state, setState] = useState(user?.state || '');
@@ -34,10 +35,12 @@ export const ProfilePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Refresh user data from API on mount
+  // Refresh user data from API on mount (skip if auth is still resolving)
   useEffect(() => {
-    refreshUser();
-  }, []);
+    if (!loading) {
+      refreshUser();
+    }
+  }, [loading]);
 
   // Update states when user data is fetched/refreshed
   useEffect(() => {
@@ -45,6 +48,7 @@ export const ProfilePage: React.FC = () => {
       setAge(user.age || '');
       setGender(user.gender || '');
       setBloodGroup(user.blood_group || '');
+      setPhone(user.phone || '');
       setVillageTown(user.village_town || '');
       setDistrict(user.district || '');
       setState(user.state || '');
@@ -63,6 +67,7 @@ export const ProfilePage: React.FC = () => {
         age: cleanAge,
         gender,
         blood_group: bloodGroup,
+        phone_number: phone || undefined,
         village_town: villageTown,
         district,
         state,
@@ -72,7 +77,12 @@ export const ProfilePage: React.FC = () => {
       });
 
       if (res && res.user) {
+        // Immediately update AuthContext so ABHA card and table reflect new values
         updateUser(res.user);
+        // Also persist to localStorage so Navbar / App.tsx pick up the update
+        localStorage.setItem('user', JSON.stringify(res.user));
+        window.dispatchEvent(new Event('auth_state_changed'));
+        window.dispatchEvent(new Event('storage'));
       }
       setIsUnlocked(false);
       setSaveSuccess(true);
@@ -84,6 +94,50 @@ export const ProfilePage: React.FC = () => {
       setIsSaving(false);
     }
   };
+
+  // Derive safe display values — NEVER fall back to "Guest User"
+  const displayName = user?.full_name
+    || (user?.email ? user.email.split('@')[0] : null)
+    || 'Verified Patient';
+  const abhaId = user?.abha_id || user?.patient_id
+    || (user?.id ? `SM-2026-${String(user.id).padStart(4, '0')}` : `SM-2026-${user?.email ? user.email.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase() : 'USER'}`);
+
+  // Structured payload encoded into the ABDM QR code
+  const qrPayload = JSON.stringify({
+    abha_id: abhaId,
+    name: displayName,
+    gender: user?.gender || '',
+    age: user?.age || '',
+    blood_group: user?.blood_group || '',
+    kiosk_url: `/kiosk?abha=${encodeURIComponent(abhaId)}`,
+  });
+
+  // While auth state is being resolved, show a skeleton — never render "Guest" state
+  if (loading) {
+    return (
+      <div className="w-full max-w-4xl mx-auto flex flex-col gap-8 text-left animate-fade-in">
+        <div className="flex flex-col gap-1">
+          <div className="h-7 w-48 rounded-lg bg-surface-elevated animate-pulse" />
+          <div className="h-4 w-80 rounded-md bg-surface-elevated animate-pulse mt-1" />
+        </div>
+        <div className="w-full max-w-md mx-auto h-48 rounded-3xl bg-surface-elevated animate-pulse" />
+        <div className="h-64 rounded-3xl bg-surface-elevated animate-pulse" />
+      </div>
+    );
+  }
+
+  // Auth resolved but no user — prompt login (never render a broken profile card)
+  if (!user) {
+    return (
+      <div className="w-full max-w-md mx-auto flex flex-col items-center gap-4 py-16 text-center animate-fade-in">
+        <div className="w-16 h-16 rounded-2xl bg-surface-elevated flex items-center justify-center">
+          <ShieldCheck className="w-8 h-8 text-brand-600" />
+        </div>
+        <h3 className="text-lg font-bold text-content-primary">Sign in to view your profile</h3>
+        <p className="text-sm text-content-muted">Your ABHA digital health card and medical records will appear here after login.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col gap-8 text-left animate-fade-in">
@@ -120,28 +174,35 @@ export const ProfilePage: React.FC = () => {
             <div className="flex flex-col">
               <span className="text-[9px] uppercase tracking-wider text-teal-100">Patient Name</span>
               <span className="text-base font-bold tracking-tight truncate max-w-[200px]">
-                {user?.full_name || 'Guest User'}
+                {displayName}
               </span>
             </div>
 
             <div className="flex flex-col">
               <span className="text-[9px] uppercase tracking-wider text-teal-100">{t('patientId')}</span>
               <span className="text-xs font-mono font-bold tracking-wider text-emerald-200">
-                {user?.patient_id || 'SM-2026-GUEST'}
+                {abhaId}
               </span>
             </div>
           </div>
 
-          {/* QR Code Placeholder */}
-          <div className="p-2 bg-white/10 rounded-2xl flex items-center justify-center shrink-0 border border-white/20">
-            <QrCode className="w-16 h-16 text-white" />
+          {/* Scannable ABDM QR Code */}
+          <div className="p-2 bg-white rounded-2xl flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
+            <QRCodeSVG
+              value={qrPayload}
+              size={72}
+              bgColor="#ffffff"
+              fgColor="#064e3b"
+              level="M"
+              includeMargin={false}
+            />
           </div>
         </div>
 
         {/* Card Footer: Metadata */}
         <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/20 text-xs font-semibold text-teal-100">
           <div>
-            <span>{user?.gender || 'N/A'}</span>
+            <span>{user?.gender || (user ? 'N/A' : '—')}</span>
             <span className="mx-2">•</span>
             <span>{user?.age || 'N/A'} Yrs</span>
           </div>
@@ -209,7 +270,7 @@ export const ProfilePage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-surface-bg/50 p-6 rounded-2xl border border-surface-border/50 text-xs sm:text-sm">
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('name')}</span>
-              <p className="font-bold text-content-primary mt-1 text-sm">{user?.full_name || 'N/A'}</p>
+              <p className="font-bold text-content-primary mt-1 text-sm">{displayName}</p>
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('email')}</span>
@@ -360,12 +421,13 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-content-secondary">{t('phone')} *</span>
+              <span className="text-[10px] uppercase font-bold tracking-wider text-content-secondary">{t('phone')} (+91)</span>
               <input
-                type="text"
-                disabled
-                value={user?.phone || ''}
-                className="w-full px-3 py-2 border border-surface-border bg-surface-bg rounded-lg text-content-muted cursor-not-allowed font-medium"
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value.replace(/[^\d+]/g, '').slice(0, 13))}
+                placeholder="+91XXXXXXXXXX"
+                className="w-full px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none"
               />
             </div>
 

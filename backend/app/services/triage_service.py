@@ -295,7 +295,84 @@ class TriageService:
         }
 
     @staticmethod
+    async def _analyse_skin_image(image_base64: str, image_mime: str, language_name: str) -> str:
+        """
+        Run the clinical vision screening pipeline on the attached photo.
+        Returns a plain-text clinical observation block to be prepended to
+        the conversational reply.  Falls back to a text note if no vision
+        model is available.
+        """
+        import base64
+        image_bytes = base64.b64decode(image_base64)
+
+        vision_prompt = f"""
+        You are a clinical dermatology screening assistant for SehatMitra, an AI health tool for rural India.
+        Analyse the attached skin/wound photograph and respond in {language_name}.
+
+        Screen for these dermatological presentations:
+        - Erythema (localised or diffuse redness)
+        - Urticaria / Hives (wheals, flare-and-wheal pattern)
+        - Fungal infection (Ringworm / Tinea corporis — circular, scaly lesion)
+        - Contact Dermatitis (streaky erythema, vesicles, well-defined border)
+        - Pustular / Impetigo-like lesion (honey-crust, purulent)
+        - Normal skin with minor laceration or bruise
+
+        Provide:
+        1. Visual observations (colour, distribution, morphology)
+        2. Most likely dermatological category with confidence (High/Medium/Low)
+        3. AYUSH parallel: relevant Ayurvedic herb / Neem / Turmeric application if appropriate
+        4. Allopathy recommendation (topical antifungal / antihistamine / OTC antiseptic)
+        5. A clear medical disclaimer
+
+        Keep the response concise (3-5 sentences per section) and in {language_name}.
+        """
+
+        try:
+            from app.services.ai_service import get_gemini_client
+            client = get_gemini_client()
+            if client:
+                if hasattr(client, "models"):
+                    from google.genai import types as genai_types
+                    response = client.models.generate_content(
+                        model="gemini-1.5-flash",
+                        contents=[
+                            genai_types.Part.from_bytes(data=image_bytes, mime_type=image_mime),
+                            vision_prompt,
+                        ]
+                    )
+                    return response.text.strip()
+                else:
+                    import google.generativeai as legacy_genai
+                    model = legacy_genai.GenerativeModel("gemini-1.5-flash")
+                    response = model.generate_content([
+                        {"mime_type": image_mime, "data": image_bytes},
+                        vision_prompt,
+                    ])
+                    return response.text.strip()
+        except Exception as vision_err:
+            print(f"[TriageService] Vision analysis failed: {vision_err}")
+
+        # Graceful no-vision fallback
+        return (
+            "⚕️ **Visual Skin Screening (Offline Mode)**\n"
+            "Image received. Automated visual analysis requires a Gemini API key. "
+            "Please describe the appearance of the skin condition in words so the clinical AI can assist you.\n\n"
+            "_Disclaimer: This visual screening tool is for preliminary guidance only. "
+            "Consult an OPD physician for differential diagnosis._"
+        )
+
+    @staticmethod
     async def perform_dual_ai_triage(request: TriageRequest) -> TriageResponse:
+        # ── Step 0: Run image analysis if a photo was attached ─────────────
+        image_context = ""
+        if getattr(request, "image_base64", None):
+            image_context = await TriageService._analyse_skin_image(
+                request.image_base64,
+                getattr(request, "image_mime", "image/jpeg") or "image/jpeg",
+                # We haven't resolved language_name yet, default to English for the vision call
+                "English"
+            )
+
         # Resolve language name for prompt injection
         lang_map = {
             "en": "English",
@@ -318,7 +395,12 @@ class TriageService:
         if request.history:
             for msg in request.history[-14:]:
                 messages.append({"role": msg.role, "content": msg.content})
-        messages.append({"role": "user", "content": request.message})
+        # If image analysis was run, prepend it to the user's message so the LLM
+        # receives the visual context as part of the conversation.
+        user_content = request.message
+        if image_context:
+            user_content = f"[SKIN IMAGE ANALYSIS RESULT]\n{image_context}\n\n[Patient Message]\n{request.message}"
+        messages.append({"role": "user", "content": user_content})
 
         # Calculate current turn/step dynamically
         user_msg_count = sum(1 for m in request.history if m.role == "user") if request.history else 0
@@ -492,7 +574,13 @@ class TriageService:
                     r_level = "Medium"
 
             is_triage = parsed.get("is_clinical_triage", True)
-            is_complete = parsed.get("is_interview_complete") or (parsed.get("interview_status") == "completed") or (current_step >= 4) or False
+            # ONLY trust the LLM's own is_interview_complete signal.
+            # Removed the hardcoded `current_step >= 4` guard that caused premature
+            # triage-slip generation after 4 arbitrary turns.
+            is_complete = bool(
+                parsed.get("is_interview_complete")
+                or (parsed.get("interview_status") == "completed")
+            )
             
             reasons_list = parsed.get("reasons") or [parsed.get("clinical_summary", "Clinical intake recorded.")]
             if not isinstance(reasons_list, list):
@@ -525,7 +613,8 @@ class TriageService:
                 current_step=int(parsed.get("current_step") or current_step),
                 total_steps=int(parsed.get("total_steps") or 4),
                 collected_points=parsed.get("collected_points") or [request.message],
-                is_interview_complete=is_complete
+                is_interview_complete=is_complete,
+                is_triage_ready=is_complete,
             )
         except Exception as norm_err:
             print(f"[TriageService] Critical normalization fallback error: {norm_err}")

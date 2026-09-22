@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  sendEmailVerification, 
-  updateProfile 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  updateProfile
 } from "firebase/auth";
 import { auth } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Activity } from "lucide-react";
 import { Button } from "./common/Button";
 
 const API_BASE_URL = 
@@ -164,6 +164,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
 
         <div>
+          {/* ASHA Worker subtle entry — shown only on Sign In tab */}
+          {!isSignUp && (
+            <a
+              href="/asha-login"
+              onClick={onClose}
+              className="flex items-center gap-2 w-full mb-4 px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 text-xs font-semibold hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+            >
+              <Activity className="w-3.5 h-3.5 shrink-0" />
+              <span>Login as ASHA Health Worker →</span>
+            </a>
+          )}
+
           <div className="flex border-b border-slate-200 dark:border-slate-800 mb-6">
             <button
               className={`flex-1 pb-3 text-center font-medium ${!isSignUp ? "border-b-2 border-emerald-600 text-emerald-600 font-semibold" : "text-slate-500"}`}

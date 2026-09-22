@@ -9,6 +9,9 @@ class TriageRequest(BaseModel):
     message: str
     language: str = "en"
     history: Optional[List[ChatMessage]] = None
+    # Multimodal: base64-encoded image for skin/wound visual analysis
+    image_base64: Optional[str] = None
+    image_mime: Optional[str] = "image/jpeg"
 
 class TriageResponse(BaseModel):
     clinical_summary: str
@@ -28,6 +31,8 @@ class TriageResponse(BaseModel):
     total_steps: Optional[int] = 6
     collected_points: Optional[List[str]] = None
     is_interview_complete: Optional[bool] = False
+    # Alias used by the frontend to know when to show the triage slip
+    is_triage_ready: Optional[bool] = False
 
 # Legacy schemas for backward compatibility with the old /triage/ endpoint
 class LegacyTriageRequest(BaseModel):

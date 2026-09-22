@@ -17,6 +17,7 @@ import { ScrollReveal } from '../components/common/ScrollReveal';
 import { Button } from '../components/common/Button';
 import { UploadCloud } from 'lucide-react';
 import { reportService } from '../services/reportService';
+import { AuthSessionBadge } from '../components/common/AuthSessionBadge';
 
 export const ReportPage: React.FC = () => {
   const [state, setState] = useState<ReportState>('idle');
@@ -74,6 +75,12 @@ export const ReportPage: React.FC = () => {
       />
 
       <main className="flex-1 w-full max-w-content-container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 flex flex-col">
+        {/* Auth session badge — shown on idle/file-selected states */}
+        {(state === 'idle' || state === 'file-selected') && (
+          <div className="flex justify-end mb-2">
+            <AuthSessionBadge />
+          </div>
+        )}
         {state === 'idle' && (
           <ScrollReveal className="w-full max-w-2xl mx-auto my-auto flex flex-col items-center">
             <ReportIntro />
