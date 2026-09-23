@@ -225,11 +225,13 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
     if (!record) return;
     setActionLoading('approve');
     try {
-      await apiClient.post(`/kiosk/queue/${record.token_id}/complete`, {
-        final_medications: medications,
-        doctor_advice: doctorAdvice,
-        status: 'COMPLETED',
-      });
+      // maxRedirects:0 prevents axios from following a 307 redirect and
+      // downgrading POST → GET, which would produce a spurious 405.
+      await apiClient.post(
+        `/kiosk/queue/${record.token_id}/complete`,
+        { final_medications: medications, doctor_advice: doctorAdvice, status: 'COMPLETED' },
+        { maxRedirects: 0 },
+      );
       showToast('✅ Prescription Finalized & Pushed to ABDM', '#065f46');
       setTimeout(() => { if (onBack) onBack(); }, 1500);
     } catch (e: any) {
@@ -243,7 +245,12 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
     if (!record) return;
     setActionLoading('escalate');
     try {
-      await apiClient.post(`/kiosk/queue/${record.token_id}/escalate`, { red_flag: true });
+      // maxRedirects:0 — same guard as handleApprove above.
+      await apiClient.post(
+        `/kiosk/queue/${record.token_id}/escalate`,
+        { red_flag: true },
+        { maxRedirects: 0 },
+      );
       showToast('⚠️ Patient Escalated to Emergency Red-Flag Priority', '#7c2d12');
       setTimeout(() => { if (onBack) onBack(); }, 1500);
     } catch (e: any) {

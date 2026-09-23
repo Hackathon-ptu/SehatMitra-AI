@@ -21,6 +21,12 @@ GET  /api/v1/kiosk/queue
 POST /api/v1/kiosk/queue/{token_id}/status
     Doctor-side status transition (IN_CONSULTATION | COMPLETED).
 
+POST|PUT /api/v1/kiosk/queue/{token_id}/complete
+    Doctor approves and finalises the consultation (e-prescription).
+
+POST|PUT /api/v1/kiosk/queue/{token_id}/escalate
+    Doctor escalates a token to emergency red-flag priority.
+
 POST /api/v1/kiosk/queue/{token_id}/nurse-verify
     Nurse-side vitals verification and cabin assignment.
     Transitions status → READY_FOR_DOCTOR.
@@ -42,7 +48,7 @@ import string
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -655,15 +661,17 @@ class CompletePayload(BaseModel):
     status: Literal["COMPLETED"] = "COMPLETED"
 
 
-@router.post("/queue/{token_id}/complete")
+@router.api_route("/queue/{token_id}/complete", methods=["POST", "PUT"])
 def complete_consultation(
     token_id: str,
-    body: CompletePayload,
+    body: Optional[CompletePayload] = Body(None),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
-    Doctor finalises a consultation.
+    Doctor finalises a consultation (Approve & E-Prescription).
 
+    Accepts both POST and PUT to tolerate trailing-slash 307 redirects where
+    some HTTP clients downgrade the verb to GET, producing a spurious 405.
     Stores the approved Rx + clinical advice into the vitals JSON column and
     transitions the token to COMPLETED.
     """
@@ -675,9 +683,10 @@ def complete_consultation(
 
     # Persist final Rx into the vitals JSON column (flexible storage).
     vitals: Dict[str, Any] = dict(entry.vitals or {})
-    vitals["final_rx"] = body.final_medications
-    if body.doctor_advice:
-        vitals["doctor_advice"] = body.doctor_advice
+    if body:
+        vitals["final_rx"] = body.final_medications
+        if body.doctor_advice:
+            vitals["doctor_advice"] = body.doctor_advice
     entry.vitals = vitals
     entry.status = "COMPLETED"
     db.commit()
@@ -688,15 +697,17 @@ class EscalatePayload(BaseModel):
     red_flag: bool = True
 
 
-@router.post("/queue/{token_id}/escalate")
+@router.api_route("/queue/{token_id}/escalate", methods=["POST", "PUT"])
 def escalate_token(
     token_id: str,
-    body: EscalatePayload,
+    body: Optional[EscalatePayload] = Body(None),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
-    Doctor escalates a token to emergency priority.
+    Doctor escalates a token to emergency priority (Escalate Priority button).
 
+    Accepts both POST and PUT to tolerate trailing-slash 307 redirects where
+    some HTTP clients downgrade the verb to GET, producing a spurious 405.
     Sets red_flag = True and transitions status to EMERGENCY_TRIAGE so that
     the queue view surfaces the card at the top with a red pulse animation.
     """
