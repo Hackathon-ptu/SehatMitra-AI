@@ -42,7 +42,7 @@ import string
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -131,10 +131,12 @@ def _token_to_dict(tok: OpdToken) -> Dict[str, Any]:
         "gender":          tok.gender,
         "chief_complaint": tok.chief_complaint,
         "pain_scale":      tok.pain_scale,
-        "red_flag":        tok.red_flag,
+        "red_flag":        bool(tok.red_flag),
         "red_flag_reason": tok.red_flag_reason,
         "status":          tok.status,
-        "cabin":           tok.assigned_cabin,
+        # Both field names so every frontend consumer works regardless of which key it reads
+        "cabin":           tok.assigned_cabin or "Cabin 1 - General",
+        "assigned_cabin":  tok.assigned_cabin or "Cabin 1 - General",
         "created_at":      tok.created_at.isoformat() if tok.created_at else None,
         "vitals":          tok.vitals or {},
     }
@@ -340,6 +342,7 @@ def doctor_cockpit(token_id: str) -> Dict[str, Any]:
 
 @router.get("/queue")
 def get_opd_queue(
+    response: Response,
     include_all: bool = False,
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
@@ -356,6 +359,11 @@ def get_opd_queue(
       4. IN_CONSULTATION  (with doctor)
     Within each bucket, FIFO by created_at.
     """
+    # Prevent any CDN / browser / proxy from caching live queue data.
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+    response.headers["Pragma"]        = "no-cache"
+    response.headers["Expires"]       = "0"
+
     _STATUS_ORDER: Dict[str, int] = {
         "EMERGENCY_TRIAGE": 0,
         "TRIAGE_PENDING":   1,

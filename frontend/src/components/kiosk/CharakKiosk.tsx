@@ -492,7 +492,7 @@ const AbhaQrModal: React.FC<AbhaQrModalProps> = ({ dark, onClose, onScan }) => {
         )}
 
         <div className={`text-xs text-center font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
-          Ã¢â‚¬â€ or enter manually Ã¢â‚¬â€
+          — or enter manually —
         </div>
 
         <div className="space-y-2">
@@ -642,7 +642,7 @@ const SnapRxModal: React.FC<SnapRxModalProps> = ({ dark, onClose, onDrugsExtract
                 </button>
               )}
               <label className={`flex-1 py-3 rounded-xl border font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-colors ${dark ? 'border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>
-                Ã°Å¸â€œÂ Upload File
+                Upload File
                 <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
               </label>
             </div>
@@ -662,7 +662,7 @@ const SnapRxModal: React.FC<SnapRxModalProps> = ({ dark, onClose, onDrugsExtract
                 disabled={processing}
                 className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
               >
-                {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting...</> : 'Ã°Å¸â€Â Extract Drugs'}
+                {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting...</> : 'Extract Drugs'}
               </button>
             </div>
           </>

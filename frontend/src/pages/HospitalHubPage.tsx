@@ -18,6 +18,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { CharakKiosk } from '../components/kiosk/CharakKiosk';
 import { DoctorCockpit } from '../components/kiosk/DoctorCockpit';
+import { apiClient } from '../services/api';
 import {
   Hospital, Sun, Moon, Lock, Eye, EyeOff,
   Activity, Stethoscope, AlertTriangle, CheckCircle2,
@@ -25,8 +26,6 @@ import {
   X, Loader2, ShieldAlert, Shield,
   MonitorSmartphone, ArrowLeft, Home,
 } from 'lucide-react';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -97,31 +96,23 @@ const NurseTriageModal: React.FC<NurseTriageModalProps> = ({ entry, onClose, onV
   const handleSend = async () => {
     setSaving(true); setSaveError('');
     try {
-      const res = await fetch(
-        `${API_BASE}/api/v1/kiosk/queue/${encodeURIComponent(entry.token_id)}/nurse-verify`,
+      const res = await apiClient.post(
+        `/kiosk/queue/${encodeURIComponent(entry.token_id)}/nurse-verify`,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bp_systolic:    bpSys  ? Number(bpSys)  : null,
-            bp_diastolic:   bpDia  ? Number(bpDia)  : null,
-            pulse:          pulse  ? Number(pulse)  : null,
-            spo2:           spo2   ? Number(spo2)   : null,
-            temp:           temp   ? Number(temp)   : null,
-            nurse_notes:    nurseNotes || null,
-            assigned_cabin: cabin,
-            red_flag:       redFlag,
-          }),
+          bp_systolic:    bpSys  ? Number(bpSys)  : null,
+          bp_diastolic:   bpDia  ? Number(bpDia)  : null,
+          pulse:          pulse  ? Number(pulse)  : null,
+          spo2:           spo2   ? Number(spo2)   : null,
+          temp:           temp   ? Number(temp)   : null,
+          nurse_notes:    nurseNotes || null,
+          assigned_cabin: cabin,
+          red_flag:       redFlag,
         }
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).detail || `HTTP ${res.status}`);
-      }
-      onVerified(await res.json());
+      onVerified(res.data);
       onClose();
     } catch (e: any) {
-      setSaveError(e.message || 'Network error');
+      setSaveError(e.response?.data?.detail || e.message || 'Network error');
     } finally {
       setSaving(false);
     }
@@ -646,12 +637,9 @@ export const HospitalHubPage: React.FC = () => {
   const fetchQueue = useCallback(async () => {
     setQueueLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/kiosk/queue`);
-      if (res.ok) {
-        const data = await res.json();
-        setQueue(data.queue || []);
-        setLastUpdated(new Date());
-      }
+      const res = await apiClient.get('/kiosk/queue');
+      setQueue(res.data.queue || []);
+      setLastUpdated(new Date());
     } catch { /* network error — keep stale */ }
     finally { setQueueLoading(false); }
   }, []);
