@@ -12,6 +12,9 @@ that no ASHA can read or mutate another worker's household visit records.
 Admins can query all records for supervisory / HMIS reporting purposes.
 """
 
+import json
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -19,15 +22,132 @@ from typing import List, Optional
 from app.api.v1.deps import require_asha, get_current_user
 from app.db.session import get_db
 from app.models.user import User
-from app.models.asha_visit import AshaVisit, AshaRiskLevel
+from app.models.asha_visit import AshaVisit, AshaRiskLevel, AshaCase
 from app.schemas.asha import (
     AshaVisitCreate,
     AshaVisitUpdate,
     AshaVisitResponse,
     AshaVisitListResponse,
+    AshaVoiceSurveyRequest,
+    AshaVoiceSurveyResponse,
+    AshaCaseSubmitRequest,
+    AshaCaseSubmitResponse,
 )
+from app.services.ibm_granite import analyze_asha_voice_survey
 
 router = APIRouter()
+
+
+# ── Voice Survey ─────────────────────────────────────────────────────────────
+
+@router.post(
+    "/voice-survey",
+    response_model=AshaVoiceSurveyResponse,
+    summary="Real-time AI triage of an ASHA vernacular field report",
+    tags=["ASHA Worker Portal"],
+)
+def asha_voice_survey(
+    payload: AshaVoiceSurveyRequest,
+    current_user: User = Depends(require_asha),
+):
+    """
+    Accepts a raw Hindi/Punjabi/Bengali ASHA field-report transcript and
+    returns structured clinical triage JSON in under ~1 second.
+
+    Engine priority: Groq (llama-3.3-70b) → Gemini (1.5-flash) → offline heuristic.
+    Never returns HTTP 500.
+    """
+    result = analyze_asha_voice_survey(payload.transcript, payload.lang)
+    # Ensure all required fields exist (heuristic always provides them,
+    # but LLM output could omit optional ones).
+    result.setdefault("gestational_week", None)
+    result.setdefault("vitals", {"bp_systolic": None, "bp_diastolic": None, "hb": None, "sugar": None})
+    return result
+
+
+# ── Submit Case ───────────────────────────────────────────────────────────────
+
+_INCENTIVE_ROUTINE = 100
+_INCENTIVE_HIGH_RISK = 300
+
+
+@router.post(
+    "/submit-case",
+    response_model=AshaCaseSubmitResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Submit an AI-triaged ASHA case; auto-creates OPD token for RED_LAL_PATAKA",
+    tags=["ASHA Worker Portal"],
+)
+def asha_submit_case(
+    payload: AshaCaseSubmitRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_asha),
+):
+    """
+    1. Runs the full Groq → Gemini → heuristic triage chain on the transcript.
+    2. Persists an ``AshaCase`` record in the DB.
+    3. If ``risk_level == RED_LAL_PATAKA``, generates an emergency OPD token
+       for the Civil Hospital Doctor Cockpit's LIVE_OPD_QUEUE.
+    4. Calculates the ASHA incentive:
+       - ₹100 for a routine (GREEN/YELLOW) survey.
+       - ₹300 for a High-Risk (RED_LAL_PATAKA) detection.
+    """
+    triage = analyze_asha_voice_survey(payload.transcript, payload.lang)
+
+    risk_level: str = triage.get("risk_level", "GREEN_NORMAL")
+    red_flag: bool = bool(triage.get("red_flag_alert", False))
+    referral: bool = bool(triage.get("referral_needed", False))
+
+    # OPD emergency token for RED cases
+    opd_token: Optional[str] = None
+    if risk_level == "RED_LAL_PATAKA":
+        opd_token = f"EMRG-{uuid.uuid4().hex[:8].upper()}"
+        referral = True
+
+    # Incentive calculation
+    incentive = _INCENTIVE_HIGH_RISK if red_flag or risk_level == "RED_LAL_PATAKA" else _INCENTIVE_ROUTINE
+
+    # Persist
+    vitals = triage.get("vitals") or {}
+    case = AshaCase(
+        asha_id=current_user.id,
+        patient_name=(
+            payload.patient_name
+            or triage.get("beneficiary_name")
+            or "Unknown"
+        ),
+        age=payload.age or triage.get("age") or 0,
+        gender=payload.gender,
+        village=payload.village,
+        transcript=payload.transcript,
+        lang=payload.lang,
+        case_type=triage.get("case_type", "GENERAL"),
+        risk_level=risk_level,
+        red_flag_alert=red_flag,
+        gestational_week=triage.get("gestational_week"),
+        vitals_json=json.dumps(vitals),
+        suspected_condition=triage.get("suspected_condition"),
+        clinical_summary=triage.get("clinical_summary"),
+        action_plan=triage.get("action_plan"),
+        referral_needed=referral,
+        opd_token=opd_token,
+        incentive_inr=incentive,
+        triage_engine=triage.get("_engine"),
+    )
+    db.add(case)
+    db.commit()
+    db.refresh(case)
+
+    return AshaCaseSubmitResponse(
+        case_id=case.id,
+        risk_level=risk_level,
+        red_flag_alert=red_flag,
+        referral_needed=referral,
+        opd_token=opd_token,
+        incentive_inr=incentive,
+        clinical_summary=triage.get("clinical_summary", ""),
+        action_plan=triage.get("action_plan", ""),
+    )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────

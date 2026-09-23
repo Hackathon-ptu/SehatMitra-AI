@@ -102,6 +102,11 @@ const decodeToken = (token: string): { email: string; role: string } | null => {
 // Synchronous localStorage hydration helpers — run BEFORE first render so that
 // components never see a transient (null, null, loading=true) state when the
 // user already has a valid cached session.
+//
+// Auth isolation: ASHA workers authenticate via sessionStorage only (keys
+// asha_token / asha_worker). If a stale ASHA-role object somehow ended up in
+// the citizen localStorage keys, we discard it here so the citizen context
+// is never corrupted by an ASHA session.
 // ---------------------------------------------------------------------------
 const getInitialToken = (): string | null =>
   localStorage.getItem('token') || localStorage.getItem('access_token') || null;
@@ -110,7 +115,15 @@ const getInitialUser = (): UserPayload | null => {
   try {
     // Prefer the richer 'sehat_user' key; fall back to legacy 'user'
     const cached = localStorage.getItem('sehat_user') || localStorage.getItem('user');
-    return cached ? (JSON.parse(cached) as UserPayload) : null;
+    if (!cached) return null;
+    const parsed = JSON.parse(cached) as UserPayload;
+    // Reject ASHA-role objects — they belong in sessionStorage, not here.
+    if ((parsed.role || '').toLowerCase() === 'asha') {
+      localStorage.removeItem('sehat_user');
+      localStorage.removeItem('user');
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }

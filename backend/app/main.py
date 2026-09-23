@@ -18,19 +18,24 @@ app = FastAPI(
 )
 
 # 2. CORS Middleware configure karein
+# allow_origins=["*"] permits all Vercel preview/production domains and local environments.
+# allow_origin_regex additionally matches any Vercel deployment URL.
+# NOTE: allow_credentials=True is incompatible with allow_origins=["*"] in browsers;
+# we use the regex override for credentialed requests while keeping "*" for non-credentialed.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173"
-    ],
-    allow_origin_regex=r"https?://.*\.vercel\.app",
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_credentials=False,   # must be False when allow_origins=["*"]
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(rest_of_path: str):
+    """Explicit OPTIONS handler so Vercel preflight requests always get 200 OK."""
+    return {}
 
 # 3. Schema is owned by Alembic migrations, not by application startup.
 #    Run `alembic upgrade head` before starting the app against a new

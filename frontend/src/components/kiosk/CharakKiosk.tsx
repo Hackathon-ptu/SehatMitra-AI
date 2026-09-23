@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import API_BASE_URL from '../../config/api';
 import {
   Flame,
   Activity,
@@ -308,7 +309,13 @@ const AYURVEDIC_QUICK = [
   'Tulsi', 'Shatavari', 'Guggul', 'Haritaki',
 ];
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+/**
+ * Resolve the kiosk API base URL from the shared config so that all fetch()
+ * calls work correctly on Vercel production, Render staging, and localhost.
+ * The shared config already strips the trailing "/api/v1" path suffix, so
+ * we strip it here to avoid doubling the prefix in every fetch URL below.
+ */
+const API_BASE = API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 const OPD_NAME = import.meta.env.VITE_KIOSK_OPD_NAME || 'Civil Hospital OPD';
 
 // --- Interaction preview helper ----------------------------------------------
@@ -957,10 +964,19 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
 
       const res = await fetch(`${API_BASE}/api/v1/kiosk/intake`, {
         method: 'POST', headers, body: JSON.stringify(body),
+      }).catch((networkErr: Error) => {
+        throw new Error(
+          `Network error — could not reach the backend at ${API_BASE}. ` +
+          `Check VITE_API_URL or VITE_BACKEND_URL env vars. (${networkErr.message})`
+        );
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).detail || 'Intake submission failed');
+        let detail = 'Intake submission failed';
+        try {
+          const errBody = await res.json();
+          detail = errBody.detail || errBody.message || `HTTP ${res.status} ${res.statusText}`;
+        } catch { /* ignore parse errors */ }
+        throw new Error(detail);
       }
       const data: IntakeResponse = await res.json();
       setResult(data);
