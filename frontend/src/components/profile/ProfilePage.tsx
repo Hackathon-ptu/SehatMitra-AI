@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -10,16 +10,35 @@ import {
   LogOut,
   Heart,
   Edit3,
-  Loader2
+  Loader2,
+  RefreshCw,
+  MapPin,
+  Phone,
 } from 'lucide-react';
 import { Button } from '../common/Button';
 
 export const ProfilePage: React.FC = () => {
-  const { user, logout, updateUser, refreshUser, loading } = useAuth();
+  const { user: ctxUser, logout, updateUser, refreshUser, loading } = useAuth();
   const { t } = useLanguage();
+
+  // Zero-flicker fallback: if the context user hasn't hydrated yet but a cached
+  // copy exists in localStorage, use it synchronously so the profile never
+  // renders the "Sign in" empty state between navigation and context hydration.
+  const cachedUser = React.useMemo(() => {
+    if (ctxUser) return ctxUser;
+    try {
+      const raw = localStorage.getItem('sehat_user') || localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [ctxUser]);
+
+  const user = cachedUser;
 
   // Mode States
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
 
   // Edit States
   const [age, setAge] = useState<number | ''>(user?.age || '');
@@ -32,15 +51,23 @@ export const ProfilePage: React.FC = () => {
   const [pincode, setPincode] = useState(user?.pincode || '');
   const [emergencyName, setEmergencyName] = useState(user?.emergency_contact_name || '');
   const [emergencyPhone, setEmergencyPhone] = useState(user?.emergency_contact_phone || '');
+  const [allergiesInput, setAllergiesInput] = useState('');
+  const [allergiesList, setAllergiesList] = useState<string[]>(user?.allergies || []);
+  const [chronicInput, setChronicInput] = useState('');
+  const [chronicList, setChronicList] = useState<string[]>(user?.chronic_conditions || []);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Refresh user data from API on mount (skip if auth is still resolving)
+  // Refresh user data from API exactly once — after auth has settled.
+  // A ref gate prevents the effect from re-firing if the parent re-renders
+  // while `loading` is already false (avoids infinite refresh loops).
+  const didRefresh = useRef(false);
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !didRefresh.current) {
+      didRefresh.current = true;
       refreshUser();
     }
-  }, [loading]);
+  }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update states when user data is fetched/refreshed
   useEffect(() => {
@@ -55,8 +82,20 @@ export const ProfilePage: React.FC = () => {
       setPincode(user.pincode || '');
       setEmergencyName(user.emergency_contact_name || '');
       setEmergencyPhone(user.emergency_contact_phone || '');
+      setAllergiesList(user.allergies || []);
+      setChronicList(user.chronic_conditions || []);
     }
   }, [user]);
+
+  const addTag = (input: string, list: string[], setList: (v: string[]) => void, setInput: (v: string) => void) => {
+    const tags = input.split(',').map(t => t.trim()).filter(t => t && !list.includes(t));
+    if (tags.length) setList([...list, ...tags]);
+    setInput('');
+  };
+
+  const removeTag = (tag: string, list: string[], setList: (v: string[]) => void) => {
+    setList(list.filter(t => t !== tag));
+  };
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
@@ -74,6 +113,8 @@ export const ProfilePage: React.FC = () => {
         pincode,
         emergency_contact_name: emergencyName,
         emergency_contact_phone: emergencyPhone,
+        allergies: allergiesList,
+        chronic_conditions: chronicList,
       });
 
       if (res && res.user) {
@@ -83,6 +124,8 @@ export const ProfilePage: React.FC = () => {
         localStorage.setItem('user', JSON.stringify(res.user));
         window.dispatchEvent(new Event('auth_state_changed'));
         window.dispatchEvent(new Event('storage'));
+        // Re-fetch from backend to confirm persistence (gender, blood_group)
+        await refreshUser();
       }
       setIsUnlocked(false);
       setSaveSuccess(true);
@@ -102,14 +145,16 @@ export const ProfilePage: React.FC = () => {
   const abhaId = user?.abha_id || user?.patient_id
     || (user?.id ? `SM-2026-${String(user.id).padStart(4, '0')}` : `SM-2026-${user?.email ? user.email.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase() : 'USER'}`);
 
-  // Structured payload encoded into the ABDM QR code
+  // Comprehensive clinical QR payload — auto-fills Charak-Kiosk on scan
   const qrPayload = JSON.stringify({
     abha_id: abhaId,
     name: displayName,
     gender: user?.gender || '',
     age: user?.age || '',
     blood_group: user?.blood_group || '',
-    kiosk_url: `/kiosk?abha=${encodeURIComponent(abhaId)}`,
+    chronic_conditions: user?.chronic_conditions || [],
+    allergies: user?.allergies || [],
+    current_medications: [],
   });
 
   // While auth state is being resolved, show a skeleton — never render "Guest" state
@@ -126,8 +171,8 @@ export const ProfilePage: React.FC = () => {
     );
   }
 
-  // Auth resolved but no user — prompt login (never render a broken profile card)
-  if (!user) {
+  // Auth resolved AND no cached user anywhere — prompt login
+  if (!user && !localStorage.getItem('token') && !localStorage.getItem('access_token')) {
     return (
       <div className="w-full max-w-md mx-auto flex flex-col items-center gap-4 py-16 text-center animate-fade-in">
         <div className="w-16 h-16 rounded-2xl bg-surface-elevated flex items-center justify-center">
@@ -152,69 +197,127 @@ export const ProfilePage: React.FC = () => {
         </p>
       </div>
 
-      {/* ABDM Digital Health Card (ABHA-style) with gradient */}
-      <div className="relative w-full max-w-md mx-auto bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-700 text-white rounded-3xl shadow-elevated overflow-hidden p-6 flex flex-col gap-5 border border-teal-800">
-        
-        {/* Card Header */}
-        <div className="flex items-center justify-between border-b border-white/20 pb-3">
-          <div className="flex items-center gap-2">
-            <Heart className="w-5 h-5 fill-red-400 text-red-400 animate-pulse" />
-            <span className="text-xs font-bold uppercase tracking-widest text-emerald-100">
-              {t('digitalHealthCard')}
-            </span>
-          </div>
-          <span className="text-[10px] font-bold bg-white/25 px-2 py-0.5 rounded uppercase tracking-wider">
-            ABDM Active
-          </span>
+      {/* 3D Flippable ABHA Health Card */}
+      <div className="w-full max-w-md mx-auto">
+        {/* Flip toggle button */}
+        <div className="flex justify-center mb-3">
+          <button
+            onClick={() => setIsFlipped(v => !v)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-teal-700 hover:bg-teal-600 text-white text-xs font-bold transition-all shadow-sm"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Flip Card (Front / Back)
+          </button>
         </div>
 
-        {/* Card Body */}
-        <div className="flex justify-between items-start gap-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wider text-teal-100">Patient Name</span>
-              <span className="text-base font-bold tracking-tight truncate max-w-[200px]">
-                {displayName}
-              </span>
+        {/* 3D card container */}
+        <div style={{ perspective: '1000px' }}>
+          <div
+            style={{
+              transformStyle: 'preserve-3d',
+              transition: 'transform 0.6s ease',
+              transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+              position: 'relative',
+              height: '220px',
+            }}
+          >
+            {/* ── FRONT FACE ── */}
+            <div
+              style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
+              className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-blue-700 text-white rounded-3xl shadow-elevated overflow-hidden p-5 flex flex-col gap-4 border border-teal-800"
+            >
+              {/* Tricolor accent stripe */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 flex">
+                <div className="flex-1 bg-orange-500" />
+                <div className="flex-1 bg-white" />
+                <div className="flex-1 bg-green-500" />
+              </div>
+              {/* Card Header */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-2">
+                  <Heart className="w-4 h-4 fill-red-400 text-red-400 animate-pulse" />
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">
+                    ABDM Digital Health Card
+                  </span>
+                </div>
+                <span className="text-[9px] font-bold bg-emerald-500/60 px-2 py-0.5 rounded uppercase tracking-wider border border-emerald-400/40 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3" /> ABDM Verified
+                </span>
+              </div>
+              {/* Card Body */}
+              <div className="flex justify-between items-start gap-4 flex-1">
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
+                  <div>
+                    <span className="text-[8px] uppercase tracking-wider text-teal-200">Patient Name</span>
+                    <p className="text-sm font-extrabold truncate">{displayName}</p>
+                  </div>
+                  <div>
+                    <span className="text-[8px] uppercase tracking-wider text-teal-200">ABHA Number</span>
+                    <p className="text-[11px] font-mono font-bold text-emerald-200 tracking-wider truncate">{abhaId}</p>
+                  </div>
+                  <div className="flex gap-3 text-[10px] font-semibold text-teal-100">
+                    <span>{user?.gender || 'Not Set'}</span>
+                    <span>•</span>
+                    <span>{user?.age ? `${user.age} Yrs` : 'Age N/A'}</span>
+                  </div>
+                  <span className="inline-flex self-start bg-emerald-500 text-white font-extrabold uppercase px-2 py-0.5 rounded-full text-[9px] tracking-wider border border-emerald-400">
+                    Blood: {user?.blood_group || 'Not Set'}
+                  </span>
+                </div>
+                {/* QR code on front — compact */}
+                <div className="p-1.5 bg-white rounded-xl shrink-0 border border-white/30 shadow-sm">
+                  <QRCodeSVG value={qrPayload} size={62} bgColor="#ffffff" fgColor="#064e3b" level="M" />
+                </div>
+              </div>
+              {/* Watermark */}
+              <div className="absolute bottom-2 right-3 opacity-10">
+                <ShieldCheck className="w-24 h-24 text-white" />
+              </div>
             </div>
 
-            <div className="flex flex-col">
-              <span className="text-[9px] uppercase tracking-wider text-teal-100">{t('patientId')}</span>
-              <span className="text-xs font-mono font-bold tracking-wider text-emerald-200">
-                {abhaId}
-              </span>
+            {/* ── BACK FACE ── */}
+            <div
+              style={{
+                backfaceVisibility: 'hidden',
+                WebkitBackfaceVisibility: 'hidden',
+                transform: 'rotateY(180deg)',
+              }}
+              className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white rounded-3xl shadow-elevated overflow-hidden p-5 flex flex-col gap-3 border border-slate-700"
+            >
+              {/* Back header */}
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                  Patient QR — Scan at Kiosk
+                </span>
+                <span className="text-[9px] font-mono text-slate-500">{abhaId}</span>
+              </div>
+              {/* Back body: info + large QR */}
+              <div className="flex gap-4 flex-1 items-center">
+                {/* Large QR */}
+                <div className="p-2 bg-white rounded-2xl shrink-0 shadow-lg">
+                  <QRCodeSVG value={qrPayload} size={110} bgColor="#ffffff" fgColor="#1e293b" level="H" />
+                </div>
+                {/* Info block */}
+                <div className="flex flex-col gap-1.5 text-xs min-w-0 flex-1">
+                  {user?.state && (
+                    <div className="flex items-center gap-1.5 text-slate-300">
+                      <MapPin className="w-3 h-3 text-teal-400 shrink-0" />
+                      <span className="truncate">{[user.district, user.state].filter(Boolean).join(', ')}</span>
+                    </div>
+                  )}
+                  {user?.emergency_contact_name && (
+                    <div className="flex items-center gap-1.5 text-slate-300">
+                      <Phone className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <span className="truncate">{user.emergency_contact_name} · {user.emergency_contact_phone || 'N/A'}</span>
+                    </div>
+                  )}
+                  <div className="mt-1 text-[9px] text-slate-500 leading-tight">
+                    Scan this QR at any Charak-Kiosk to auto-fill patient demographics, blood group, chronic conditions & current medications.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Scannable ABDM QR Code */}
-          <div className="p-2 bg-white rounded-2xl flex items-center justify-center shrink-0 border border-white/30 shadow-sm">
-            <QRCodeSVG
-              value={qrPayload}
-              size={72}
-              bgColor="#ffffff"
-              fgColor="#064e3b"
-              level="M"
-              includeMargin={false}
-            />
-          </div>
-        </div>
-
-        {/* Card Footer: Metadata */}
-        <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/20 text-xs font-semibold text-teal-100">
-          <div>
-            <span>{user?.gender || (user ? 'N/A' : '—')}</span>
-            <span className="mx-2">•</span>
-            <span>{user?.age || 'N/A'} Yrs</span>
-          </div>
-
-          <span className="bg-emerald-500 text-white font-extrabold uppercase px-3 py-1 rounded-full text-[10px] tracking-wider shadow-sm border border-emerald-400">
-            {t('bloodGroup')}: {user?.blood_group || 'N/A'}
-          </span>
-        </div>
-
-        {/* Verified Badge decoration */}
-        <div className="absolute top-2 right-2 flex items-center gap-1 opacity-10">
-          <ShieldCheck className="w-32 h-32 text-white" />
         </div>
       </div>
 
@@ -282,11 +385,11 @@ export const ProfilePage: React.FC = () => {
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('gender')}</span>
-              <p className="font-bold text-content-primary mt-1 text-sm">{user?.gender || 'N/A'}</p>
+              <p className="font-bold text-content-primary mt-1 text-sm">{user?.gender || 'Not Set'}</p>
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('bloodGroup')}</span>
-              <p className="font-bold text-content-primary mt-1 text-sm">{user?.blood_group || 'N/A'}</p>
+              <p className="font-bold text-content-primary mt-1 text-sm">{user?.blood_group || 'Not Set'}</p>
             </div>
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('phone')}</span>
@@ -329,7 +432,7 @@ export const ProfilePage: React.FC = () => {
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('allergies')}</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {user?.allergies && user.allergies.length > 0 ? (
-                  user.allergies.map((item, idx) => (
+                  (user.allergies as string[]).map((item: string, idx: number) => (
                     <span key={idx} className="bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 text-xs px-2.5 py-1 rounded-lg border border-red-150">
                       {item}
                     </span>
@@ -344,7 +447,7 @@ export const ProfilePage: React.FC = () => {
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('chronicConditions')}</span>
               <div className="flex flex-wrap gap-1 mt-1">
                 {user?.chronic_conditions && user.chronic_conditions.length > 0 ? (
-                  user.chronic_conditions.map((item, idx) => (
+                  (user.chronic_conditions as string[]).map((item: string, idx: number) => (
                     <span key={idx} className="bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 text-xs px-2.5 py-1 rounded-lg border border-blue-150">
                       {item}
                     </span>
@@ -395,6 +498,7 @@ export const ProfilePage: React.FC = () => {
                 onChange={(e) => setGender(e.target.value)}
                 className="w-full px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none appearance-none"
               >
+                <option value="">— Select Gender —</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>
@@ -409,6 +513,7 @@ export const ProfilePage: React.FC = () => {
                 onChange={(e) => setBloodGroup(e.target.value)}
                 className="w-full px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none appearance-none"
               >
+                <option value="">— Select Blood Group —</option>
                 <option value="A+">A+</option>
                 <option value="A-">A-</option>
                 <option value="B+">B+</option>
@@ -491,6 +596,66 @@ export const ProfilePage: React.FC = () => {
                 onChange={(e) => setEmergencyPhone(e.target.value.replace(/\D/g, ''))}
                 className="w-full px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none"
               />
+            </div>
+
+            {/* Allergies tag editor */}
+            <div className="col-span-1 md:col-span-2 flex flex-col gap-1.5">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-content-secondary">{t('allergies')}</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={allergiesInput}
+                  onChange={(e) => setAllergiesInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(allergiesInput, allergiesList, setAllergiesList, setAllergiesInput); } }}
+                  placeholder="e.g. Penicillin, Sulfa, Dust (comma-separated)"
+                  className="flex-1 px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => addTag(allergiesInput, allergiesList, setAllergiesList, setAllergiesInput)}
+                  className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold"
+                >Add</button>
+              </div>
+              {allergiesList.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {allergiesList.map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-1 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-300 text-xs px-2.5 py-1 rounded-lg border border-red-200">
+                      {tag}
+                      <button type="button" onClick={() => removeTag(tag, allergiesList, setAllergiesList)} className="ml-0.5 hover:text-red-500">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Chronic conditions tag editor */}
+            <div className="col-span-1 md:col-span-2 flex flex-col gap-1.5">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-content-secondary">{t('chronicConditions')}</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chronicInput}
+                  onChange={(e) => setChronicInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(chronicInput, chronicList, setChronicList, setChronicInput); } }}
+                  placeholder="e.g. Type-2 Diabetes, Hypertension (comma-separated)"
+                  className="flex-1 px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => addTag(chronicInput, chronicList, setChronicList, setChronicInput)}
+                  className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold"
+                >Add</button>
+              </div>
+              {chronicList.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {chronicList.map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-1 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 text-xs px-2.5 py-1 rounded-lg border border-blue-200">
+                      {tag}
+                      <button type="button" onClick={() => removeTag(tag, chronicList, setChronicList)} className="ml-0.5 hover:text-blue-500">&times;</button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -110,6 +110,12 @@ export const authService = {
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('access_token', response.data.access_token);
     }
+    // Persist full user object synchronously so ProfilePage hydrates instantly
+    if (response.data?.user) {
+      const userJson = JSON.stringify(response.data.user);
+      localStorage.setItem('user', userJson);
+      localStorage.setItem('sehat_user', userJson);
+    }
     return response.data;
   },
 
@@ -131,6 +137,12 @@ export const authService = {
     if (response.data?.access_token) {
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('access_token', response.data.access_token);
+    }
+    // Persist full user object synchronously so ProfilePage hydrates instantly
+    if (response.data?.user) {
+      const userJson = JSON.stringify(response.data.user);
+      localStorage.setItem('user', userJson);
+      localStorage.setItem('sehat_user', userJson);
     }
     return response.data;
   },

@@ -5,6 +5,7 @@ Architecture: Dual-Engine Triage (Groq LPU Primary + IBM Granite-3.0 Fallback)
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text as _sa_text
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.db.session import describe_engine
@@ -56,7 +57,56 @@ def init_db():
     except Exception as exc:
         # Prevent startup crash; log the error for debugging
         print(f"[DB] Startup DB init error: {exc}")
+
+    # ── SQLite / libSQL column auto-migration ─────────────────────────────────
+    # Ensures any columns added after initial deployment exist without a manual
+    # Alembic migration. Safe to run on every startup — ALTER TABLE is a no-op
+    # when the column already exists (caught and silently ignored).
+    _ensure_user_columns()
+
     print("[CORS] allowed origins: Universal (* via regex)")
+
+
+def _ensure_user_columns():
+    """Add missing columns to the `users` table if they were introduced after
+    the initial schema was deployed. Works for both local SQLite and Turso/libSQL."""
+    from app.db.session import engine
+    REQUIRED_COLUMNS = [
+        ("gender",                  "VARCHAR"),
+        ("blood_group",             "VARCHAR"),
+        ("age",                     "INTEGER"),
+        ("allergies",               "TEXT"),
+        ("chronic_conditions",      "TEXT"),
+        ("village_town",            "VARCHAR"),
+        ("district",                "VARCHAR"),
+        ("state",                   "VARCHAR"),
+        ("pincode",                 "VARCHAR"),
+        ("emergency_contact_name",  "VARCHAR"),
+        ("emergency_contact_phone", "VARCHAR"),
+        ("is_profile_completed",    "BOOLEAN DEFAULT 0"),
+        ("phone",                   "VARCHAR"),
+        ("username",                "VARCHAR"),
+        ("patient_id",              "VARCHAR"),
+    ]
+    try:
+        with engine.connect() as conn:
+            # PRAGMA table_info returns (cid, name, type, notnull, dflt_value, pk)
+            result = conn.execute(_sa_text("PRAGMA table_info(users)"))
+            existing = {row[1] for row in result.fetchall()}
+            for col_name, col_type in REQUIRED_COLUMNS:
+                if col_name not in existing:
+                    try:
+                        conn.execute(_sa_text(
+                            f"ALTER TABLE users ADD COLUMN {col_name} {col_type}"
+                        ))
+                        conn.commit()
+                        print(f"[DB-MIGRATE] Added missing column: users.{col_name}")
+                    except Exception as alter_err:
+                        # Column may already exist via a race or unsupported DDL — safe to ignore
+                        conn.rollback()
+                        print(f"[DB-MIGRATE] Could not add users.{col_name} (non-fatal): {alter_err}")
+    except Exception as e:
+        print(f"[DB-MIGRATE] Column check skipped (non-fatal): {e}")
 
 
 # 4. API Routes include karein

@@ -170,6 +170,14 @@ export const App = () => {
 
             {/* Desktop-only Panel (lg and above) */}
             <div className="hidden lg:flex items-center gap-3">
+              {/* Hospital Portal quick-access — always visible, zero URL typing */}
+              <a
+                href="/hospital"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold shadow-sm transition-all"
+              >
+                🏥 Hospital Portal
+              </a>
+
               {/* Theme Toggle Button */}
               <button
                 onClick={toggleTheme}
@@ -269,6 +277,15 @@ export const App = () => {
         {/* Mobile Menu Dropdown Panel */}
         {mobileMenuOpen && (
           <div className="lg:hidden bg-surface-card border-b border-surface-border py-4 px-4 flex flex-col gap-4 animate-fade-in z-30 shadow-lg">
+            {/* Hospital Hub — prominent at top of mobile menu */}
+            <a
+              href="/hospital"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-bold transition-colors"
+            >
+              🏥 Hospital Portal
+            </a>
+
             <div className="flex items-center justify-between border-b border-surface-border pb-3">
               <span className="text-xs font-bold text-content-muted uppercase">Settings & Account</span>
               <button

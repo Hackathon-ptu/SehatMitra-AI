@@ -128,6 +128,14 @@ export const Navbar: React.FC<NavbarProps> = () => {
               </NavLink>
             );
           })}
+
+          {/* Prominent Hospital Portal badge — always visible, zero URL typing needed */}
+          <a
+            href="/hospital"
+            className="flex items-center gap-1.5 px-3 py-1.5 ml-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold shadow-sm transition-all"
+          >
+            🏥 Hospital Portal
+          </a>
         </nav>
 
         {/* Right Action Controls */}
@@ -169,11 +177,18 @@ export const Navbar: React.FC<NavbarProps> = () => {
                 <span className="text-xs text-slate-400">▼</span>
               </button>
               {dropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1 z-50 text-left">
+                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1 z-50 text-left">
                   <div className="px-3 py-2 border-b border-slate-100 dark:border-slate-800 text-xs text-slate-700 dark:text-slate-200">
                     <p className="font-semibold truncate">{user.displayName || "Patient"}</p>
                     <p className="text-slate-400 truncate">{user.email}</p>
                   </div>
+                  <a
+                    href="/hospital"
+                    onClick={() => setDropdown(false)}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-xs text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30 font-semibold"
+                  >
+                    🏥 Hospital Staff Hub
+                  </a>
                   <button
                     onClick={() => {
                       localStorage.removeItem("sehat_user");
@@ -249,6 +264,15 @@ export const Navbar: React.FC<NavbarProps> = () => {
               </NavLink>
             );
           })}
+
+          {/* Hospital Portal — visible in mobile drawer */}
+          <a
+            href="/hospital"
+            onClick={closeMobileMenu}
+            className="flex items-center gap-2.5 px-3 py-2.5 text-sm font-bold rounded-md bg-emerald-700 hover:bg-emerald-600 text-white transition-colors"
+          >
+            🏥 Hospital Portal
+          </a>
           
           <div className="mt-4 pt-4 border-t border-surface-border flex flex-col gap-2">
             {deferredPrompt && (

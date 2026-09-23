@@ -98,21 +98,42 @@ const decodeToken = (token: string): { email: string; role: string } | null => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Synchronous localStorage hydration helpers — run BEFORE first render so that
+// components never see a transient (null, null, loading=true) state when the
+// user already has a valid cached session.
+// ---------------------------------------------------------------------------
+const getInitialToken = (): string | null =>
+  localStorage.getItem('token') || localStorage.getItem('access_token') || null;
+
+const getInitialUser = (): UserPayload | null => {
+  try {
+    // Prefer the richer 'sehat_user' key; fall back to legacy 'user'
+    const cached = localStorage.getItem('sehat_user') || localStorage.getItem('user');
+    return cached ? (JSON.parse(cached) as UserPayload) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserPayload | null>(null);
+  // Initialize synchronously from cache — eliminates the null flash on first render.
+  const [token, setToken] = useState<string | null>(getInitialToken);
+  const [user, setUser] = useState<UserPayload | null>(getInitialUser);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup' | null>(null);
-  // loading=true until the Firebase onAuthStateChanged callback has resolved (including
-  // any backend token validation).  Components must NOT treat user=null as "guest" while
-  // loading is still true.
-  const [loading, setLoading] = useState(true);
+  // loading=true ONLY when we have a token but no cached user yet — i.e., we still
+  // need a backend round-trip to validate/fetch the full profile.
+  // If we already hydrated the user from cache, skip the loading spinner entirely.
+  const [loading, setLoading] = useState<boolean>(!getInitialUser() && !!getInitialToken());
 
   const fetchProfile = async (authToken: string) => {
     try {
       const data = await authService.getMe();
       if (data) {
         setUser(data);
+        // Write to both keys so hydration helpers always find a warm cache
         localStorage.setItem('user', JSON.stringify(data));
+        localStorage.setItem('sehat_user', JSON.stringify(data));
       }
     } catch (e) {
       console.error("Failed to fetch user profile", e);
@@ -136,6 +157,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('token', res.access_token);
         localStorage.setItem('access_token', res.access_token);
         localStorage.setItem('user', JSON.stringify(res.user));
+        localStorage.setItem('sehat_user', JSON.stringify(res.user));
       }
     } catch (err) {
       console.error("Failed to sync Firebase user with backend", err);
@@ -216,6 +238,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (newUser) {
       setUser(newUser);
       localStorage.setItem('user', JSON.stringify(newUser));
+      localStorage.setItem('sehat_user', JSON.stringify(newUser));
     } else {
       fetchProfile(newToken);
     }
@@ -251,15 +274,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     await signOut(auth);
-    // Clear persisted auth data
+    // Clear all persisted auth data (both legacy and new keys)
     localStorage.removeItem('token');
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
+    localStorage.removeItem('sehat_user');
   };
 
   const updateUser = (updatedUser: UserPayload) => {
     setUser(updatedUser);
     localStorage.setItem('user', JSON.stringify(updatedUser));
+    localStorage.setItem('sehat_user', JSON.stringify(updatedUser));
   };
 
   const showAuthModal = (mode: 'login' | 'signup') => {

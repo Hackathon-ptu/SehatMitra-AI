@@ -32,6 +32,12 @@ import {
   Sun,
   Moon,
   Languages,
+  Volume2,
+  Heart,
+  Users,
+  Timer,
+  TrendingUp,
+  Zap,
 } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -39,6 +45,24 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type StaffRole = 'doctor' | 'nurse';
+
+/** Five-state clinical state machine. */
+type QueueStatus =
+  | 'TRIAGE_PENDING'    // freshly submitted by kiosk — at nurse desk
+  | 'EMERGENCY_TRIAGE'  // red-flag intake — at nurse desk (urgent)
+  | 'READY_FOR_DOCTOR'  // nurse verified vitals, forwarded to doctor cabin
+  | 'IN_CONSULTATION'   // doctor opened cockpit
+  | 'COMPLETED';        // encounter finished
+
+interface QueueVitals {
+  bp_systolic?: number | null;
+  bp_diastolic?: number | null;
+  pulse?: number | null;
+  spo2?: number | null;
+  temp?: number | null;
+  verified_by_nurse?: boolean;
+  nurse_notes?: string;
+}
 
 interface QueueEntry {
   token_id: string;
@@ -49,16 +73,10 @@ interface QueueEntry {
   pain_scale: number | null;
   red_flag: boolean;
   red_flag_reason?: string | null;
-  status: 'WAITING' | 'IN_CONSULTATION' | 'COMPLETED';
+  status: QueueStatus;
   cabin?: string;
   created_at: string;
-  vitals?: {
-    bp_systolic?: number | null;
-    bp_diastolic?: number | null;
-    pulse?: number | null;
-    spo2?: number | null;
-    temp?: number | null;
-  };
+  vitals?: QueueVitals;
 }
 
 interface CockpitRecord {
@@ -190,6 +208,7 @@ const PinGate: React.FC<PinGateProps> = ({ onUnlock }) => {
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [shake, setShake] = useState(false);
+  const [dark, setDark] = useState(false);
 
   const tryUnlock = () => {
     if (pin === VALID_PINS[role]) {
@@ -203,24 +222,36 @@ const PinGate: React.FC<PinGateProps> = ({ onUnlock }) => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6">
+    <div className={`min-h-screen flex items-center justify-center p-6 transition-colors duration-300 ${dark ? 'bg-slate-950' : 'bg-slate-100'}`}>
+      {/* Theme toggle — top-right */}
+      <button
+        onClick={() => setDark(v => !v)}
+        className={`absolute top-4 right-4 p-2.5 rounded-xl border text-xs font-bold transition-all ${
+          dark ? 'bg-slate-800 border-slate-700 text-amber-300 hover:bg-slate-700'
+               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'
+        }`}
+        title={dark ? 'Switch to Medical Light Theme' : 'Switch to Dark Theme'}
+      >
+        {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+      </button>
+
       <div className={`w-full max-w-sm space-y-6 transition-transform ${shake ? 'animate-wiggle' : ''}`}>
         {/* Logo */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-800 flex items-center justify-center shadow-xl shadow-emerald-900/60">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-700 flex items-center justify-center shadow-xl shadow-emerald-900/40">
             <Hospital className="w-8 h-8 text-white" />
           </div>
           <div className="text-center">
-            <h1 className="text-white font-extrabold text-xl">Staff Workstation</h1>
-            <p className="text-slate-400 text-xs mt-0.5">Hospital OPD Queue & Doctor Cockpit</p>
-            <p className="text-slate-600 text-[10px] mt-1 font-mono">AIIA PS-26047 · SehatMitra-AI</p>
+            <h1 className={`font-extrabold text-xl ${dark ? 'text-white' : 'text-slate-900'}`}>Staff Workstation</h1>
+            <p className={`text-xs mt-0.5 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Hospital OPD Queue & Doctor Cockpit</p>
+            <p className={`text-[10px] mt-1 font-mono ${dark ? 'text-slate-600' : 'text-slate-400'}`}>AIIA PS-26047 · SehatMitra-AI</p>
           </div>
         </div>
 
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 p-5 space-y-4">
+        <div className={`rounded-2xl border p-5 space-y-4 transition-colors ${dark ? 'bg-slate-800 border-slate-700' : 'bg-white shadow-xl border-slate-200'}`}>
           {/* Role selector */}
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Role</p>
+            <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>Role</p>
             <div className="flex gap-2">
               {(['doctor', 'nurse'] as StaffRole[]).map(r => (
                 <button
@@ -228,8 +259,10 @@ const PinGate: React.FC<PinGateProps> = ({ onUnlock }) => {
                   onClick={() => { setRole(r); setPin(''); setError(''); }}
                   className={`flex-1 py-2.5 rounded-xl border font-bold text-sm capitalize transition-all ${
                     role === r
-                      ? 'border-emerald-500 bg-emerald-900/40 text-emerald-300'
-                      : 'border-slate-600 bg-slate-700 text-slate-400 hover:border-slate-500'
+                      ? 'border-emerald-500 bg-emerald-700/20 text-emerald-600'
+                      : (dark
+                          ? 'border-slate-600 bg-slate-700 text-slate-400 hover:border-slate-500'
+                          : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300')
                   }`}
                 >
                   {r === 'doctor' ? '🩺' : '🩹'} {r}
@@ -240,7 +273,7 @@ const PinGate: React.FC<PinGateProps> = ({ onUnlock }) => {
 
           {/* PIN input */}
           <div>
-            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">
+            <label className={`text-xs font-bold uppercase tracking-wider block mb-2 ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
               <Lock className="inline w-3 h-3 mr-1" />PIN
             </label>
             <input
@@ -251,14 +284,18 @@ const PinGate: React.FC<PinGateProps> = ({ onUnlock }) => {
               onKeyDown={e => e.key === 'Enter' && tryUnlock()}
               placeholder="Enter PIN"
               autoFocus
-              className="w-full px-4 py-3 rounded-xl bg-slate-700 border border-slate-600 text-white text-xl font-mono text-center tracking-widest placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              className={`w-full px-4 py-3 rounded-xl border text-xl font-mono text-center tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors ${
+                dark
+                  ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-500'
+                  : 'bg-slate-50 border-slate-300 text-slate-900 placeholder-slate-400'
+              }`}
             />
             {error && (
-              <p className="text-red-400 text-xs mt-1.5 flex items-center gap-1">
+              <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1">
                 <AlertTriangle className="w-3 h-3" /> {error}
               </p>
             )}
-            <p className="text-slate-600 text-[10px] mt-1">Demo PINs — Doctor: 1234 · Nurse: 5678</p>
+            <p className={`text-[10px] mt-1 ${dark ? 'text-slate-600' : 'text-slate-400'}`}>Demo PINs — Doctor: 1234 · Nurse: 5678</p>
           </div>
 
           <button
@@ -277,14 +314,218 @@ const PinGate: React.FC<PinGateProps> = ({ onUnlock }) => {
 // ── Doctor Cockpit — Fullscreen 3-Column Bento CDSS Grid ──────────────────
 // Replaces the narrow scrollable drawer with a glanceable 1080p layout.
 
+// ── Nurse Triage Modal ────────────────────────────────────────────────────────
+
+interface NurseTriageModalProps {
+  entry: QueueEntry;
+  onClose: () => void;
+  /** Called after successful nurse-verify so the parent can refresh its local state. */
+  onVerified: (updated: QueueEntry) => void;
+}
+
+const NurseTriageModal: React.FC<NurseTriageModalProps> = ({ entry, onClose, onVerified }) => {
+  const [bpSys,      setBpSys]      = useState(String(entry.vitals?.bp_systolic  ?? ''));
+  const [bpDia,      setBpDia]      = useState(String(entry.vitals?.bp_diastolic ?? ''));
+  const [pulse,      setPulse]      = useState(String(entry.vitals?.pulse        ?? ''));
+  const [spo2,       setSpo2]       = useState(String(entry.vitals?.spo2         ?? ''));
+  const [temp,       setTemp]       = useState(String(entry.vitals?.temp         ?? ''));
+  const [nurseNotes, setNurseNotes] = useState('');
+  const [redFlag,    setRedFlag]    = useState(entry.red_flag);
+  const [cabin,      setCabin]      = useState(entry.cabin ?? 'Cabin 1 - Dr. Sharma');
+  const [saving,     setSaving]     = useState(false);
+  const [saveError,  setSaveError]  = useState('');
+
+  const CABINS = ['Cabin 1 - Dr. Sharma', 'Cabin 2 - Dr. Verma', 'Cabin 3 - Dr. Patel'];
+
+  const handleSend = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/kiosk/queue/${encodeURIComponent(entry.token_id)}/nurse-verify`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bp_systolic:    bpSys      ? Number(bpSys)  : null,
+            bp_diastolic:   bpDia      ? Number(bpDia)  : null,
+            pulse:          pulse      ? Number(pulse)  : null,
+            spo2:           spo2       ? Number(spo2)   : null,
+            temp:           temp       ? Number(temp)   : null,
+            nurse_notes:    nurseNotes || null,
+            assigned_cabin: cabin,
+            red_flag:       redFlag,
+          }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as any).detail || `HTTP ${res.status}`);
+      }
+      const updated: QueueEntry = await res.json();
+      onVerified(updated);
+      onClose();
+    } catch (e: any) {
+      setSaveError(e.message || 'Network error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls = 'w-full px-3 py-2 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500';
+  const labelCls = 'text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+      <div className="w-full max-w-lg bg-slate-900 rounded-2xl border border-slate-700 shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className={`px-5 py-3.5 flex items-center justify-between border-b ${
+          redFlag ? 'bg-red-950 border-red-800' : 'bg-slate-800 border-slate-700'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${redFlag ? 'bg-red-700' : 'bg-emerald-800'}`}>
+              <Activity className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="text-white font-extrabold text-sm">Nurse Triage &amp; Vitals Station</p>
+              <p className="text-slate-400 text-[10px] font-mono">{entry.token_id} · {entry.patient_name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-700 text-slate-400 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
+          {/* Patient summary */}
+          <div className="rounded-xl bg-slate-800 border border-slate-700 p-4 space-y-1">
+            <p className="text-white font-bold text-sm">{entry.patient_name}</p>
+            <p className="text-slate-400 text-xs capitalize">
+              {entry.chief_complaint.replace(/_/g, ' ')}
+              {entry.age ? ` · ${entry.age}y` : ''}
+              {entry.gender ? ` · ${entry.gender}` : ''}
+            </p>
+            {entry.red_flag_reason && (
+              <p className="text-red-300 text-xs flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3" /> {entry.red_flag_reason}
+              </p>
+            )}
+          </div>
+
+          {/* Vitals form */}
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-emerald-400" /> Vitals Verification / Entry
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>BP Systolic (mmHg)</label>
+                <input type="number" value={bpSys} onChange={e => setBpSys(e.target.value)} placeholder="120" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>BP Diastolic (mmHg)</label>
+                <input type="number" value={bpDia} onChange={e => setBpDia(e.target.value)} placeholder="80" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Pulse (bpm)</label>
+                <input type="number" value={pulse} onChange={e => setPulse(e.target.value)} placeholder="72" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>SpO₂ (%)</label>
+                <input type="number" value={spo2} onChange={e => setSpo2(e.target.value)} placeholder="98" className={inputCls} />
+              </div>
+              <div className="col-span-2">
+                <label className={labelCls}>Temperature (°F)</label>
+                <input type="number" step="0.1" value={temp} onChange={e => setTemp(e.target.value)} placeholder="98.6" className={inputCls} />
+              </div>
+            </div>
+          </div>
+
+          {/* Emergency escalation toggle */}
+          <div className={`flex items-center justify-between p-4 rounded-xl border transition-colors ${
+            redFlag ? 'bg-red-900/30 border-red-600' : 'bg-slate-800 border-slate-700'
+          }`}>
+            <div>
+              <p className="text-sm font-bold text-white">Emergency Escalation</p>
+              <p className="text-xs text-slate-400">Toggle if patient condition deteriorates</p>
+            </div>
+            <button
+              onClick={() => setRedFlag(v => !v)}
+              className={`relative w-12 h-6 rounded-full transition-colors ${redFlag ? 'bg-red-600' : 'bg-slate-600'}`}
+            >
+              <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${redFlag ? 'translate-x-7' : 'translate-x-1'}`} />
+            </button>
+          </div>
+
+          {/* Nurse notes */}
+          <div>
+            <label className={labelCls}>Nurse Observations (optional)</label>
+            <textarea
+              value={nurseNotes}
+              onChange={e => setNurseNotes(e.target.value)}
+              placeholder="Any clinical observations..."
+              rows={2}
+              className="w-full px-3 py-2 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          {/* Cabin assignment */}
+          <div>
+            <label className={labelCls}>Cabin Assignment</label>
+            <select
+              value={cabin}
+              onChange={e => setCabin(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl bg-slate-700 border border-slate-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {CABINS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="px-5 py-4 border-t border-slate-700 space-y-2">
+          {saveError && (
+            <p className="text-red-400 text-xs flex items-center gap-1.5">
+              <AlertTriangle className="w-3 h-3 shrink-0" /> {saveError}
+            </p>
+          )}
+          <div className="flex gap-3">
+            <button onClick={onClose} className="flex-none px-4 py-2.5 rounded-xl border border-slate-600 bg-slate-800 text-slate-300 text-sm font-semibold hover:bg-slate-700 transition-colors">
+              Cancel
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 text-white font-bold text-sm transition-colors"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              Forward to Doctor Cabin
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Doctor Cockpit Drawer (CDSS) ───────────────────────────────────────────────
+
+// ── Verified-by-nurse badge used in cockpit ────────────────────────────────────
+const NurseVerifiedBadge: React.FC = () => (
+  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-900/40 border border-emerald-600/60 text-emerald-300 text-[10px] font-bold">
+    <CheckCircle2 className="w-3 h-3" /> Verified by Nurse Station
+  </span>
+);
+
 interface CockpitDrawerProps {
   tokenId: string;
   role: StaffRole;
+  nurseVerified?: boolean;
   onClose: () => void;
   onStatusUpdate: (tokenId: string, status: 'IN_CONSULTATION' | 'COMPLETED') => void;
 }
 
-const CockpitDrawer: React.FC<CockpitDrawerProps> = ({ tokenId, onClose, onStatusUpdate }) => {
+const CockpitDrawer: React.FC<CockpitDrawerProps> = ({ tokenId, nurseVerified, onClose, onStatusUpdate }) => {
   const [record, setRecord]               = useState<CockpitRecord | null>(null);
   const [loading, setLoading]             = useState(true);
   const [fetchError, setFetchError]       = useState('');
@@ -509,6 +750,14 @@ const CockpitDrawer: React.FC<CockpitDrawerProps> = ({ tokenId, onClose, onStatu
               <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-400 font-mono text-[10px]">
                 {record.token_id}
               </span>
+              {/* Nurse-verified badge / kiosk-only note */}
+              {nurseVerified ? (
+                <NurseVerifiedBadge />
+              ) : (
+                <span className="px-2 py-0.5 rounded-md text-[9px] font-semibold bg-amber-900/30 text-amber-300 border border-amber-600/40" title="Telemetry from Kiosk intake (Nurse physical check skipped/pending)">
+                  ⚠ Kiosk Telemetry — Nurse check pending
+                </span>
+              )}
               {/* Bilingual origin badge */}
               {langLabel && record.vernacular_text && (
                 <span className="px-2 py-0.5 rounded-lg bg-indigo-900/40 border border-indigo-600/50 text-indigo-300 text-[10px] font-medium max-w-xs truncate"
@@ -833,97 +1082,199 @@ const CockpitDrawer: React.FC<CockpitDrawerProps> = ({ tokenId, onClose, onStatu
 
 // ── Queue Token Card ───────────────────────────────────────────────────────
 
+// Human-readable labels and colours for each queue state.
+const STATUS_META: Record<QueueStatus, { label: string; dot: string; text: string }> = {
+  TRIAGE_PENDING:   { label: 'At Nurse Desk',    dot: 'bg-yellow-500',              text: 'text-yellow-400' },
+  EMERGENCY_TRIAGE: { label: 'Emergency Triage', dot: 'bg-red-500 animate-pulse',   text: 'text-red-400'    },
+  READY_FOR_DOCTOR: { label: 'Ready for Doctor', dot: 'bg-emerald-400 animate-pulse', text: 'text-emerald-400' },
+  IN_CONSULTATION:  { label: 'In Consultation',  dot: 'bg-blue-400 animate-pulse',  text: 'text-blue-400'   },
+  COMPLETED:        { label: 'Completed',         dot: 'bg-slate-600',               text: 'text-slate-500'  },
+};
+
 interface TokenCardProps {
   entry: QueueEntry;
+  role: StaffRole;
   onClick: () => void;
   dark?: boolean;
 }
 
-const TokenCard: React.FC<TokenCardProps> = ({ entry, onClick, dark = true }) => {
+const TokenCard: React.FC<TokenCardProps> = ({ entry, role, onClick, dark = true }) => {
   const isRed = entry.red_flag;
-  const statusColor = {
-    WAITING: 'text-amber-400',
-    IN_CONSULTATION: 'text-emerald-400',
-    COMPLETED: 'text-slate-500',
-  }[entry.status];
+  const sm = STATUS_META[entry.status] ?? STATUS_META['TRIAGE_PENDING'];
 
-  const statusDot = {
-    WAITING: 'bg-amber-400',
-    IN_CONSULTATION: 'bg-emerald-400 animate-pulse',
-    COMPLETED: 'bg-slate-600',
-  }[entry.status];
+  const statusColor = sm.text;
+  const statusDot   = sm.dot;
 
   const createdAt = new Date(entry.created_at);
   const timeStr = createdAt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-
-  // Wait time in minutes
   const waitMins = Math.floor((Date.now() - createdAt.getTime()) / 60_000);
   const waitStr = waitMins < 1 ? 'Just now' : `${waitMins}m wait`;
-
-  // Pain color
   const painColor =
     (entry.pain_scale ?? 0) >= 7 ? 'text-red-400' :
     (entry.pain_scale ?? 0) >= 4 ? 'text-amber-400' : 'text-emerald-400';
 
   const cardCls = isRed
-    ? (dark ? 'border-red-500 bg-red-900/20 hover:bg-red-900/30' : 'border-red-400 bg-red-50 hover:bg-red-100')
-    : (dark ? 'border-slate-700 bg-slate-800 hover:bg-slate-700/80' : 'border-slate-200 bg-white shadow-sm hover:border-emerald-400');
+    ? (dark ? 'border-red-500 bg-red-900/20' : 'border-red-400 bg-red-50')
+    : (dark ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white shadow-sm');
 
-  const nameCls = dark ? 'text-white' : 'text-slate-900';
-  const metaCls = dark ? 'text-slate-400' : 'text-slate-500';
+  const nameCls  = dark ? 'text-white'     : 'text-slate-900';
+  const metaCls  = dark ? 'text-slate-400' : 'text-slate-500';
   const cabinCls = dark ? 'text-slate-500' : 'text-slate-400';
 
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full text-left p-4 rounded-xl border transition-all hover:scale-[1.01] active:scale-100 ${cardCls}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        {/* Left */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className={`font-mono font-black text-sm ${isRed ? 'text-red-300' : 'text-emerald-300'}`}>
-              {entry.token_id}
-            </span>
-            {isRed && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-600 text-white animate-pulse">
-                🚨 EMERGENCY
-              </span>
-            )}
-            {entry.pain_scale != null && (
-              <span className={`text-[10px] font-bold tabular-nums ${painColor}`}>
-                Pain {entry.pain_scale}/10
-              </span>
-            )}
-          </div>
-          <p className={`font-semibold text-sm truncate ${nameCls}`}>{entry.patient_name}</p>
-          <p className={`text-xs mt-0.5 capitalize ${metaCls}`}>
-            {entry.chief_complaint.replace(/_/g, ' ')}
-            {entry.age ? ` · ${entry.age}y` : ''}
-            {entry.gender ? ` · ${entry.gender}` : ''}
-          </p>
-          {entry.cabin && (
-            <p className={`text-[10px] mt-0.5 ${cabinCls}`}>🏥 {entry.cabin}</p>
-          )}
-        </div>
+  const hasVitals = entry.vitals && (
+    entry.vitals.bp_systolic || entry.vitals.pulse || entry.vitals.spo2
+  );
 
-        {/* Right */}
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <div className={`w-2 h-2 rounded-full ${statusDot}`} />
-            <span className={`text-xs font-semibold ${statusColor}`}>{entry.status.replace('_', ' ')}</span>
-          </div>
-          <div className="flex items-center gap-1 text-slate-500 text-[10px]">
-            <Clock className="w-3 h-3" />
-            {timeStr}
-          </div>
-          <span className="text-[10px] text-slate-500">{waitStr}</span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isRed ? 'bg-red-700 text-white' : 'bg-emerald-900/50 text-emerald-400 border border-emerald-700'}`}>
-            Attend Patient →
+  const callPatient = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!('speechSynthesis' in window)) { alert('TTS not supported in this browser'); return; }
+    const cabin = entry.cabin || 'Cabin 1';
+    const text = `Token number ${entry.token_id}, ${entry.patient_name}, please proceed to ${cabin}`;
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'hi-IN';
+    utt.rate = 0.9;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utt);
+    // Also speak English version after Hindi
+    setTimeout(() => {
+      const uttEn = new SpeechSynthesisUtterance(`Token number ${entry.token_id}, please proceed to ${cabin}`);
+      uttEn.lang = 'en-IN';
+      uttEn.rate = 0.9;
+      window.speechSynthesis.speak(uttEn);
+    }, 3000);
+  };
+
+  return (
+    <div className={`rounded-xl border transition-all ${cardCls}`}>
+      {/* Top row — token badge + emergency + status */}
+      <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+        <span className={`font-mono font-black text-base ${isRed ? 'text-red-300' : (dark ? 'text-emerald-300' : 'text-emerald-600')}`}>
+          {entry.token_id}
+        </span>
+        {isRed && (
+          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-red-600 text-white animate-pulse">
+            EMERGENCY
           </span>
+        )}
+        {entry.pain_scale != null && (
+          <span className={`text-[10px] font-bold tabular-nums ${painColor}`}>
+            Pain {entry.pain_scale}/10
+          </span>
+        )}
+        {/* Nurse verification status pill */}
+        {entry.vitals?.verified_by_nurse ? (
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-900/40 text-emerald-300 border border-emerald-700/50">
+            🟢 Nurse Verified{entry.vitals.bp_systolic && entry.vitals.bp_diastolic ? ` (BP: ${entry.vitals.bp_systolic}/${entry.vitals.bp_diastolic})` : ''}
+          </span>
+        ) : (
+          <span className="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-900/30 text-amber-300 border border-amber-700/40">
+            🟡 Kiosk Telemetry (Pending Nurse Verification)
+          </span>
+        )}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <div className={`w-2 h-2 rounded-full ${statusDot}`} />
+          <span className={`text-[11px] font-semibold ${statusColor}`}>{sm.label}</span>
         </div>
       </div>
-    </button>
+
+      {/* Middle — patient info + vitals */}
+      <div className="px-4 pb-2">
+        <p className={`font-bold text-sm ${nameCls}`}>{entry.patient_name}</p>
+        <p className={`text-xs mt-0.5 capitalize ${metaCls}`}>
+          {entry.chief_complaint.replace(/_/g, ' ')}
+          {entry.age ? ` · ${entry.age}y` : ''}
+          {entry.gender ? ` · ${entry.gender}` : ''}
+        </p>
+        {entry.cabin && (
+          <p className={`text-[10px] mt-0.5 ${cabinCls}`}>{entry.cabin}</p>
+        )}
+
+        {/* Vitals snapshot */}
+        {hasVitals && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {entry.vitals?.bp_systolic && entry.vitals.bp_diastolic && (
+              <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg ${dark ? 'bg-emerald-900/30 text-emerald-300 border border-emerald-800' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                <Activity className="w-2.5 h-2.5" />
+                BP {entry.vitals.bp_systolic}/{entry.vitals.bp_diastolic}
+              </span>
+            )}
+            {entry.vitals?.spo2 && (
+              <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg ${dark ? 'bg-cyan-900/30 text-cyan-300 border border-cyan-800' : 'bg-cyan-50 text-cyan-700 border border-cyan-200'}`}>
+                SpO₂ {entry.vitals.spo2}%
+              </span>
+            )}
+            {entry.vitals?.pulse && (
+              <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-lg ${dark ? 'bg-pink-900/30 text-pink-300 border border-pink-800' : 'bg-pink-50 text-pink-700 border border-pink-200'}`}>
+                <Heart className="w-2.5 h-2.5" />
+                {entry.vitals.pulse} bpm
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom action row */}
+      <div className={`px-4 pb-3 flex items-center gap-2 border-t ${dark ? 'border-slate-700/50' : 'border-slate-100'} pt-2`}>
+        {/* Wait timer */}
+        <div className={`flex items-center gap-1 text-[10px] ${dark ? 'text-slate-500' : 'text-slate-400'}`}>
+          <Clock className="w-3 h-3" />
+          {timeStr} · {waitStr}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Call Patient TTS button */}
+          <button
+            onClick={callPatient}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+              dark ? 'border border-slate-600 bg-slate-700 hover:bg-indigo-900/60 hover:border-indigo-500 text-slate-300 hover:text-indigo-300'
+                   : 'border border-slate-300 bg-white hover:bg-indigo-50 hover:border-indigo-400 text-slate-600 hover:text-indigo-700'
+            }`}
+            title="Call patient via TTS announcement"
+          >
+            <Volume2 className="w-3.5 h-3.5" /> 🔊 Call
+          </button>
+
+          {/* Doctor: always show "Attend Patient" — nurse verification is non-blocking */}
+          {role === 'doctor' && entry.status !== 'COMPLETED' && (
+            <button
+              onClick={onClick}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                isRed
+                  ? 'bg-red-700 hover:bg-red-600 text-white'
+                  : (dark ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100' : 'bg-emerald-600 hover:bg-emerald-500 text-white')
+              }`}
+              title={!entry.vitals?.verified_by_nurse ? 'Telemetry from Kiosk intake (Nurse physical check skipped/pending)' : undefined}
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              Attend Patient
+            </button>
+          )}
+
+          {/* Nurse: show action for triage-pending tokens only */}
+          {role === 'nurse' && entry.status !== 'COMPLETED' && !(
+            entry.status === 'READY_FOR_DOCTOR' || entry.status === 'IN_CONSULTATION'
+          ) && (
+            <button
+              onClick={onClick}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                isRed
+                  ? 'bg-red-700 hover:bg-red-600 text-white'
+                  : (dark ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100' : 'bg-emerald-600 hover:bg-emerald-500 text-white')
+              }`}
+            >
+              <Stethoscope className="w-3.5 h-3.5" />
+              Verify Vitals & Triage
+            </button>
+          )}
+          {/* Status hint for nurse viewing a forwarded token */}
+          {role === 'nurse' && (entry.status === 'READY_FOR_DOCTOR' || entry.status === 'IN_CONSULTATION') && (
+            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 px-2 py-1.5 rounded-lg bg-emerald-900/20 border border-emerald-700/40">
+              <CheckCircle2 className="w-3 h-3" /> Forwarded
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -935,6 +1286,7 @@ export const StaffPortal: React.FC = () => {
   const [queueLoading, setQueueLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const [nurseTriageEntry, setNurseTriageEntry] = useState<QueueEntry | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [dark, setDark] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -978,7 +1330,8 @@ export const StaffPortal: React.FC = () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
-    intervalRef.current = setInterval(fetchQueue, 3500);
+    // 3-second polling as specified.
+    intervalRef.current = setInterval(fetchQueue, 3000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -988,12 +1341,47 @@ export const StaffPortal: React.FC = () => {
     setQueue(prev => prev.map(e => e.token_id === tokenId ? { ...e, status } : e));
   };
 
+  /** Called by NurseTriageModal after a successful /nurse-verify POST. */
+  const handleNurseVerified = (updated: QueueEntry) => {
+    setQueue(prev => prev.map(e => e.token_id === updated.token_id ? updated : e));
+  };
+
+  // Callback for card click — role-gated.
+  const handleCardClick = (entry: QueueEntry) => {
+    if (role === 'nurse') {
+      // Only open triage modal for nurse-pending statuses.
+      if (entry.status === 'TRIAGE_PENDING' || entry.status === 'EMERGENCY_TRIAGE') {
+        setNurseTriageEntry(entry);
+      }
+    } else {
+      // Doctor can attend ANY non-completed token — nurse verification is non-blocking.
+      if (entry.status !== 'COMPLETED') {
+        setSelectedToken(entry.token_id);
+      }
+    }
+  };
+
   if (!role) {
     return <PinGate onUnlock={setRole} />;
   }
 
-  const redQueue = queue.filter(e => e.red_flag && e.status !== 'COMPLETED');
-  const normalQueue = queue.filter(e => !e.red_flag && e.status !== 'COMPLETED');
+  // ── Role-specific queue groupings ────────────────────────────────────────────
+  const emergencyQueue  = queue.filter(e => e.status === 'EMERGENCY_TRIAGE');
+  const triagePending   = queue.filter(e => e.status === 'TRIAGE_PENDING');
+  const readyForDoctor  = queue.filter(e => e.status === 'READY_FOR_DOCTOR');
+  const inConsult       = queue.filter(e => e.status === 'IN_CONSULTATION');
+
+  // Legacy helpers still used by telemetry ribbon.
+  const redQueue        = queue.filter(e => e.red_flag && e.status !== 'COMPLETED');
+  const normalQueue     = queue.filter(e => !e.red_flag && e.status !== 'COMPLETED');
+
+  // ── Dynamic telemetry computations ──────────────────────────────────────────
+  const waitingCount   = triagePending.length + emergencyQueue.length;
+  const inConsultCount = inConsult.length;
+  const emergencyCount = emergencyQueue.length;
+  const completedCount = queue.filter(e => e.status === 'COMPLETED').length;
+  const triagedToday   = completedCount + queue.length;
+  const hoursSaved     = ((triagedToday * 3.2) / 60).toFixed(1);
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-300 ${th.screen}`}>
@@ -1063,93 +1451,223 @@ export const StaffPortal: React.FC = () => {
         </div>
       </header>
 
-      {/* ── Stats bar ─────────────────────────────────────────────────────── */}
-      <div className={`border-b px-5 py-2 flex items-center gap-6 ${th.statsBar}`}>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-amber-400" />
-          <span className={`text-xs ${th.muted}`}>Waiting: <span className={`font-bold ${th.text}`}>{queue.filter(e => e.status === 'WAITING').length}</span></span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className={`text-xs ${th.muted}`}>In Consultation: <span className={`font-bold ${th.text}`}>{queue.filter(e => e.status === 'IN_CONSULTATION').length}</span></span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-          <span className={`text-xs ${th.muted}`}>Emergency: <span className="text-red-500 font-bold">{redQueue.length}</span></span>
-        </div>
-        {lastUpdated && (
-          <div className={`ml-auto flex items-center gap-1 text-[10px] font-mono ${th.subtext}`}>
-            <Clock className="w-3 h-3" />
-            {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+      {/* ── OPD Telemetry Ribbon ───────────────────────────────────────────── */}
+      <div className={`border-b px-4 py-0 ${th.statsBar}`}>
+        <div className="flex items-stretch divide-x divide-slate-200 dark:divide-slate-700/60 overflow-x-auto">
+
+          {/* Total Triaged */}
+          <div className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[110px]">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <Users className="w-3.5 h-3.5 text-emerald-500" />
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${th.muted}`}>Triaged Today</span>
+            </div>
+            <span className={`text-xl font-black tabular-nums ${dark ? 'text-white' : 'text-slate-900'}`}>
+              {triagedToday}
+            </span>
           </div>
-        )}
+
+          {/* Active Waiting */}
+          <div className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[100px]">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <div className="w-2 h-2 rounded-full bg-amber-400" />
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${th.muted}`}>Waiting</span>
+            </div>
+            <span className={`text-xl font-black tabular-nums text-amber-400`}>
+              {waitingCount}
+            </span>
+          </div>
+
+          {/* In Consultation */}
+          <div className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[120px]">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${th.muted}`}>In Consult</span>
+            </div>
+            <span className={`text-xl font-black tabular-nums text-emerald-400`}>
+              {inConsultCount}
+            </span>
+          </div>
+
+          {/* Emergency Intercepts */}
+          <div className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[120px]">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <Zap className="w-3.5 h-3.5 text-red-500" />
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${th.muted}`}>Emergencies</span>
+            </div>
+            <span className={`text-xl font-black tabular-nums text-red-400`}>
+              {emergencyCount}
+            </span>
+          </div>
+
+          {/* Avg Intake Duration */}
+          <div className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[130px]">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <Timer className="w-3.5 h-3.5 text-blue-400" />
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${th.muted}`}>Avg Intake</span>
+            </div>
+            <span className={`text-base font-black tabular-nums ${dark ? 'text-blue-300' : 'text-blue-700'}`}>1m 45s</span>
+          </div>
+
+          {/* Physician Hours Saved */}
+          <div className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[130px]">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
+              <span className={`text-[10px] font-bold uppercase tracking-wide ${th.muted}`}>Hours Saved</span>
+            </div>
+            <span className={`text-base font-black tabular-nums ${dark ? 'text-purple-300' : 'text-purple-700'}`}>{hoursSaved} hrs</span>
+          </div>
+
+          {/* Live clock */}
+          {lastUpdated && (
+            <div className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[90px] ml-auto">
+              <div className="flex items-center gap-1 mb-0.5">
+                <Clock className="w-3 h-3 text-slate-400" />
+                <span className={`text-[10px] font-bold uppercase tracking-wide ${th.muted}`}>Updated</span>
+              </div>
+              <span className={`text-[10px] font-mono ${th.subtext}`}>
+                {lastUpdated.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Main ──────────────────────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto p-5 space-y-6 max-w-3xl mx-auto w-full">
 
         {/* Emergency banner */}
-        {redQueue.length > 0 && (
+        {emergencyQueue.length > 0 && (
           <div className="p-4 rounded-xl bg-red-600/20 border-2 border-red-500 flex items-center gap-3 animate-pulse">
             <ShieldAlert className="w-6 h-6 text-red-500 shrink-0" />
             <div>
               <p className="text-red-500 font-extrabold text-sm">
-                🚨 {redQueue.length} EMERGENCY TOKEN{redQueue.length > 1 ? 'S' : ''} — Immediate Attention Required
+                {emergencyQueue.length} EMERGENCY TOKEN{emergencyQueue.length > 1 ? 'S' : ''} — Immediate Attention Required
               </p>
               <p className="text-red-400 text-xs mt-0.5">
-                {redQueue.map(e => e.token_id).join(' · ')}
+                {emergencyQueue.map(e => e.token_id).join(' · ')}
               </p>
             </div>
           </div>
         )}
 
         {/* Empty state */}
-        {queue.length === 0 && !queueLoading && (
+        {queue.filter(e => e.status !== 'COMPLETED').length === 0 && !queueLoading && (
           <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${th.emptyBg}`}>
               <Activity className={`w-8 h-8 ${th.subtext}`} />
             </div>
             <p className={`font-semibold ${th.muted}`}>No active patients in queue</p>
-            <p className={`text-sm ${th.subtext}`}>Queue auto-refreshes every 3.5 seconds</p>
+            <p className={`text-sm ${th.subtext}`}>Queue auto-refreshes every 3 seconds</p>
           </div>
         )}
 
-        {/* Emergency tokens */}
-        {redQueue.length > 0 && (
-          <div>
-            <h2 className="text-xs font-bold text-red-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <ShieldAlert className="w-3.5 h-3.5" /> Emergency / Red-Flag ({redQueue.length})
-            </h2>
-            <div className="space-y-2">
-              {redQueue.map(entry => (
-                <TokenCard key={entry.token_id} entry={entry} onClick={() => setSelectedToken(entry.token_id)} dark={dark} />
-              ))}
-            </div>
-          </div>
+        {role === 'nurse' ? (
+          /* ── NURSE VIEW ─────────────────────────────────────────────────── */
+          <>
+            {/* Group 1: Pending triage (both emergency and routine) */}
+            {(emergencyQueue.length > 0 || triagePending.length > 0) && (
+              <div>
+                <h2 className="text-xs font-bold text-amber-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Activity className="w-3.5 h-3.5" />
+                  Pending Nurse Triage ({emergencyQueue.length + triagePending.length})
+                </h2>
+                <div className="space-y-2">
+                  {[...emergencyQueue, ...triagePending].map(entry => (
+                    <TokenCard key={entry.token_id} entry={entry} role={role} onClick={() => handleCardClick(entry)} dark={dark} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Group 2: Already forwarded to doctor */}
+            {(readyForDoctor.length > 0 || inConsult.length > 0) && (
+              <div>
+                <h2 className={`text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 ${th.muted}`}>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                  Forwarded to Doctor ({readyForDoctor.length + inConsult.length})
+                </h2>
+                <div className="space-y-2">
+                  {[...readyForDoctor, ...inConsult].map(entry => (
+                    <TokenCard key={entry.token_id} entry={entry} role={role} onClick={() => handleCardClick(entry)} dark={dark} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* ── DOCTOR VIEW ────────────────────────────────────────────────── */
+          <>
+            {/* Group 1: Ready for consultation — vitals verified by nurse */}
+            {readyForDoctor.length > 0 && (
+              <div>
+                <h2 className="text-xs font-bold text-emerald-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Ready for Consultation ({readyForDoctor.length})
+                  <span className="px-2 py-0.5 rounded-full text-[9px] bg-emerald-900/40 border border-emerald-700/50 font-bold normal-case">
+                    Vitals Verified by Nurse
+                  </span>
+                </h2>
+                <div className="space-y-2">
+                  {readyForDoctor.map(entry => (
+                    <TokenCard key={entry.token_id} entry={entry} role={role} onClick={() => handleCardClick(entry)} dark={dark} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Group 2: Currently in consultation */}
+            {inConsult.length > 0 && (
+              <div>
+                <h2 className={`text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 text-blue-400`}>
+                  <Stethoscope className="w-3.5 h-3.5" />
+                  In Consultation ({inConsult.length})
+                </h2>
+                <div className="space-y-2">
+                  {inConsult.map(entry => (
+                    <TokenCard key={entry.token_id} entry={entry} role={role} onClick={() => handleCardClick(entry)} dark={dark} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Group 3: Emergency + routine still at nurse triage — read-only view */}
+            {(emergencyQueue.length > 0 || triagePending.length > 0) && (
+              <div>
+                <h2 className={`text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 ${th.muted}`}>
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  At Nurse Triage Desk ({emergencyQueue.length + triagePending.length})
+                </h2>
+                <div className="space-y-2">
+                  {[...emergencyQueue, ...triagePending].map(entry => (
+                    <TokenCard key={entry.token_id} entry={entry} role={role} onClick={() => handleCardClick(entry)} dark={dark} />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {/* Normal queue */}
-        {normalQueue.length > 0 && (
-          <div>
-            <h2 className={`text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2 ${th.muted}`}>
-              <Activity className="w-3.5 h-3.5" /> Standard Queue ({normalQueue.length})
-            </h2>
-            <div className="space-y-2">
-              {normalQueue.map(entry => (
-                <TokenCard key={entry.token_id} entry={entry} onClick={() => setSelectedToken(entry.token_id)} dark={dark} />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Suppress TS warnings for legacy helpers used only for telemetry ribbon */}
+        {(normalQueue.length < 0 || redQueue.length < 0) && null}
       </main>
 
       {/* ── Doctor Cockpit Drawer ─────────────────────────────────────────── */}
-      {selectedToken && (
+      {selectedToken && role === 'doctor' && (
         <CockpitDrawer
           tokenId={selectedToken}
           role={role}
+          nurseVerified={queue.find(e => e.token_id === selectedToken)?.vitals?.verified_by_nurse ?? false}
           onClose={() => setSelectedToken(null)}
           onStatusUpdate={handleStatusUpdate}
+        />
+      )}
+
+      {/* ── Nurse Triage Modal ────────────────────────────────────────────── */}
+      {nurseTriageEntry && role === 'nurse' && (
+        <NurseTriageModal
+          entry={nurseTriageEntry}
+          onClose={() => setNurseTriageEntry(null)}
+          onVerified={handleNurseVerified}
         />
       )}
     </div>

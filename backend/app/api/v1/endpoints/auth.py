@@ -232,17 +232,27 @@ def verify_and_register(payload: VerifyAndRegisterRequest, db: Session = Depends
     # 6. Generate JWT token with user ID subject
     token = create_access_token(data={"sub": str(new_user.id), "role": new_user.role})
 
+    resolved_role = str(new_user.role.value if hasattr(new_user.role, "value") else new_user.role)
+
     return {
         "access_token": token,
         "token_type": "bearer",
         "user": {
             "id": new_user.id,
-            "patient_id": new_user.patient_id,
-            "username": new_user.username,
             "email": new_user.email,
-            "full_name": new_user.full_name,
-            "is_profile_completed": False
-        }
+            "full_name": new_user.full_name or (new_user.email.split("@")[0] if new_user.email else "User"),
+            "role": resolved_role,
+            "patient_id": new_user.patient_id,
+            "abha_id": getattr(new_user, "abha_id", None) or new_user.patient_id,
+            "username": new_user.username,
+            "phone": new_user.phone,
+            "age": None,
+            "gender": None,
+            "blood_group": None,
+            "allergies": [],
+            "chronic_conditions": [],
+            "is_profile_completed": False,
+        },
     }
 
 # Keep signup endpoint as fallback but deprecate it internally to maintain API compatibility
@@ -292,17 +302,36 @@ async def login(
         )
         
     access_token = create_access_token(data={"sub": str(user.id), "role": user.role})
+
+    resolved_full_name = user.full_name or (user.email.split("@")[0] if user.email else "User")
+    resolved_patient_id = user.patient_id or f"SM-2026-{user.id:04d}"
+    resolved_role = str(user.role.value if hasattr(user.role, "value") else user.role)
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
             "id": user.id,
-            "patient_id": user.patient_id,
-            "username": user.username,
             "email": user.email,
-            "full_name": user.full_name,
-            "is_profile_completed": user.is_profile_completed
-        }
+            "full_name": resolved_full_name,
+            "role": resolved_role,
+            "patient_id": resolved_patient_id,
+            "abha_id": getattr(user, "abha_id", None) or resolved_patient_id,
+            "username": user.username,
+            "phone": user.phone,
+            "age": getattr(user, "age", None),
+            "gender": getattr(user, "gender", None),
+            "blood_group": getattr(user, "blood_group", None),
+            "village_town": getattr(user, "village_town", None),
+            "district": getattr(user, "district", None),
+            "state": getattr(user, "state", None),
+            "pincode": getattr(user, "pincode", None),
+            "emergency_contact_name": getattr(user, "emergency_contact_name", None),
+            "emergency_contact_phone": getattr(user, "emergency_contact_phone", None),
+            "allergies": getattr(user, "allergies", None),
+            "chronic_conditions": getattr(user, "chronic_conditions", None),
+            "is_profile_completed": user.is_profile_completed,
+        },
     }
 
 @router.get("/me", response_model=UserProfileResponse)
@@ -314,6 +343,7 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.post("/profile")
 @router.put("/profile")
+@router.put("/me")
 @router.post("/complete-profile")
 @router.put("/complete-profile")
 def update_profile(

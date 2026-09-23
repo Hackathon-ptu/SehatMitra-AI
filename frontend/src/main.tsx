@@ -5,7 +5,7 @@ import App from './App';
 import { AshaLoginPage } from './pages/AshaLoginPage';
 import { AshaPortalPage } from './pages/AshaPortalPage';
 import { StandaloneKioskPage, DoctorCockpitPage } from './pages/StandaloneKioskPage';
-import { StaffPortal } from './components/kiosk/StaffPortal';
+import { HospitalHubPage } from './pages/HospitalHubPage';
 import { AuthProvider } from './context/AuthContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { BrowserRouter } from 'react-router-dom';
@@ -21,8 +21,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             {/* ── Hospital Kiosk Shell (no Navbar/Footer) ── */}
             <Route path="/kiosk" element={<StandaloneKioskPage />} />
 
-            {/* ── Hospital Staff Workstation (PIN-protected) ── */}
-            <Route path="/staff" element={<StaffPortal />} />
+            {/* ── Hospital Login + Staff Workstation (PIN-protected, strict gate) ── */}
+            <Route path="/hospital" element={<HospitalHubPage />} />
+
+            {/* ── /staff alias → same PIN-gated Hospital workstation ── */}
+            <Route path="/staff" element={<HospitalHubPage />} />
 
             {/* Doctor Cockpit — physician workstation, separate from patient kiosk */}
             <Route path="/doctor-cockpit" element={<DoctorCockpitPage />} />

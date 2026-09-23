@@ -194,16 +194,26 @@ export const AuthModal: React.FC = () => {
         <button onClick={hideAuthModal} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
 
         <div>
-          {/* ASHA Worker subtle entry — shown only on Sign In tab */}
+          {/* Quick-access portal links — shown only on Sign In tab */}
           {!isSignUp && (
-            <Link
-              to="/asha-login"
-              onClick={hideAuthModal}
-              className="flex items-center gap-2 w-full mb-4 px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 text-xs font-semibold hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
-            >
-              <Activity className="w-3.5 h-3.5 shrink-0" />
-              <span>Login as ASHA Health Worker →</span>
-            </Link>
+            <div className="flex flex-col gap-2 mb-4">
+              <Link
+                to="/asha-login"
+                onClick={hideAuthModal}
+                className="flex items-center gap-2 w-full px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 text-xs font-semibold hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
+              >
+                <Activity className="w-3.5 h-3.5 shrink-0" />
+                <span>Login as ASHA Health Worker →</span>
+              </Link>
+              <Link
+                to="/hospital"
+                onClick={hideAuthModal}
+                className="flex items-center gap-2 w-full px-3 py-2 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+              >
+                <span className="shrink-0">🏥</span>
+                <span>Hospital OPD Staff Portal →</span>
+              </Link>
+            </div>
           )}
 
           <div className="flex border-b border-slate-200 dark:border-slate-800 mb-6">

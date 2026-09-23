@@ -169,6 +169,19 @@ export const AshaLoginPage: React.FC = () => {
             Go to Citizen Portal
           </Link>
         </p>
+
+        {/* Hospital Hub redirect footer */}
+        <div className="mt-4 pt-4 border-t border-slate-700/60 text-center">
+          <p className="text-[10px] text-slate-500">
+            Looking for the Hospital OPD Workstation?
+          </p>
+          <Link
+            to="/hospital"
+            className="inline-flex items-center gap-1.5 mt-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition-colors"
+          >
+            🏥 Switch to Hospital Hub →
+          </Link>
+        </div>
       </div>
     </div>
   );

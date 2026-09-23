@@ -19,6 +19,8 @@ import {
   ChevronDown,
   ChevronUp,
   Flame,
+  Printer,
+  Heart,
 } from 'lucide-react';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -165,6 +167,147 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const printOpdSlip = () => {
+    if (!record) return;
+    const v = record.vitals;
+    const bpStr  = (v.bp_systolic && v.bp_diastolic) ? `${v.bp_systolic}/${v.bp_diastolic} mmHg` : 'Not recorded';
+    const spo2Str = v.spo2 ? `${v.spo2}%`  : 'N/A';
+    const pulseStr = v.pulse ? `${v.pulse} bpm` : 'N/A';
+    const tempStr  = v.temp  ? `${v.temp}°C`   : 'N/A';
+    const ont = record.ontology;
+    const rx_allo  = (record as any).rx_allopathic ?? [];
+    const rx_ayush = (record as any).rx_ayush ?? [];
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OPD Clinical Slip — ${record.token_id}</title>
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0; font-family:'Segoe UI',system-ui,sans-serif; }
+    body { background:#f0f4f8; padding:20px; }
+    .slip { max-width:680px; margin:auto; background:#fff; border-radius:12px; box-shadow:0 4px 20px #0002; overflow:hidden; }
+    .header { background:linear-gradient(135deg,#065f46 0%,#047857 100%); color:#fff; padding:20px 24px; }
+    .header h1 { font-size:18px; font-weight:900; letter-spacing:.5px; }
+    .header p  { font-size:11px; opacity:.8; margin-top:2px; }
+    .subheader { background:#064e3b; color:#6ee7b7; padding:8px 24px; font-size:11px; font-weight:700; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; }
+    .token { font-size:28px; font-weight:900; font-family:monospace; color:#10b981; }
+    .body { padding:20px 24px; }
+    .section-title { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#6b7280; margin-bottom:8px; margin-top:16px; border-bottom:1px solid #e5e7eb; padding-bottom:4px; }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .info-box { background:#f9fafb; border-radius:8px; padding:10px 14px; border:1px solid #e5e7eb; }
+    .info-label { font-size:9px; text-transform:uppercase; color:#9ca3af; font-weight:700; margin-bottom:2px; }
+    .info-val { font-size:14px; font-weight:800; color:#111827; }
+    .vitals-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+    .vital-card { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:8px; text-align:center; }
+    .vital-label { font-size:9px; color:#6b7280; font-weight:700; text-transform:uppercase; }
+    .vital-val { font-size:16px; font-weight:900; color:#065f46; margin:2px 0; }
+    .vital-status { font-size:9px; color:#10b981; font-weight:700; }
+    .badge-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+    .badge { padding:4px 10px; border-radius:20px; font-size:10px; font-weight:800; border:1.5px solid; }
+    .badge-icd { background:#eff6ff; border-color:#93c5fd; color:#1d4ed8; }
+    .badge-ayush { background:#f5f3ff; border-color:#c4b5fd; color:#7c3aed; }
+    .rx-list { list-style:none; }
+    .rx-list li { padding:6px 10px; border-radius:6px; margin-bottom:4px; font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; }
+    .rx-allo { background:#eff6ff; color:#1e40af; }
+    .rx-ayush { background:#f0fdf4; color:#065f46; }
+    .rx-num { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900; flex-shrink:0; }
+    .footer { background:#f9fafb; border-top:1px solid #e5e7eb; padding:12px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .disclaimer { font-size:9px; color:#9ca3af; max-width:380px; line-height:1.5; }
+    .qr-placeholder { width:60px; height:60px; border:2px solid #d1d5db; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:9px; color:#9ca3af; text-align:center; }
+    @media print { body{ padding:0; background:#fff; } .slip { box-shadow:none; border-radius:0; } }
+  </style>
+</head>
+<body>
+  <div class="slip">
+    <div class="header">
+      <h1>🏥 Government District Hospital — OPD Clinical Slip</h1>
+      <p>AIIA PS-26047 · SehatMitra-AI · ICD-11 + NAMASTE Dual-Ontology</p>
+    </div>
+    <div class="subheader">
+      <span>TOKEN</span>
+      <span class="token">${record.token_id}</span>
+      <span>${new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
+    </div>
+
+    <div class="body">
+      <!-- Patient -->
+      <div class="section-title">Patient Information</div>
+      <div class="two-col">
+        <div class="info-box">
+          <div class="info-label">Full Name</div>
+          <div class="info-val">${record.patient_name}</div>
+        </div>
+        <div class="info-box">
+          <div class="info-label">Age · Gender</div>
+          <div class="info-val">${record.age ?? '—'} yrs · ${record.gender ?? '—'}</div>
+        </div>
+      </div>
+      <div class="info-box" style="margin-top:8px">
+        <div class="info-label">Chief Complaint</div>
+        <div class="info-val" style="text-transform:capitalize">${record.chief_complaint_key.replace(/_/g,' ')}</div>
+      </div>
+
+      <!-- Vitals -->
+      <div class="section-title" style="margin-top:16px">Measured Vitals</div>
+      <div class="vitals-grid">
+        <div class="vital-card">
+          <div class="vital-label">Blood Pressure</div>
+          <div class="vital-val" style="font-size:13px">${bpStr}</div>
+          <div class="vital-status">${v.bp_systolic ? (v.bp_systolic >= 140 ? '⚠ Elevated' : '✓ Normal') : ''}</div>
+        </div>
+        <div class="vital-card">
+          <div class="vital-label">SpO₂</div>
+          <div class="vital-val">${spo2Str}</div>
+          <div class="vital-status">${v.spo2 ? (v.spo2 < 94 ? '⚠ Low' : '✓ Normal') : ''}</div>
+        </div>
+        <div class="vital-card">
+          <div class="vital-label">Pulse</div>
+          <div class="vital-val">${pulseStr}</div>
+          <div class="vital-status">${v.pulse ? (v.pulse > 100 || v.pulse < 60 ? '⚠ Irregular' : '✓ Normal') : ''}</div>
+        </div>
+        <div class="vital-card">
+          <div class="vital-label">Temperature</div>
+          <div class="vital-val">${tempStr}</div>
+          <div class="vital-status">${v.temp ? (v.temp > 38.5 ? '⚠ Fever' : '✓ Normal') : ''}</div>
+        </div>
+      </div>
+
+      <!-- Dual Ontology -->
+      <div class="section-title" style="margin-top:16px">Dual-Ontology Classification</div>
+      <div class="badge-row">
+        <div class="badge badge-icd">ICD-11: ${ont.icd11_code} — ${ont.icd11_title}</div>
+        <div class="badge badge-ayush">NAMASTE: ${ont.namaste_code} — ${ont.namaste_title}</div>
+      </div>
+
+      <!-- Rx -->
+      ${rx_allo.length > 0 ? `
+      <div class="section-title" style="margin-top:16px">Allopathic Prescription</div>
+      <ul class="rx-list">
+        ${rx_allo.map((r: string, i: number) => `<li class="rx-allo"><span class="rx-num" style="background:#1d4ed8;color:#fff">${i+1}</span>${r}</li>`).join('')}
+      </ul>` : ''}
+
+      ${rx_ayush.length > 0 ? `
+      <div class="section-title" style="margin-top:12px">AYUSH Complementary</div>
+      <ul class="rx-list">
+        ${rx_ayush.map((r: string, i: number) => `<li class="rx-ayush"><span class="rx-num" style="background:#065f46;color:#fff">${i+1}</span>${r}</li>`).join('')}
+      </ul>` : ''}
+    </div>
+
+    <div class="footer">
+      <div class="disclaimer">
+        ⚕️ This slip is computer-generated and clinically verified. Medications should be dispensed as per physician's final order.<br>
+        Powered by IBM Granite · SehatMitra-AI · AIIA PS-26047
+      </div>
+      <div class="qr-placeholder">QR<br>Verify</div>
+    </div>
+  </div>
+  <script>window.onload = () => window.print();<\/script>
+</body>
+</html>`;
+    const win = window.open('', '_blank', 'width=780,height=900');
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
   // ── Loading / error states ──────────────────────────────────────────────────
 
   if (loading) return (
@@ -262,43 +405,76 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
             {/* Real-time vitals card */}
             <div className="bg-slate-800 rounded-2xl border border-slate-700 p-4">
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 text-emerald-400" /> Vitals
+                <Activity className="w-3.5 h-3.5 text-emerald-400" /> Captured Vitals — Vital Sense Pod
               </p>
               <div className="space-y-2">
-                {record.vitals.bp_systolic && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs">Blood Pressure</span>
+                {/* BP */}
+                <div className={`flex justify-between items-center rounded-xl px-3 py-2 ${
+                  record.vitals.bp_systolic
+                    ? ((record.vitals.bp_systolic || 0) >= 180 ? 'bg-red-900/30' : (record.vitals.bp_systolic || 0) >= 140 ? 'bg-amber-900/20' : 'bg-emerald-900/20')
+                    : 'bg-slate-700/30'
+                }`}>
+                  <span className="text-slate-400 text-xs">Blood Pressure</span>
+                  <div className="flex items-center gap-2">
                     <span className={`text-sm font-bold ${
-                      (record.vitals.bp_systolic || 0) > 140 ? 'text-red-400' : 'text-emerald-400'
-                    }`}>{record.vitals.bp_systolic}/{record.vitals.bp_diastolic} mmHg</span>
+                      record.vitals.bp_systolic
+                        ? ((record.vitals.bp_systolic || 0) >= 180 ? 'text-red-400' : (record.vitals.bp_systolic || 0) >= 140 ? 'text-amber-400' : 'text-emerald-400')
+                        : 'text-slate-500'
+                    }`}>{record.vitals.bp_systolic ? `${record.vitals.bp_systolic}/${record.vitals.bp_diastolic} mmHg` : '—'}</span>
+                    {record.vitals.bp_systolic && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                        (record.vitals.bp_systolic || 0) >= 180 ? 'bg-red-800 text-red-200' :
+                        (record.vitals.bp_systolic || 0) >= 140 ? 'bg-amber-800 text-amber-200' :
+                        'bg-emerald-800 text-emerald-200'
+                      }`}>{(record.vitals.bp_systolic || 0) >= 180 ? 'Crisis' : (record.vitals.bp_systolic || 0) >= 140 ? 'Elevated' : '✓ Normal'}</span>
+                    )}
                   </div>
-                )}
-                {record.vitals.pulse && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs">Heart Rate</span>
-                    <span className={`text-sm font-bold ${
-                      (record.vitals.pulse || 0) > 100 || (record.vitals.pulse || 100) < 60 ? 'text-amber-400' : 'text-emerald-400'
-                    }`}>{record.vitals.pulse} bpm</span>
+                </div>
+                {/* Pulse */}
+                <div className={`flex justify-between items-center rounded-xl px-3 py-2 ${record.vitals.pulse ? 'bg-pink-900/20' : 'bg-slate-700/30'}`}>
+                  <span className="text-slate-400 text-xs flex items-center gap-1"><Heart className="w-3 h-3 text-pink-400" /> Heart Rate</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${record.vitals.pulse ? ((record.vitals.pulse || 0) > 100 || (record.vitals.pulse || 0) < 60 ? 'text-amber-400' : 'text-emerald-400') : 'text-slate-500'}`}>
+                      {record.vitals.pulse ? `${record.vitals.pulse} bpm` : '—'}
+                    </span>
+                    {record.vitals.pulse && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${(record.vitals.pulse || 0) > 100 || (record.vitals.pulse || 0) < 60 ? 'bg-amber-800 text-amber-200' : 'bg-emerald-800 text-emerald-200'}`}>
+                        {(record.vitals.pulse || 0) > 100 || (record.vitals.pulse || 0) < 60 ? '⚠ Irregular' : '✓ Normal'}
+                      </span>
+                    )}
                   </div>
-                )}
-                {record.vitals.spo2 && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs">SpO₂</span>
-                    <span className={`text-sm font-bold ${
-                      (record.vitals.spo2 || 100) < 94 ? 'text-red-400' : 'text-emerald-400'
-                    }`}>{record.vitals.spo2}%</span>
+                </div>
+                {/* SpO2 */}
+                <div className={`flex justify-between items-center rounded-xl px-3 py-2 ${record.vitals.spo2 ? 'bg-cyan-900/20' : 'bg-slate-700/30'}`}>
+                  <span className="text-slate-400 text-xs">SpO₂</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${record.vitals.spo2 ? ((record.vitals.spo2 || 100) < 94 ? 'text-red-400' : 'text-emerald-400') : 'text-slate-500'}`}>
+                      {record.vitals.spo2 ? `${record.vitals.spo2}%` : '—'}
+                    </span>
+                    {record.vitals.spo2 && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${(record.vitals.spo2 || 100) < 90 ? 'bg-red-800 text-red-200' : (record.vitals.spo2 || 100) < 94 ? 'bg-amber-800 text-amber-200' : 'bg-emerald-800 text-emerald-200'}`}>
+                        {(record.vitals.spo2 || 100) < 90 ? 'Critical' : (record.vitals.spo2 || 100) < 94 ? '⚠ Low' : '✓ Normal'}
+                      </span>
+                    )}
                   </div>
-                )}
-                {record.vitals.temp && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-slate-400 text-xs">Temperature</span>
-                    <span className={`text-sm font-bold ${
-                      (record.vitals.temp || 37) > 38.5 ? 'text-red-400' : 'text-emerald-400'
-                    }`}>{record.vitals.temp}°C</span>
+                </div>
+                {/* Temp */}
+                <div className={`flex justify-between items-center rounded-xl px-3 py-2 ${record.vitals.temp ? 'bg-orange-900/20' : 'bg-slate-700/30'}`}>
+                  <span className="text-slate-400 text-xs">Temperature</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-bold ${record.vitals.temp ? ((record.vitals.temp || 0) > 38.5 ? 'text-red-400' : 'text-emerald-400') : 'text-slate-500'}`}>
+                      {record.vitals.temp ? `${record.vitals.temp}°C` : '—'}
+                    </span>
+                    {record.vitals.temp && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${(record.vitals.temp || 0) > 38.5 ? 'bg-red-800 text-red-200' : 'bg-emerald-800 text-emerald-200'}`}>
+                        {(record.vitals.temp || 0) > 38.5 ? '⚠ Fever' : '✓ Normal'}
+                      </span>
+                    )}
                   </div>
-                )}
+                </div>
+                {/* Pain scale */}
                 {record.pain_scale !== null && record.pain_scale !== undefined && (
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center rounded-xl px-3 py-2 bg-slate-700/30">
                     <span className="text-slate-400 text-xs">Pain Scale (VAS)</span>
                     <span className={`text-sm font-bold ${
                       (record.pain_scale || 0) >= 7 ? 'text-red-400' :
@@ -307,7 +483,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
                   </div>
                 )}
                 {vitalsStr === 'Not recorded' && !record.pain_scale && (
-                  <p className="text-slate-500 text-xs italic">No vitals recorded at intake</p>
+                  <p className="text-slate-500 text-xs italic text-center py-2">No vitals captured at kiosk — use Vital Sense Pod at intake</p>
                 )}
               </div>
             </div>
@@ -458,20 +634,27 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
             </div>
 
             {/* Triage action buttons */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <button
                 className="flex items-center justify-center gap-2 py-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/40 border border-emerald-600"
                 onClick={() => alert(`Triage approved for ${record.token_id}. Opening E-Prescription...`)}
               >
                 <CheckCircle2 className="w-5 h-5" />
-                Approve Triage &amp; Open E-Prescription
+                Approve &amp; E-Prescription
+              </button>
+              <button
+                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-blue-700 hover:bg-blue-600 text-white font-bold text-sm transition-all shadow-lg shadow-blue-900/40 border border-blue-600"
+                onClick={printOpdSlip}
+              >
+                <Printer className="w-5 h-5" />
+                🖨️ Print Clinical Slip
               </button>
               <button
                 className="flex items-center justify-center gap-2 py-4 rounded-xl bg-red-700 hover:bg-red-600 text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 border border-red-600"
                 onClick={() => alert(`OPD Priority Escalated for ${record.token_id}`)}
               >
                 <ArrowUpCircle className="w-5 h-5" />
-                Escalate OPD Priority
+                Escalate Priority
               </button>
             </div>
           </div>

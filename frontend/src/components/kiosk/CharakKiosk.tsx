@@ -1,13 +1,13 @@
-/**
- * CharakKiosk.tsx — Sprint 5
+﻿/**
+ * CharakKiosk.tsx - Sprint 5
  * Charak-Kiosk: OPD Patient Self-Service Intake Interface (AIIA PS-26047)
  *
  * New in Sprint 5:
- *  • 12-Language selector (EN, HI, PA, BN, MR, TE, TA, GU, KN, ML, OR, UR)
- *  • ABHA QR scanner modal (webcam-based html5-qrcode)
- *  • Snap Old Prescription → OCR via /api/v1/kiosk/ocr-prescription
- *  • Voice medication extraction via IBM Granite
- *  • Dynamic UI label localization dictionary
+ *  - 12-Language selector (EN, HI, PA, BN, MR, TE, TA, GU, KN, ML, OR, UR)
+ *  - ABHA QR scanner modal (webcam-based html5-qrcode)
+ *  - Snap Old Prescription -> OCR via /api/v1/kiosk/ocr-prescription
+ *  - Voice medication extraction via IBM Granite
+ *  - Dynamic UI label localization dictionary
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -36,9 +36,18 @@ import {
   QrCode,
   Camera,
   Languages,
+  Heart,
+  Baby,
+  UserCheck,
+  HeartHandshake,
+  Thermometer,
+  Wind,
+  Bone,
+  HeartPulse,
+  Sparkles,
 } from 'lucide-react';
 
-// ─── Types ──────────────────────────────────────────────────────────────────
+// --- Types -------------------------------------------------------------------
 
 interface IntakeResponse {
   status: string;
@@ -50,7 +59,15 @@ interface IntakeResponse {
   saved_to_history?: boolean;
 }
 
-// ─── 12-Language Dictionary ───────────────────────────────────────────────────
+interface VitalsPod {
+  bp_systolic: number;
+  bp_diastolic: number;
+  spo2: number;
+  pulse: number;
+  temp: number;
+}
+
+// --- 12-Language Dictionary --------------------------------------------------
 
 type LangCode =
   | 'en-IN' | 'hi-IN' | 'pa-IN' | 'bn-IN' | 'mr-IN'
@@ -85,7 +102,7 @@ interface LangStrings {
 
 const LANG_DICT: Record<LangCode, LangStrings> = {
   'en-IN': {
-    label: 'English', flag: '🌐',
+    label: 'English', flag: '\uD83C\uDDEE\uD83C\uDDF3',
     patientName: 'Patient Name', age: 'Age', gender: 'Gender',
     complaint: 'Voice Complaint', agni: 'Digestive Fire (Agni)',
     koshtha: 'Bowel Type (Koshtha)', medicines: 'Current Medicines',
@@ -96,125 +113,125 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'Select...', male: 'Male', female: 'Female', other: 'Other',
   },
   'hi-IN': {
-    label: 'हिंदी', flag: '🇮🇳',
-    patientName: 'मरीज़ का नाम', age: 'आयु', gender: 'लिंग',
-    complaint: 'मुख्य शिकायत', agni: 'पाचन शक्ति (अग्नि)',
-    koshtha: 'मल प्रकृति (कोष्ठ)', medicines: 'वर्तमान दवाइयां',
-    speak: 'बोलें', stop: 'रोकें', next: 'आगे', back: 'वापस',
-    submit: 'जमा करें और टोकन पाएं', scanAbha: 'ABHA QR स्कैन करें',
-    snapRx: 'पुरानी पर्ची की फ़ोटो', voiceMeds: 'दवाइयां बोलें',
-    placeholderName: 'पूरा नाम...', placeholderComplaint: 'अपनी मुख्य तकलीफ़ बताएं...',
-    selectGender: 'चुनें...', male: 'पुरुष', female: 'महिला', other: 'अन्य',
+    label: '\u0939\u093F\u0902\u0926\u0940', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à¤®à¤°à¥€à¤œà¤¼ à¤•à¤¾ à¤¨à¤¾à¤®', age: 'à¤†à¤¯à¥', gender: 'à¤²à¤¿à¤‚à¤—',
+    complaint: 'à¤®à¥à¤–à¥à¤¯ à¤¶à¤¿à¤•à¤¾à¤¯à¤¤', agni: 'à¤ªà¤¾à¤šà¤¨ à¤¶à¤•à¥à¤¤à¤¿ (à¤…à¤—à¥à¤¨à¤¿)',
+    koshtha: 'à¤®à¤² à¤ªà¥à¤°à¤•à¥ƒà¤¤à¤¿ (à¤•à¥‹à¤·à¥à¤ )', medicines: 'à¤µà¤°à¥à¤¤à¤®à¤¾à¤¨ à¤¦à¤µà¤¾à¤‡à¤¯à¤¾à¤‚',
+    speak: 'à¤¬à¥‹à¤²à¥‡à¤‚', stop: 'à¤°à¥‹à¤•à¥‡à¤‚', next: 'à¤†à¤—à¥‡', back: 'à¤µà¤¾à¤ªà¤¸',
+    submit: 'à¤œà¤®à¤¾ à¤•à¤°à¥‡à¤‚ à¤”à¤° à¤Ÿà¥‹à¤•à¤¨ à¤ªà¤¾à¤à¤‚', scanAbha: 'ABHA QR à¤¸à¥à¤•à¥ˆà¤¨ à¤•à¤°à¥‡à¤‚',
+    snapRx: 'à¤ªà¥à¤°à¤¾à¤¨à¥€ à¤ªà¤°à¥à¤šà¥€ à¤•à¥€ à¤«à¤¼à¥‹à¤Ÿà¥‹', voiceMeds: 'à¤¦à¤µà¤¾à¤‡à¤¯à¤¾à¤‚ à¤¬à¥‹à¤²à¥‡à¤‚',
+    placeholderName: 'à¤ªà¥‚à¤°à¤¾ à¤¨à¤¾à¤®...', placeholderComplaint: 'à¤…à¤ªà¤¨à¥€ à¤®à¥à¤–à¥à¤¯ à¤¤à¤•à¤²à¥€à¤«à¤¼ à¤¬à¤¤à¤¾à¤à¤‚...',
+    selectGender: 'à¤šà¥à¤¨à¥‡à¤‚...', male: 'à¤ªà¥à¤°à¥à¤·', female: 'à¤®à¤¹à¤¿à¤²à¤¾', other: 'à¤…à¤¨à¥à¤¯',
   },
   'pa-IN': {
-    label: 'ਪੰਜਾਬੀ', flag: '🇮🇳',
-    patientName: 'ਮਰੀਜ਼ ਦਾ ਨਾਮ', age: 'ਉਮਰ', gender: 'ਲਿੰਗ',
-    complaint: 'ਮੁੱਖ ਸ਼ਿਕਾਇਤ', agni: 'ਪਾਚਨ ਸ਼ਕਤੀ (ਅਗਨੀ)',
-    koshtha: 'ਟੱਟੀ ਕਿਸਮ (ਕੋਸ਼ਠ)', medicines: 'ਮੌਜੂਦਾ ਦਵਾਈਆਂ',
-    speak: 'ਬੋਲੋ', stop: 'ਰੋਕੋ', next: 'ਅੱਗੇ', back: 'ਵਾਪਸ',
-    submit: 'ਜਮ੍ਹਾਂ ਕਰੋ ਅਤੇ ਟੋਕਨ ਲਓ', scanAbha: 'ABHA QR ਸਕੈਨ ਕਰੋ',
-    snapRx: 'ਪੁਰਾਣੀ ਪਰਚੀ ਦੀ ਫ਼ੋਟੋ', voiceMeds: 'ਦਵਾਈਆਂ ਬੋਲੋ',
-    placeholderName: 'ਪੂਰਾ ਨਾਮ...', placeholderComplaint: 'ਆਪਣੀ ਮੁੱਖ ਸ਼ਿਕਾਇਤ ਦੱਸੋ...',
-    selectGender: 'ਚੁਣੋ...', male: 'ਮਰਦ', female: 'ਔਰਤ', other: 'ਹੋਰ',
+    label: '\u0A2A\u0A70\u0A1C\u0A3E\u0A2C\u0A40', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à¨®à¨°à©€à¨œà¨¼ à¨¦à¨¾ à¨¨à¨¾à¨®', age: 'à¨‰à¨®à¨°', gender: 'à¨²à¨¿à©°à¨—',
+    complaint: 'à¨®à©à©±à¨– à¨¸à¨¼à¨¿à¨•à¨¾à¨‡à¨¤', agni: 'à¨ªà¨¾à¨šà¨¨ à¨¸à¨¼à¨•à¨¤à©€ (à¨…à¨—à¨¨à©€)',
+    koshtha: 'à¨Ÿà©±à¨Ÿà©€ à¨•à¨¿à¨¸à¨® (à¨•à©‹à¨¸à¨¼à¨ )', medicines: 'à¨®à©Œà¨œà©‚à¨¦à¨¾ à¨¦à¨µà¨¾à¨ˆà¨†à¨‚',
+    speak: 'à¨¬à©‹à¨²à©‹', stop: 'à¨°à©‹à¨•à©‹', next: 'à¨…à©±à¨—à©‡', back: 'à¨µà¨¾à¨ªà¨¸',
+    submit: 'à¨œà¨®à©à¨¹à¨¾à¨‚ à¨•à¨°à©‹ à¨…à¨¤à©‡ à¨Ÿà©‹à¨•à¨¨ à¨²à¨“', scanAbha: 'ABHA QR à¨¸à¨•à©ˆà¨¨ à¨•à¨°à©‹',
+    snapRx: 'à¨ªà©à¨°à¨¾à¨£à©€ à¨ªà¨°à¨šà©€ à¨¦à©€ à¨«à¨¼à©‹à¨Ÿà©‹', voiceMeds: 'à¨¦à¨µà¨¾à¨ˆà¨†à¨‚ à¨¬à©‹à¨²à©‹',
+    placeholderName: 'à¨ªà©‚à¨°à¨¾ à¨¨à¨¾à¨®...', placeholderComplaint: 'à¨†à¨ªà¨£à©€ à¨®à©à©±à¨– à¨¸à¨¼à¨¿à¨•à¨¾à¨‡à¨¤ à¨¦à©±à¨¸à©‹...',
+    selectGender: 'à¨šà©à¨£à©‹...', male: 'à¨®à¨°à¨¦', female: 'à¨”à¨°à¨¤', other: 'à¨¹à©‹à¨°',
   },
   'bn-IN': {
-    label: 'বাংলা', flag: '🇮🇳',
-    patientName: 'রোগীর নাম', age: 'বয়স', gender: 'লিঙ্গ',
-    complaint: 'প্রধান অভিযোগ', agni: 'পাচন শক্তি (অগ্নি)',
-    koshtha: 'মলের ধরন (কোষ্ঠ)', medicines: 'বর্তমান ওষুধ',
-    speak: 'বলুন', stop: 'থামুন', next: 'পরবর্তী', back: 'পিছনে',
-    submit: 'জমা করুন এবং টোকেন নিন', scanAbha: 'ABHA QR স্ক্যান করুন',
-    snapRx: 'পুরনো প্রেসক্রিপশনের ছবি', voiceMeds: 'ওষুধ বলুন',
-    placeholderName: 'পুরো নাম...', placeholderComplaint: 'আপনার প্রধান সমস্যা বলুন...',
-    selectGender: 'বেছে নিন...', male: 'পুরুষ', female: 'মহিলা', other: 'অন্যান্য',
+    label: '\u09AC\u09BE\u0982\u09B2\u09BE', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à¦°à§‹à¦—à§€à¦° à¦¨à¦¾à¦®', age: 'à¦¬à¦¯à¦¼à¦¸', gender: 'à¦²à¦¿à¦™à§à¦—',
+    complaint: 'à¦ªà§à¦°à¦§à¦¾à¦¨ à¦…à¦­à¦¿à¦¯à§‹à¦—', agni: 'à¦ªà¦¾à¦šà¦¨ à¦¶à¦•à§à¦¤à¦¿ (à¦…à¦—à§à¦¨à¦¿)',
+    koshtha: 'à¦®à¦²à§‡à¦° à¦§à¦°à¦¨ (à¦•à§‹à¦·à§à¦ )', medicines: 'à¦¬à¦°à§à¦¤à¦®à¦¾à¦¨ à¦“à¦·à§à¦§',
+    speak: 'à¦¬à¦²à§à¦¨', stop: 'à¦¥à¦¾à¦®à§à¦¨', next: 'à¦ªà¦°à¦¬à¦°à§à¦¤à§€', back: 'à¦ªà¦¿à¦›à¦¨à§‡',
+    submit: 'à¦œà¦®à¦¾ à¦•à¦°à§à¦¨ à¦à¦¬à¦‚ à¦Ÿà§‹à¦•à§‡à¦¨ à¦¨à¦¿à¦¨', scanAbha: 'ABHA QR à¦¸à§à¦•à§à¦¯à¦¾à¦¨ à¦•à¦°à§à¦¨',
+    snapRx: 'à¦ªà§à¦°à¦¨à§‹ à¦ªà§à¦°à§‡à¦¸à¦•à§à¦°à¦¿à¦ªà¦¶à¦¨à§‡à¦° à¦›à¦¬à¦¿', voiceMeds: 'à¦“à¦·à§à¦§ à¦¬à¦²à§à¦¨',
+    placeholderName: 'à¦ªà§à¦°à§‹ à¦¨à¦¾à¦®...', placeholderComplaint: 'à¦†à¦ªà¦¨à¦¾à¦° à¦ªà§à¦°à¦§à¦¾à¦¨ à¦¸à¦®à¦¸à§à¦¯à¦¾ à¦¬à¦²à§à¦¨...',
+    selectGender: 'à¦¬à§‡à¦›à§‡ à¦¨à¦¿à¦¨...', male: 'à¦ªà§à¦°à§à¦·', female: 'à¦®à¦¹à¦¿à¦²à¦¾', other: 'à¦…à¦¨à§à¦¯à¦¾à¦¨à§à¦¯',
   },
   'mr-IN': {
-    label: 'मराठी', flag: '🇮🇳',
-    patientName: 'रुग्णाचे नाव', age: 'वय', gender: 'लिंग',
-    complaint: 'मुख्य तक्रार', agni: 'पाचन शक्ती (अग्नी)',
-    koshtha: 'मल प्रकृती (कोष्ठ)', medicines: 'सध्याची औषधे',
-    speak: 'बोला', stop: 'थांबा', next: 'पुढे', back: 'मागे',
-    submit: 'सबमिट करा व टोकन मिळवा', scanAbha: 'ABHA QR स्कॅन करा',
-    snapRx: 'जुन्या चिठ्ठीचा फोटो', voiceMeds: 'औषधे बोला',
-    placeholderName: 'पूर्ण नाव...', placeholderComplaint: 'आपली मुख्य तक्रार सांगा...',
-    selectGender: 'निवडा...', male: 'पुरुष', female: 'स्त्री', other: 'इतर',
+    label: '\u092E\u0930\u093E\u0920\u0940', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à¤°à¥à¤—à¥à¤£à¤¾à¤šà¥‡ à¤¨à¤¾à¤µ', age: 'à¤µà¤¯', gender: 'à¤²à¤¿à¤‚à¤—',
+    complaint: 'à¤®à¥à¤–à¥à¤¯ à¤¤à¤•à¥à¤°à¤¾à¤°', agni: 'à¤ªà¤¾à¤šà¤¨ à¤¶à¤•à¥à¤¤à¥€ (à¤…à¤—à¥à¤¨à¥€)',
+    koshtha: 'à¤®à¤² à¤ªà¥à¤°à¤•à¥ƒà¤¤à¥€ (à¤•à¥‹à¤·à¥à¤ )', medicines: 'à¤¸à¤§à¥à¤¯à¤¾à¤šà¥€ à¤”à¤·à¤§à¥‡',
+    speak: 'à¤¬à¥‹à¤²à¤¾', stop: 'à¤¥à¤¾à¤‚à¤¬à¤¾', next: 'à¤ªà¥à¤¢à¥‡', back: 'à¤®à¤¾à¤—à¥‡',
+    submit: 'à¤¸à¤¬à¤®à¤¿à¤Ÿ à¤•à¤°à¤¾ à¤µ à¤Ÿà¥‹à¤•à¤¨ à¤®à¤¿à¤³à¤µà¤¾', scanAbha: 'ABHA QR à¤¸à¥à¤•à¥…à¤¨ à¤•à¤°à¤¾',
+    snapRx: 'à¤œà¥à¤¨à¥à¤¯à¤¾ à¤šà¤¿à¤ à¥à¤ à¥€à¤šà¤¾ à¤«à¥‹à¤Ÿà¥‹', voiceMeds: 'à¤”à¤·à¤§à¥‡ à¤¬à¥‹à¤²à¤¾',
+    placeholderName: 'à¤ªà¥‚à¤°à¥à¤£ à¤¨à¤¾à¤µ...', placeholderComplaint: 'à¤†à¤ªà¤²à¥€ à¤®à¥à¤–à¥à¤¯ à¤¤à¤•à¥à¤°à¤¾à¤° à¤¸à¤¾à¤‚à¤—à¤¾...',
+    selectGender: 'à¤¨à¤¿à¤µà¤¡à¤¾...', male: 'à¤ªà¥à¤°à¥à¤·', female: 'à¤¸à¥à¤¤à¥à¤°à¥€', other: 'à¤‡à¤¤à¤°',
   },
   'te-IN': {
-    label: 'తెలుగు', flag: '🇮🇳',
-    patientName: 'రోగి పేరు', age: 'వయస్సు', gender: 'లింగం',
-    complaint: 'ప్రధాన ఫిర్యాదు', agni: 'జీర్ణ శక్తి (అగ్ని)',
-    koshtha: 'మలం రకం (కోష్ఠ)', medicines: 'ప్రస్తుత మందులు',
-    speak: 'మాట్లాడండి', stop: 'ఆపండి', next: 'తదుపరి', back: 'వెనుకకు',
-    submit: 'సమర్పించండి మరియు టోకెన్ పొందండి', scanAbha: 'ABHA QR స్కాన్ చేయండి',
-    snapRx: 'పాత ప్రిస్క్రిప్షన్ ఫోటో', voiceMeds: 'మందులు చెప్పండి',
-    placeholderName: 'పూర్తి పేరు...', placeholderComplaint: 'మీ ప్రధాన సమస్య చెప్పండి...',
-    selectGender: 'ఎంచుకోండి...', male: 'పురుషుడు', female: 'స్త్రీ', other: 'ఇతర',
+    label: 'à°¤à±†à°²à±à°—à±', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à°°à±‹à°—à°¿ à°ªà±‡à°°à±', age: 'à°µà°¯à°¸à±à°¸à±', gender: 'à°²à°¿à°‚à°—à°‚',
+    complaint: 'à°ªà±à°°à°§à°¾à°¨ à°«à°¿à°°à±à°¯à°¾à°¦à±', agni: 'à°œà±€à°°à±à°£ à°¶à°•à±à°¤à°¿ (à°…à°—à±à°¨à°¿)',
+    koshtha: 'à°®à°²à°‚ à°°à°•à°‚ (à°•à±‹à°·à±à° )', medicines: 'à°ªà±à°°à°¸à±à°¤à±à°¤ à°®à°‚à°¦à±à°²à±',
+    speak: 'à°®à°¾à°Ÿà±à°²à°¾à°¡à°‚à°¡à°¿', stop: 'à°†à°ªà°‚à°¡à°¿', next: 'à°¤à°¦à±à°ªà°°à°¿', back: 'à°µà±†à°¨à±à°•à°•à±',
+    submit: 'à°¸à°®à°°à±à°ªà°¿à°‚à°šà°‚à°¡à°¿ à°®à°°à°¿à°¯à± à°Ÿà±‹à°•à±†à°¨à± à°ªà±Šà°‚à°¦à°‚à°¡à°¿', scanAbha: 'ABHA QR à°¸à±à°•à°¾à°¨à± à°šà±‡à°¯à°‚à°¡à°¿',
+    snapRx: 'à°ªà°¾à°¤ à°ªà±à°°à°¿à°¸à±à°•à±à°°à°¿à°ªà±à°·à°¨à± à°«à±‹à°Ÿà±‹', voiceMeds: 'à°®à°‚à°¦à±à°²à± à°šà±†à°ªà±à°ªà°‚à°¡à°¿',
+    placeholderName: 'à°ªà±‚à°°à±à°¤à°¿ à°ªà±‡à°°à±...', placeholderComplaint: 'à°®à±€ à°ªà±à°°à°§à°¾à°¨ à°¸à°®à°¸à±à°¯ à°šà±†à°ªà±à°ªà°‚à°¡à°¿...',
+    selectGender: 'à°Žà°‚à°šà±à°•à±‹à°‚à°¡à°¿...', male: 'à°ªà±à°°à±à°·à±à°¡à±', female: 'à°¸à±à°¤à±à°°à±€', other: 'à°‡à°¤à°°',
   },
   'ta-IN': {
-    label: 'தமிழ்', flag: '🇮🇳',
-    patientName: 'நோயாளி பெயர்', age: 'வயது', gender: 'பாலினம்',
-    complaint: 'முதன்மை புகார்', agni: 'செரிமான சக்தி (அக்னி)',
-    koshtha: 'மல வகை (கோஷ்ட)', medicines: 'தற்போதைய மருந்துகள்',
-    speak: 'பேசுங்கள்', stop: 'நிறுத்துங்கள்', next: 'அடுத்து', back: 'திரும்பு',
-    submit: 'சமர்ப்பிக்கவும் & டோக்கன் பெறவும்', scanAbha: 'ABHA QR ஸ்கேன் செய்யவும்',
-    snapRx: 'பழைய மருந்துச்சீட்டு புகைப்படம்', voiceMeds: 'மருந்துகள் சொல்லுங்கள்',
-    placeholderName: 'முழு பெயர்...', placeholderComplaint: 'உங்கள் முதன்மை பிரச்சனையை சொல்லுங்கள்...',
-    selectGender: 'தேர்ந்தெடுக்கவும்...', male: 'ஆண்', female: 'பெண்', other: 'மற்றவை',
+    label: 'à®¤à®®à®¿à®´à¯', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à®¨à¯‹à®¯à®¾à®³à®¿ à®ªà¯†à®¯à®°à¯', age: 'à®µà®¯à®¤à¯', gender: 'à®ªà®¾à®²à®¿à®©à®®à¯',
+    complaint: 'à®®à¯à®¤à®©à¯à®®à¯ˆ à®ªà¯à®•à®¾à®°à¯', agni: 'à®šà¯†à®°à®¿à®®à®¾à®© à®šà®•à¯à®¤à®¿ (à®…à®•à¯à®©à®¿)',
+    koshtha: 'à®®à®² à®µà®•à¯ˆ (à®•à¯‹à®·à¯à®Ÿ)', medicines: 'à®¤à®±à¯à®ªà¯‹à®¤à¯ˆà®¯ à®®à®°à¯à®¨à¯à®¤à¯à®•à®³à¯',
+    speak: 'à®ªà¯‡à®šà¯à®™à¯à®•à®³à¯', stop: 'à®¨à®¿à®±à¯à®¤à¯à®¤à¯à®™à¯à®•à®³à¯', next: 'à®…à®Ÿà¯à®¤à¯à®¤à¯', back: 'à®¤à®¿à®°à¯à®®à¯à®ªà¯',
+    submit: 'à®šà®®à®°à¯à®ªà¯à®ªà®¿à®•à¯à®•à®µà¯à®®à¯ & à®Ÿà¯‹à®•à¯à®•à®©à¯ à®ªà¯†à®±à®µà¯à®®à¯', scanAbha: 'ABHA QR à®¸à¯à®•à¯‡à®©à¯ à®šà¯†à®¯à¯à®¯à®µà¯à®®à¯',
+    snapRx: 'à®ªà®´à¯ˆà®¯ à®®à®°à¯à®¨à¯à®¤à¯à®šà¯à®šà¯€à®Ÿà¯à®Ÿà¯ à®ªà¯à®•à¯ˆà®ªà¯à®ªà®Ÿà®®à¯', voiceMeds: 'à®®à®°à¯à®¨à¯à®¤à¯à®•à®³à¯ à®šà¯Šà®²à¯à®²à¯à®™à¯à®•à®³à¯',
+    placeholderName: 'à®®à¯à®´à¯ à®ªà¯†à®¯à®°à¯...', placeholderComplaint: 'à®‰à®™à¯à®•à®³à¯ à®®à¯à®¤à®©à¯à®®à¯ˆ à®ªà®¿à®°à®šà¯à®šà®©à¯ˆà®¯à¯ˆ à®šà¯Šà®²à¯à®²à¯à®™à¯à®•à®³à¯...',
+    selectGender: 'à®¤à¯‡à®°à¯à®¨à¯à®¤à¯†à®Ÿà¯à®•à¯à®•à®µà¯à®®à¯...', male: 'à®†à®£à¯', female: 'à®ªà¯†à®£à¯', other: 'à®®à®±à¯à®±à®µà¯ˆ',
   },
   'gu-IN': {
-    label: 'ગુજરાતી', flag: '🇮🇳',
-    patientName: 'દર્દીનું નામ', age: 'ઉંમર', gender: 'જાતિ',
-    complaint: 'મુખ્ય ફરિયાદ', agni: 'પાચન શક્તિ (અગ્નિ)',
-    koshtha: 'મળ પ્રકૃતિ (કોષ્ઠ)', medicines: 'હાલની દવાઓ',
-    speak: 'બોલો', stop: 'રોકો', next: 'આગળ', back: 'પાછળ',
-    submit: 'સબમિટ કરો અને ટોકન મેળવો', scanAbha: 'ABHA QR સ્કૅન કરો',
-    snapRx: 'જૂની પ્રિસ્ક્રિપ્શનનો ફોટો', voiceMeds: 'દવાઓ બોલો',
-    placeholderName: 'પૂરું નામ...', placeholderComplaint: 'તમારી મુખ્ય તકલીફ જણાવો...',
-    selectGender: 'પસંદ કરો...', male: 'પુરુષ', female: 'સ્ત્રી', other: 'અન્ય',
+    label: 'àª—à«àªœàª°àª¾àª¤à«€', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'àª¦àª°à«àª¦à«€àª¨à«àª‚ àª¨àª¾àª®', age: 'àª‰àª‚àª®àª°', gender: 'àªœàª¾àª¤àª¿',
+    complaint: 'àª®à«àª–à«àª¯ àª«àª°àª¿àª¯àª¾àª¦', agni: 'àªªàª¾àªšàª¨ àª¶àª•à«àª¤àª¿ (àª…àª—à«àª¨àª¿)',
+    koshtha: 'àª®àª³ àªªà«àª°àª•à«ƒàª¤àª¿ (àª•à«‹àª·à«àª )', medicines: 'àª¹àª¾àª²àª¨à«€ àª¦àªµàª¾àª“',
+    speak: 'àª¬à«‹àª²à«‹', stop: 'àª°à«‹àª•à«‹', next: 'àª†àª—àª³', back: 'àªªàª¾àª›àª³',
+    submit: 'àª¸àª¬àª®àª¿àªŸ àª•àª°à«‹ àª…àª¨à«‡ àªŸà«‹àª•àª¨ àª®à«‡àª³àªµà«‹', scanAbha: 'ABHA QR àª¸à«àª•à«…àª¨ àª•àª°à«‹',
+    snapRx: 'àªœà«‚àª¨à«€ àªªà«àª°àª¿àª¸à«àª•à«àª°àª¿àªªà«àª¶àª¨àª¨à«‹ àª«à«‹àªŸà«‹', voiceMeds: 'àª¦àªµàª¾àª“ àª¬à«‹àª²à«‹',
+    placeholderName: 'àªªà«‚àª°à«àª‚ àª¨àª¾àª®...', placeholderComplaint: 'àª¤àª®àª¾àª°à«€ àª®à«àª–à«àª¯ àª¤àª•àª²à«€àª« àªœàª£àª¾àªµà«‹...',
+    selectGender: 'àªªàª¸àª‚àª¦ àª•àª°à«‹...', male: 'àªªà«àª°à«àª·', female: 'àª¸à«àª¤à«àª°à«€', other: 'àª…àª¨à«àª¯',
   },
   'kn-IN': {
-    label: 'ಕನ್ನಡ', flag: '🇮🇳',
-    patientName: 'ರೋಗಿಯ ಹೆಸರು', age: 'ವಯಸ್ಸು', gender: 'ಲಿಂಗ',
-    complaint: 'ಮುಖ್ಯ ದೂರು', agni: 'ಜೀರ್ಣ ಶಕ್ತಿ (ಅಗ್ನಿ)',
-    koshtha: 'ಮಲ ಪ್ರಕೃತಿ (ಕೋಷ್ಠ)', medicines: 'ಪ್ರಸ್ತುತ ಔಷಧಗಳು',
-    speak: 'ಮಾತನಾಡಿ', stop: 'ನಿಲ್ಲಿಸಿ', next: 'ಮುಂದೆ', back: 'ಹಿಂದೆ',
-    submit: 'ಸಲ್ಲಿಸಿ ಮತ್ತು ಟೋಕನ್ ಪಡೆಯಿರಿ', scanAbha: 'ABHA QR ಸ್ಕ್ಯಾನ್ ಮಾಡಿ',
-    snapRx: 'ಹಳೆಯ ಪ್ರಿಸ್ಕ್ರಿಪ್ಷನ್ ಫೋಟೋ', voiceMeds: 'ಔಷಧಗಳನ್ನು ಹೇಳಿ',
-    placeholderName: 'ಪೂರ್ಣ ಹೆಸರು...', placeholderComplaint: 'ನಿಮ್ಮ ಮುಖ್ಯ ಸಮಸ್ಯೆ ಹೇಳಿ...',
-    selectGender: 'ಆಯ್ಕೆ ಮಾಡಿ...', male: 'ಪುರುಷ', female: 'ಮಹಿಳೆ', other: 'ಇತರೆ',
+    label: 'à²•à²¨à³à²¨à²¡', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à²°à³‹à²—à²¿à²¯ à²¹à³†à²¸à²°à³', age: 'à²µà²¯à²¸à³à²¸à³', gender: 'à²²à²¿à²‚à²—',
+    complaint: 'à²®à³à²–à³à²¯ à²¦à³‚à²°à³', agni: 'à²œà³€à²°à³à²£ à²¶à²•à³à²¤à²¿ (à²…à²—à³à²¨à²¿)',
+    koshtha: 'à²®à²² à²ªà³à²°à²•à³ƒà²¤à²¿ (à²•à³‹à²·à³à² )', medicines: 'à²ªà³à²°à²¸à³à²¤à³à²¤ à²”à²·à²§à²—à²³à³',
+    speak: 'à²®à²¾à²¤à²¨à²¾à²¡à²¿', stop: 'à²¨à²¿à²²à³à²²à²¿à²¸à²¿', next: 'à²®à³à²‚à²¦à³†', back: 'à²¹à²¿à²‚à²¦à³†',
+    submit: 'à²¸à²²à³à²²à²¿à²¸à²¿ à²®à²¤à³à²¤à³ à²Ÿà³‹à²•à²¨à³ à²ªà²¡à³†à²¯à²¿à²°à²¿', scanAbha: 'ABHA QR à²¸à³à²•à³à²¯à²¾à²¨à³ à²®à²¾à²¡à²¿',
+    snapRx: 'à²¹à²³à³†à²¯ à²ªà³à²°à²¿à²¸à³à²•à³à²°à²¿à²ªà³à²·à²¨à³ à²«à³‹à²Ÿà³‹', voiceMeds: 'à²”à²·à²§à²—à²³à²¨à³à²¨à³ à²¹à³‡à²³à²¿',
+    placeholderName: 'à²ªà³‚à²°à³à²£ à²¹à³†à²¸à²°à³...', placeholderComplaint: 'à²¨à²¿à²®à³à²® à²®à³à²–à³à²¯ à²¸à²®à²¸à³à²¯à³† à²¹à³‡à²³à²¿...',
+    selectGender: 'à²†à²¯à³à²•à³† à²®à²¾à²¡à²¿...', male: 'à²ªà³à²°à³à²·', female: 'à²®à²¹à²¿à²³à³†', other: 'à²‡à²¤à²°à³†',
   },
   'ml-IN': {
-    label: 'മലയാളം', flag: '🇮🇳',
-    patientName: 'രോഗിയുടെ പേര്', age: 'പ്രായം', gender: 'ലിംഗം',
-    complaint: 'പ്രധാന പരാതി', agni: 'ദഹന ശക്തി (അഗ്നി)',
-    koshtha: 'മലം തരം (കോഷ്ഠ)', medicines: 'നിലവിലെ മരുന്നുകൾ',
-    speak: 'സംസാരിക്കൂ', stop: 'നിർത്തൂ', next: 'അടുത്തത്', back: 'പിന്നോട്ട്',
-    submit: 'സമർപ്പിക്കൂ & ടോക്കൺ നേടൂ', scanAbha: 'ABHA QR സ്കാൻ ചെയ്യൂ',
-    snapRx: 'പഴയ പ്രിസ്ക്രിപ്ഷൻ ഫോട്ടോ', voiceMeds: 'മരുന്നുകൾ പറയൂ',
-    placeholderName: 'പൂർണ്ണ പേര്...', placeholderComplaint: 'നിങ്ങളുടെ പ്രധാന പ്രശ്നം പറയൂ...',
-    selectGender: 'തിരഞ്ഞെടുക്കൂ...', male: 'പുരുഷൻ', female: 'സ്ത്രീ', other: 'മറ്റുള്ളവ',
+    label: '\u0D2E\u0D32\u0D2F\u0D3E\u0D33\u0D02', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à´°àµ‹à´—à´¿à´¯àµà´Ÿàµ† à´ªàµ‡à´°àµ', age: 'à´ªàµà´°à´¾à´¯à´‚', gender: 'à´²à´¿à´‚à´—à´‚',
+    complaint: 'à´ªàµà´°à´§à´¾à´¨ à´ªà´°à´¾à´¤à´¿', agni: 'à´¦à´¹à´¨ à´¶à´•àµà´¤à´¿ (à´…à´—àµà´¨à´¿)',
+    koshtha: 'à´®à´²à´‚ à´¤à´°à´‚ (à´•àµ‹à´·àµà´ )', medicines: 'à´¨à´¿à´²à´µà´¿à´²àµ† à´®à´°àµà´¨àµà´¨àµà´•àµ¾',
+    speak: 'à´¸à´‚à´¸à´¾à´°à´¿à´•àµà´•àµ‚', stop: 'à´¨à´¿àµ¼à´¤àµà´¤àµ‚', next: 'à´…à´Ÿàµà´¤àµà´¤à´¤àµ', back: 'à´ªà´¿à´¨àµà´¨àµ‹à´Ÿàµà´Ÿàµ',
+    submit: 'à´¸à´®àµ¼à´ªàµà´ªà´¿à´•àµà´•àµ‚ & à´Ÿàµ‹à´•àµà´•àµº à´¨àµ‡à´Ÿàµ‚', scanAbha: 'ABHA QR à´¸àµà´•à´¾àµ» à´šàµ†à´¯àµà´¯àµ‚',
+    snapRx: 'à´ªà´´à´¯ à´ªàµà´°à´¿à´¸àµà´•àµà´°à´¿à´ªàµà´·àµ» à´«àµ‹à´Ÿàµà´Ÿàµ‹', voiceMeds: 'à´®à´°àµà´¨àµà´¨àµà´•àµ¾ à´ªà´±à´¯àµ‚',
+    placeholderName: 'à´ªàµ‚àµ¼à´£àµà´£ à´ªàµ‡à´°àµ...', placeholderComplaint: 'à´¨à´¿à´™àµà´™à´³àµà´Ÿàµ† à´ªàµà´°à´§à´¾à´¨ à´ªàµà´°à´¶àµà´¨à´‚ à´ªà´±à´¯àµ‚...',
+    selectGender: 'à´¤à´¿à´°à´žàµà´žàµ†à´Ÿàµà´•àµà´•àµ‚...', male: 'à´ªàµà´°àµà´·àµ»', female: 'à´¸àµà´¤àµà´°àµ€', other: 'à´®à´±àµà´±àµà´³àµà´³à´µ',
   },
   'or-IN': {
-    label: 'ଓଡ଼ିଆ', flag: '🇮🇳',
-    patientName: 'ରୋଗୀଙ୍କ ନାମ', age: 'ବୟସ', gender: 'ଲିଙ୍ଗ',
-    complaint: 'ମୁଖ୍ୟ ଅଭିଯୋଗ', agni: 'ପାଚନ ଶକ୍ତି (ଅଗ୍ନି)',
-    koshtha: 'ମଳ ପ୍ରକୃତି (କୋଷ୍ଠ)', medicines: 'ବର୍ତ୍ତମାନ ଔଷଧ',
-    speak: 'କୁହନ୍ତୁ', stop: 'ବନ୍ଦ କରନ୍ତୁ', next: 'ପରବର୍ତ୍ତୀ', back: 'ପଛକୁ',
-    submit: 'ଦାଖଲ କରନ୍ତୁ ଏବଂ ଟୋକେନ ନିଅନ୍ତୁ', scanAbha: 'ABHA QR ସ୍କ୍ୟାନ କରନ୍ତୁ',
-    snapRx: 'ପୁରୁଣା ପ୍ରେସ୍କ୍ରିପ୍ସନ ଫଟୋ', voiceMeds: 'ଔଷଧ କୁହନ୍ତୁ',
-    placeholderName: 'ପୂର୍ଣ ନାମ...', placeholderComplaint: 'ଆପଣଙ୍କ ମୁଖ୍ୟ ସମସ୍ୟା କୁହନ୍ତୁ...',
-    selectGender: 'ବାଛନ୍ତୁ...', male: 'ପୁରୁଷ', female: 'ମହିଳା', other: 'ଅନ୍ୟ',
+    label: '\u0B13\u0B21\u0B3C\u0B3F\u0B06', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'à¬°à­‹à¬—à­€à¬™à­à¬• à¬¨à¬¾à¬®', age: 'à¬¬à­Ÿà¬¸', gender: 'à¬²à¬¿à¬™à­à¬—',
+    complaint: 'à¬®à­à¬–à­à­Ÿ à¬…à¬­à¬¿à¬¯à­‹à¬—', agni: 'à¬ªà¬¾à¬šà¬¨ à¬¶à¬•à­à¬¤à¬¿ (à¬…à¬—à­à¬¨à¬¿)',
+    koshtha: 'à¬®à¬³ à¬ªà­à¬°à¬•à­ƒà¬¤à¬¿ (à¬•à­‹à¬·à­à¬ )', medicines: 'à¬¬à¬°à­à¬¤à­à¬¤à¬®à¬¾à¬¨ à¬”à¬·à¬§',
+    speak: 'à¬•à­à¬¹à¬¨à­à¬¤à­', stop: 'à¬¬à¬¨à­à¬¦ à¬•à¬°à¬¨à­à¬¤à­', next: 'à¬ªà¬°à¬¬à¬°à­à¬¤à­à¬¤à­€', back: 'à¬ªà¬›à¬•à­',
+    submit: 'à¬¦à¬¾à¬–à¬² à¬•à¬°à¬¨à­à¬¤à­ à¬à¬¬à¬‚ à¬Ÿà­‹à¬•à­‡à¬¨ à¬¨à¬¿à¬…à¬¨à­à¬¤à­', scanAbha: 'ABHA QR à¬¸à­à¬•à­à­Ÿà¬¾à¬¨ à¬•à¬°à¬¨à­à¬¤à­',
+    snapRx: 'à¬ªà­à¬°à­à¬£à¬¾ à¬ªà­à¬°à­‡à¬¸à­à¬•à­à¬°à¬¿à¬ªà­à¬¸à¬¨ à¬«à¬Ÿà­‹', voiceMeds: 'à¬”à¬·à¬§ à¬•à­à¬¹à¬¨à­à¬¤à­',
+    placeholderName: 'à¬ªà­‚à¬°à­à¬£ à¬¨à¬¾à¬®...', placeholderComplaint: 'à¬†à¬ªà¬£à¬™à­à¬• à¬®à­à¬–à­à­Ÿ à¬¸à¬®à¬¸à­à­Ÿà¬¾ à¬•à­à¬¹à¬¨à­à¬¤à­...',
+    selectGender: 'à¬¬à¬¾à¬›à¬¨à­à¬¤à­...', male: 'à¬ªà­à¬°à­à¬·', female: 'à¬®à¬¹à¬¿à¬³à¬¾', other: 'à¬…à¬¨à­à­Ÿ',
   },
   'ur-IN': {
-    label: 'اردو', flag: '🇮🇳',
-    patientName: 'مریض کا نام', age: 'عمر', gender: 'جنس',
-    complaint: 'اہم شکایت', agni: 'ہاضمے کی طاقت (اگنی)',
-    koshtha: 'پاخانے کی قسم (کوشٹھ)', medicines: 'موجودہ دوائیں',
-    speak: 'بولیں', stop: 'روکیں', next: 'آگے', back: 'پیچھے',
-    submit: 'جمع کریں اور ٹوکن لیں', scanAbha: 'ABHA QR اسکین کریں',
-    snapRx: 'پرانے نسخے کی تصویر', voiceMeds: 'دوائیں بولیں',
-    placeholderName: 'پورا نام...', placeholderComplaint: 'اپنی اہم تکلیف بتائیں...',
-    selectGender: 'منتخب کریں...', male: 'مرد', female: 'عورت', other: 'دیگر',
+    label: '\u0627\u0631\u062F\u0648', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    patientName: 'Ù…Ø±ÛŒØ¶ Ú©Ø§ Ù†Ø§Ù…', age: 'Ø¹Ù…Ø±', gender: 'Ø¬Ù†Ø³',
+    complaint: 'Ø§ÛÙ… Ø´Ú©Ø§ÛŒØª', agni: 'ÛØ§Ø¶Ù…Û’ Ú©ÛŒ Ø·Ø§Ù‚Øª (Ø§Ú¯Ù†ÛŒ)',
+    koshtha: 'Ù¾Ø§Ø®Ø§Ù†Û’ Ú©ÛŒ Ù‚Ø³Ù… (Ú©ÙˆØ´Ù¹Ú¾)', medicines: 'Ù…ÙˆØ¬ÙˆØ¯Û Ø¯ÙˆØ§Ø¦ÛŒÚº',
+    speak: 'Ø¨ÙˆÙ„ÛŒÚº', stop: 'Ø±ÙˆÚ©ÛŒÚº', next: 'Ø¢Ú¯Û’', back: 'Ù¾ÛŒÚ†Ú¾Û’',
+    submit: 'Ø¬Ù…Ø¹ Ú©Ø±ÛŒÚº Ø§ÙˆØ± Ù¹ÙˆÚ©Ù† Ù„ÛŒÚº', scanAbha: 'ABHA QR Ø§Ø³Ú©ÛŒÙ† Ú©Ø±ÛŒÚº',
+    snapRx: 'Ù¾Ø±Ø§Ù†Û’ Ù†Ø³Ø®Û’ Ú©ÛŒ ØªØµÙˆÛŒØ±', voiceMeds: 'Ø¯ÙˆØ§Ø¦ÛŒÚº Ø¨ÙˆÙ„ÛŒÚº',
+    placeholderName: 'Ù¾ÙˆØ±Ø§ Ù†Ø§Ù…...', placeholderComplaint: 'Ø§Ù¾Ù†ÛŒ Ø§ÛÙ… ØªÚ©Ù„ÛŒÙ Ø¨ØªØ§Ø¦ÛŒÚº...',
+    selectGender: 'Ù…Ù†ØªØ®Ø¨ Ú©Ø±ÛŒÚº...', male: 'Ù…Ø±Ø¯', female: 'Ø¹ÙˆØ±Øª', other: 'Ø¯ÛŒÚ¯Ø±',
   },
 };
 
@@ -223,127 +240,33 @@ const LANG_ORDER: LangCode[] = [
   'ta-IN','gu-IN','kn-IN','ml-IN','or-IN','ur-IN',
 ];
 
-// ─── Localized Complaint Categories ─────────────────────────────────────────
+// --- Clinical Complaint Categories -----------------------------------------
 
-interface ComplaintCat {
-  id: string;
-  complaint: string;
-  emoji: string;
-  label: string;   // primary label (localized)
-  sub: string;     // secondary descriptor (localized)
-}
-
-const COMPLAINT_I18N: Record<LangCode, ComplaintCat[]> = {
-  'en-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'Stomach',   sub: 'Acidity / Gas'      },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'Joint Pain', sub: 'Knee / Back'        },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'Cough',      sub: 'Breathlessness'     },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'Diabetes',   sub: 'Urination / Sugar'  },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'High BP',    sub: 'Headache'           },
-  ],
-  'hi-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'पेट',           sub: 'एसिडिटी / गैस'       },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'जोड़ों का दर्द', sub: 'घुटने / पीठ'         },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'खांसी',          sub: 'सांस फूलना'           },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'शुगर / मधुमेह',  sub: 'बार-बार पेशाब'        },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'उच्च बीपी',      sub: 'सिरदर्द'              },
-  ],
-  'pa-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'ਪੇਟ',          sub: 'ਐਸਿਡਿਟੀ / ਗੈਸ'      },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'ਜੋੜਾਂ ਦਾ ਦਰਦ', sub: 'ਗੋਡੇ / ਪਿੱਠ'         },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'ਖੰਘ',           sub: 'ਸਾਹ ਚੜ੍ਹਨਾ'          },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'ਸ਼ੂਗਰ',         sub: 'ਵਾਰ-ਵਾਰ ਪਿਸ਼ਾਬ'      },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'ਹਾਈ ਬੀਪੀ',     sub: 'ਸਿਰਦਰਦ'              },
-  ],
-  'bn-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'পেট',          sub: 'অ্যাসিডিটি / গ্যাস'  },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'জয়েন্টের ব্যথা',sub: 'হাঁটু / পিঠ'         },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'কাশি',          sub: 'শ্বাসকষ্ট'            },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'ডায়াবেটিস',    sub: 'বারবার প্রস্রাব'       },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'হাই বিপি',      sub: 'মাথাব্যথা'            },
-  ],
-  'mr-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'पोट',          sub: 'आम्लपित्त / गॅस'      },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'सांधेदुखी',    sub: 'गुडघे / पाठ'          },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'खोकला',        sub: 'दम लागणे'              },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'मधुमेह',       sub: 'वारंवार लघवी'          },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'उच्च बीपी',    sub: 'डोकेदुखी'              },
-  ],
-  'te-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'కడుపు',        sub: 'యాసిడిటీ / గ్యాస్'   },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'కీళ్ళ నొప్పి', sub: 'మోకాలు / వెన్ను'      },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'దగ్గు',         sub: 'శ్వాస తీసుకోవడం'      },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'మధుమేహం',      sub: 'తరచుగా మూత్రం'        },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'అధిక రక్తపోటు', sub: 'తలనొప్పి'             },
-  ],
-  'ta-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'வயிறு',        sub: 'அமிலம் / வாயு'        },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'மூட்டு வலி',   sub: 'முழங்கால் / முதுகு'   },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'இருமல்',        sub: 'மூச்சுத் திணறல்'      },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'நீரிழிவு',     sub: 'அடிக்கடி சிறுநீர்'   },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'உயர் ரத்த அழுத்தம்', sub: 'தலைவலி'        },
-  ],
-  'gu-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'પેટ',          sub: 'એસિડિટી / ગૅસ'       },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'સાંધાનો દુ:ખાવો', sub: 'ઘૂંટણ / પીઠ'       },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'ઉધરસ',         sub: 'શ્વાસ ચઢવો'            },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'ડાયાબિટીસ',    sub: 'વારંવાર પેશાબ'         },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'ઉચ્ચ BP',       sub: 'માથાનો દુ:ખાવો'       },
-  ],
-  'kn-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'ಹೊಟ್ಟೆ',        sub: 'ಆಮ್ಲೀಯತೆ / ಗ್ಯಾಸ್'    },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'ಕೀಲು ನೋವು',    sub: 'ಮೊಣಕಾಲು / ಬೆನ್ನು'     },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'ಕೆಮ್ಮು',         sub: 'ಉಸಿರಾಟ ತೊಂದರೆ'        },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'ಮಧುಮೇಹ',       sub: 'ಆಗಾಗ ಮೂತ್ರ'           },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'ಅಧಿಕ ರಕ್ತದೊತ್ತಡ', sub: 'ತಲೆನೋವು'            },
-  ],
-  'ml-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'വയറ്',         sub: 'അമ്ലത / വായു'          },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'സന്ധിവേദന',   sub: 'കാൽമുട്ട് / പുറം'     },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'ചുമ',          sub: 'ശ്വാസതടസ്സം'           },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'പ്രമേഹം',      sub: 'ഇടക്കിടെ മൂത്രം'     },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'ഉയർന്ന BP',    sub: 'തലവേദന'                },
-  ],
-  'or-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'ପେଟ',          sub: 'ଏସିଡ / ଗ୍ୟାସ'        },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'ଗଣ୍ଠି ଯନ୍ତ୍ରଣା', sub: 'ଆଣ୍ଠୁ / ପିଠ'         },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'କାଶ',           sub: 'ଶ୍ୱାସ ଅଟକା'           },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'ମଧୁମେହ',       sub: 'ବାରମ୍ବାର ପ୍ରସ୍ରାବ'    },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'ଉଚ୍ଚ ବିପି',     sub: 'ମୁଣ୍ଡ ବ୍ୟଥା'          },
-  ],
-  'ur-IN': [
-    { id: 'gastritis',    complaint: 'stomach_pain',  emoji: '🫃', label: 'پیٹ',           sub: 'تیزابیت / گیس'        },
-    { id: 'arthritis',    complaint: 'joint_pain',    emoji: '🦴', label: 'جوڑوں کا درد',  sub: 'گھٹنا / پیٹھ'         },
-    { id: 'cough',        complaint: 'cough',         emoji: '🫁', label: 'کھانسی',        sub: 'سانس لینا مشکل'       },
-    { id: 'diabetes',     complaint: 'diabetes',      emoji: '🩸', label: 'ذیابیطس',       sub: 'بار بار پیشاب'         },
-    { id: 'hypertension', complaint: 'hypertension',  emoji: '💓', label: 'ہائی بی پی',    sub: 'سر درد'                },
-  ],
-};
 
 const AGNI_OPTIONS = [
   {
-    id: 'mandagni', label: 'Mandagni', sublabel: 'Slow / Heavy', hindi: 'मंदाग्नि', desc: 'भारीपन, नींद', emoji: '🌊',
+    id: 'mandagni', label: 'Mandagni', sublabel: 'Slow / Heavy', hindi: '\u092E\u0902\u0926\u093E\u0917\u094D\u0928\u093F', desc: '\u092D\u093E\u0930\u0940\u092A\u0928, \u0928\u0940\u0902\u0926', emoji: '\uD83C\uDF0A',
     active_light: 'border-blue-500 bg-blue-50 ring-2 ring-blue-400 text-blue-900',
     active_dark:  'border-blue-400 bg-blue-900/40 ring-2 ring-blue-400',
     inactive_light:'border-slate-300 bg-white hover:border-blue-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-blue-600 text-white',
   },
   {
-    id: 'vishamagni', label: 'Vishamagni', sublabel: 'Irregular / Gas', hindi: 'विषमाग्नि', desc: 'अनियमित, गैस', emoji: '💨',
+    id: 'vishamagni', label: 'Vishamagni', sublabel: 'Irregular / Gas', hindi: '\u0935\u093F\u0937\u092E\u093E\u0917\u094D\u0928\u093F', desc: '\u0905\u0928\u093F\u092F\u092E\u093F\u0924, \u0917\u0948\u0938', emoji: '\uD83D\uDCA8',
     active_light: 'border-amber-500 bg-amber-50 ring-2 ring-amber-400 text-amber-900',
     active_dark:  'border-amber-400 bg-amber-900/40 ring-2 ring-amber-400',
     inactive_light:'border-slate-300 bg-white hover:border-amber-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-amber-600 text-white',
   },
   {
-    id: 'tikshnagni', label: 'Tikshnagni', sublabel: 'Intense / Acidic', hindi: 'तीक्ष्णाग्नि', desc: 'जलन, एसिडिटी', emoji: '🔥',
+    id: 'tikshnagni', label: 'Tikshnagni', sublabel: 'Intense / Acidic', hindi: '\u0924\u0940\u0915\u094D\u0937\u094D\u0923\u093E\u0917\u094D\u0928\u093F', desc: '\u091C\u0932\u0928, \u090F\u0938\u093F\u0921\u093F\u091F\u0940', emoji: '\uD83D\uDD25',
     active_light: 'border-red-500 bg-red-50 ring-2 ring-red-400 text-red-900',
     active_dark:  'border-red-400 bg-red-900/40 ring-2 ring-red-400',
     inactive_light:'border-slate-300 bg-white hover:border-red-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-red-600 text-white',
   },
   {
-    id: 'samagni', label: 'Samagni', sublabel: 'Balanced', hindi: 'समाग्नि', desc: 'सामान्य', emoji: '✅',
+    id: 'samagni', label: 'Samagni', sublabel: 'Balanced', hindi: '\u0938\u092E\u093E\u0917\u094D\u0928\u093F', desc: '\u0938\u093E\u092E\u093E\u0928\u094D\u092F', emoji: '\u2705',
     active_light: 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 text-emerald-900',
     active_dark:  'border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400',
     inactive_light:'border-slate-300 bg-white hover:border-emerald-400 text-slate-800 shadow-sm',
@@ -353,21 +276,21 @@ const AGNI_OPTIONS = [
 
 const KOSHTHA_OPTIONS = [
   {
-    id: 'krura', label: 'Krura', sublabel: 'Hard / Constipated', hindi: 'क्रूर', emoji: '🪨',
+    id: 'krura', label: 'Krura', sublabel: 'Hard / Constipated', hindi: '\u0915\u094D\u0930\u0942\u0930', emoji: '\uD83E\uDEA8',
     active_light: 'border-stone-500 bg-stone-50 ring-2 ring-stone-400 text-stone-900',
     active_dark:  'border-stone-400 bg-stone-900/40 ring-2 ring-stone-400',
     inactive_light:'border-slate-300 bg-white hover:border-stone-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-stone-500 text-white',
   },
   {
-    id: 'madhyama', label: 'Madhyama', sublabel: 'Regular / Normal', hindi: 'मध्यम', emoji: '🟢',
+    id: 'madhyama', label: 'Madhyama', sublabel: 'Regular / Normal', hindi: '\u092E\u0927\u094D\u092F\u092E', emoji: '\uD83D\uDFE2',
     active_light: 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 text-emerald-900',
     active_dark:  'border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400',
     inactive_light:'border-slate-300 bg-white hover:border-emerald-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-emerald-500 text-white',
   },
   {
-    id: 'mridu', label: 'Mridu', sublabel: 'Loose / Soft', hindi: 'मृदु', emoji: '💧',
+    id: 'mridu', label: 'Mridu', sublabel: 'Loose / Soft', hindi: '\u092E\u0943\u0926\u0941', emoji: '\uD83D\uDCA7',
     active_light: 'border-cyan-500 bg-cyan-50 ring-2 ring-cyan-400 text-cyan-900',
     active_dark:  'border-cyan-400 bg-cyan-900/40 ring-2 ring-cyan-400',
     inactive_light:'border-slate-300 bg-white hover:border-cyan-400 text-slate-800 shadow-sm',
@@ -388,7 +311,7 @@ const AYURVEDIC_QUICK = [
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const OPD_NAME = import.meta.env.VITE_KIOSK_OPD_NAME || 'Civil Hospital OPD';
 
-// ─── Interaction preview helper ───────────────────────────────────────────────
+// --- Interaction preview helper ----------------------------------------------
 
 const KNOWN_INTERACTIONS: Record<string, string[]> = {
   warfarin:  ['turmeric', 'ginger', 'garlic', 'ginkgo', 'guggul'],
@@ -405,7 +328,7 @@ function previewInteractions(allopathic: string[], ayurvedic: string[]): string[
       if (key.includes(d)) {
         ayurvedic.forEach((herb) => {
           if (herbs.some((h) => herb.toLowerCase().includes(h))) {
-            warnings.push(`${drug} + ${herb}: potential interaction — consult doctor`);
+            warnings.push(`${drug} + ${herb}: potential interaction - consult doctor`);
           }
         });
       }
@@ -414,7 +337,7 @@ function previewInteractions(allopathic: string[], ayurvedic: string[]): string[
   return warnings;
 }
 
-// ─── Live clock helper ────────────────────────────────────────────────────────
+// --- Live clock helper -------------------------------------------------------
 
 const LiveClock: React.FC<{ dark: boolean }> = ({ dark }) => {
   const [time, setTime] = useState(() =>
@@ -434,12 +357,23 @@ const LiveClock: React.FC<{ dark: boolean }> = ({ dark }) => {
   );
 };
 
-// ─── ABHA QR Scanner Modal ────────────────────────────────────────────────────
+// --- ABHA QR Scanner Modal ---------------------------------------------------
+
+interface AbhaQrScanResult {
+  name: string;
+  age: string;
+  abhaId: string;
+  gender?: string;
+  bloodGroup?: string;
+  chronicConditions?: string[];
+  allergies?: string[];
+  currentMedications?: string[];
+}
 
 interface AbhaQrModalProps {
   dark: boolean;
   onClose: () => void;
-  onScan: (name: string, age: string, abhaId: string) => void;
+  onScan: (result: AbhaQrScanResult) => void;
 }
 
 const AbhaQrModal: React.FC<AbhaQrModalProps> = ({ dark, onClose, onScan }) => {
@@ -487,13 +421,22 @@ const AbhaQrModal: React.FC<AbhaQrModalProps> = ({ dark, onClose, onScan }) => {
             // ABHA QR v2 is JSON: {"hidn":"<id>","name":"<n>","dob":"<d>","gender":"<g>"}
             try {
               const parsed = JSON.parse(raw);
-              const abhaId = parsed.hidn || parsed.healthId || raw;
-              const name = parsed.name || '';
-              const dobYear = parsed.dob ? new Date().getFullYear() - parseInt(parsed.dob.split('-')[0] || '0') : 0;
-              onScan(name, dobYear > 0 ? String(dobYear) : '', abhaId);
+              // Support both ABDM standard QR and SehatMitra comprehensive QR
+              const abhaId  = parsed.abha_id || parsed.hidn || parsed.healthId || raw;
+              const name    = parsed.name || '';
+              const age     = parsed.age ? String(parsed.age) : (
+                parsed.dob ? String(new Date().getFullYear() - parseInt(parsed.dob.split('-')[0] || '0')) : ''
+              );
+              onScan({
+                name, age, abhaId,
+                gender:             parsed.gender || '',
+                bloodGroup:         parsed.blood_group || '',
+                chronicConditions:  Array.isArray(parsed.chronic_conditions)  ? parsed.chronic_conditions  : [],
+                currentMedications: Array.isArray(parsed.current_medications) ? parsed.current_medications : [],
+              });
               return;
             } catch {
-              onScan('', '', raw);
+              onScan({ name: '', age: '', abhaId: raw });
               return;
             }
           }
@@ -507,7 +450,7 @@ const AbhaQrModal: React.FC<AbhaQrModalProps> = ({ dark, onClose, onScan }) => {
 
   const handleManualSubmit = () => {
     if (!manualAbha.trim()) return;
-    onScan(manualName, manualAge, manualAbha.trim());
+    onScan({ name: manualName, age: manualAge, abhaId: manualAbha.trim() });
   };
 
   const bg = dark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200';
@@ -544,7 +487,7 @@ const AbhaQrModal: React.FC<AbhaQrModalProps> = ({ dark, onClose, onScan }) => {
         )}
 
         <div className={`text-xs text-center font-semibold ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
-          — or enter manually —
+          â€” or enter manually â€”
         </div>
 
         <div className="space-y-2">
@@ -582,7 +525,7 @@ const AbhaQrModal: React.FC<AbhaQrModalProps> = ({ dark, onClose, onScan }) => {
   );
 };
 
-// ─── Snap Prescription Modal ──────────────────────────────────────────────────
+// â”€â”€â”€ Snap Prescription Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface SnapRxModalProps {
   dark: boolean;
@@ -694,7 +637,7 @@ const SnapRxModal: React.FC<SnapRxModalProps> = ({ dark, onClose, onDrugsExtract
                 </button>
               )}
               <label className={`flex-1 py-3 rounded-xl border font-bold text-sm flex items-center justify-center gap-2 cursor-pointer transition-colors ${dark ? 'border-slate-600 bg-slate-800 text-slate-300 hover:bg-slate-700' : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'}`}>
-                📁 Upload File
+                ðŸ“ Upload File
                 <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
               </label>
             </div>
@@ -714,7 +657,7 @@ const SnapRxModal: React.FC<SnapRxModalProps> = ({ dark, onClose, onDrugsExtract
                 disabled={processing}
                 className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
               >
-                {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting...</> : '🔍 Extract Drugs'}
+                {processing ? <><Loader2 className="w-4 h-4 animate-spin" /> Extracting...</> : 'ðŸ” Extract Drugs'}
               </button>
             </div>
           </>
@@ -724,7 +667,7 @@ const SnapRxModal: React.FC<SnapRxModalProps> = ({ dark, onClose, onDrugsExtract
   );
 };
 
-// ─── Component ───────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 interface CharakKioskProps {
   onCockpitOpen?: (tokenId: string) => void;
@@ -732,35 +675,37 @@ interface CharakKioskProps {
 }
 
 export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFlag }) => {
-  // ── Theme ──────────────────────────────────────────────────────────────────
+  // â”€â”€ Theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [dark, setDark] = useState(false);
 
-  // ── Language ───────────────────────────────────────────────────────────────
+  // â”€â”€ Language â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [langCode, setLangCode] = useState<LangCode>('en-IN');
   const [showLangMenu, setShowLangMenu] = useState(false);
   const L = LANG_DICT[langCode];
-  // Complaint categories that re-render instantly when language changes
-  const complaintCategories = COMPLAINT_I18N[langCode] ?? COMPLAINT_I18N['en-IN'];
-
-  // ── Step 0 ─────────────────────────────────────────────────────────────────
+  // â”€â”€ Step 0 â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [patientName, setPatientName] = useState('');
   const [age, setAge]                 = useState('');
+  const [ageGroup, setAgeGroup]       = useState('');   // 'child' | 'adult' | 'middle' | 'senior'
   const [gender, setGender]           = useState('');
   const [patientId, setPatientId]     = useState(() => `PT-${Date.now()}`);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [abhaId, setAbhaId]           = useState('');
 
-  // ── Step 1 (voice/complaint) ───────────────────────────────────────────────
+  // â”€â”€ Step 1 (voice/complaint) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [complaint, setComplaint]     = useState('');
   const [isListening, setIsListening] = useState(false);
   const recognitionRef                = useRef<any>(null);
 
-  // ── Step 2 (Dashavidha) ───────────────────────────────────────────────────
+  // â”€â”€ IoT Vitals Pod â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  const [vitals, setVitals]         = useState<VitalsPod | null>(null);
+  const [vitalsScan, setVitalsScan] = useState<'idle' | 'scanning' | 'done'>('idle');
+
+  // â”€â”€ Step 2 (Dashavidha) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [agni, setAgni]       = useState('');
   const [koshtha, setKoshtha] = useState('');
   const [painScale, setPainScale] = useState(3);
 
-  // ── Step 3 (medicines) ───────────────────────────────────────────────────
+  // â”€â”€ Step 3 (medicines) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [allopathicMeds, setAllopathicMeds] = useState<string[]>([]);
   const [ayurvedicMeds, setAyurvedicMeds]   = useState<string[]>([]);
   const [alloInput, setAlloInput]           = useState('');
@@ -768,17 +713,24 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
   const [isVoiceMeds, setIsVoiceMeds]       = useState(false);
   const voiceMedRecRef                      = useRef<any>(null);
 
-  // ── Modals ────────────────────────────────────────────────────────────────
+  // â”€â”€ Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [showAbhaModal, setShowAbhaModal] = useState(false);
   const [showSnapModal, setShowSnapModal] = useState(false);
 
-  // ── Flow control ──────────────────────────────────────────────────────────
+  // ── ABHA preview card (shown after scan/manual ABHA input) ──────────────────
+  const [abhaPreview, setAbhaPreview] = useState<AbhaQrScanResult | null>(null);
+  const [abhaIdInput, setAbhaIdInput] = useState('');
+  // Allergies & chronic conditions fetched from ABHA card
+  const [fetchedAllergies, setFetchedAllergies] = useState<string[]>([]);
+  const [fetchedChronicConditions, setFetchedChronicConditions] = useState<string[]>([]);
+
+  // â”€â”€ Flow control â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [step, setStep]     = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError]   = useState('');
   const [result, setResult] = useState<IntakeResponse | null>(null);
 
-  // ── Auto-reset countdown (15 s after token generation) ───────────────────
+  // â”€â”€ Auto-reset countdown (15 s after token generation) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [countdown, setCountdown] = useState<number | null>(null);
   const countdownRef  = useRef<ReturnType<typeof setInterval> | null>(null);
   const resetKioskRef = useRef<() => void>(() => {});
@@ -819,7 +771,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
 
   const interactionWarnings = previewInteractions(allopathicMeds, ayurvedicMeds);
 
-  // ── Voice complaint ───────────────────────────────────────────────────────
+  // â”€â”€ Voice complaint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const startListening = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -844,7 +796,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     setIsListening(false);
   }, []);
 
-  // ── Voice medicines ───────────────────────────────────────────────────────
+  // â”€â”€ Voice medicines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const startVoiceMeds = useCallback(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -890,7 +842,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     setIsVoiceMeds(false);
   }, []);
 
-  // ── Medicine toggles ──────────────────────────────────────────────────────
+  // â”€â”€ Medicine toggles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const toggleAllopathic = (med: string) =>
     setAllopathicMeds((p) => p.includes(med) ? p.filter((m) => m !== med) : [...p, med]);
@@ -908,16 +860,48 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     setAyurInput('');
   };
 
-  // ── ABHA QR callback ─────────────────────────────────────────────────────
+  // â”€â”€ ABHA QR callback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  const handleAbhaScan = (name: string, ageVal: string, id: string) => {
-    if (name) setPatientName(name);
-    if (ageVal) setAge(ageVal);
-    if (id) { setAbhaId(id); setPatientId(id); }
+  const handleAbhaScan = (result: AbhaQrScanResult) => {
+    // Show the ABHA Preview Card first — user must confirm before data fills
+    setAbhaPreview(result);
     setShowAbhaModal(false);
   };
 
-  // ── OCR callback ──────────────────────────────────────────────────────────
+  /** Called when user taps "Confirm Details" on the ABHA preview card */
+  const handleAbhaConfirm = () => {
+    if (!abhaPreview) return;
+    const result = abhaPreview;
+    if (result.name)   setPatientName(result.name);
+    if (result.age)    setAge(result.age);
+    if (result.abhaId) { setAbhaId(result.abhaId); setPatientId(result.abhaId); }
+    if (result.gender) setGender(result.gender.toLowerCase());
+    if (result.allergies)          setFetchedAllergies(result.allergies);
+    if (result.chronicConditions)  setFetchedChronicConditions(result.chronicConditions);
+    // Auto-fill medications from QR
+    if (result.currentMedications && result.currentMedications.length > 0) {
+      result.currentMedications.forEach(med => {
+        setAllopathicMeds(prev => prev.includes(med) ? prev : [...prev, med]);
+      });
+    }
+    setAbhaPreview(null);
+    setAbhaIdInput('');
+  };
+
+  /** Try to parse a manually-typed ABHA number and show a synthetic preview */
+  const handleAbhaIdLookup = () => {
+    const id = abhaIdInput.trim();
+    if (!id) return;
+    // Simulate a lightweight lookup — in production this would call ABDM sandbox
+    const syntheticResult: AbhaQrScanResult = {
+      abhaId: id,
+      name: '',
+      age: '',
+    };
+    setAbhaPreview(syntheticResult);
+  };
+
+  // â”€â”€ OCR callback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleOcrDrugs = (drugs: string[]) => {
     drugs.forEach(d => {
@@ -927,7 +911,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     setShowSnapModal(false);
   };
 
-  // ── Submit ────────────────────────────────────────────────────────────────
+  // â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const handleSubmit = async () => {
     if (!patientName.trim()) { setError('Patient name is required.'); return; }
@@ -935,10 +919,19 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     setLoading(true);
     setError('');
     try {
+      // Resolve age: prefer typed age, fall back from age-group selector
+      const resolvedAge = age
+        ? parseInt(age, 10)
+        : ageGroup === 'child'  ? 12
+        : ageGroup === 'adult'  ? 28
+        : ageGroup === 'middle' ? 50
+        : ageGroup === 'senior' ? 68
+        : null;
+
       const body = {
         patient_id:               patientId,
         patient_name:             patientName.trim(),
-        age:                      age ? parseInt(age, 10) : null,
+        age:                      resolvedAge,
         gender:                   gender || null,
         chief_complaint_key:      selectedCategory,
         raw_symptoms:             complaint ? [complaint] : [selectedCategory],
@@ -946,9 +939,17 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
         appetite_level:           5,
         digestive_issue:          agni === 'tikshnagni' ? 8 : agni === 'mandagni' ? 6 : agni === 'vishamagni' ? 7 : 3,
         bristol_stool:            koshtha === 'krura' ? 1 : koshtha === 'mridu' ? 6 : 4,
-        vitals:                   {},
+        vitals: vitals ? {
+          bp_systolic:  vitals.bp_systolic,
+          bp_diastolic: vitals.bp_diastolic,
+          spo2:         vitals.spo2,
+          pulse:        vitals.pulse,
+          temp:         vitals.temp,
+        } : {},
         current_allopathic_drugs: allopathicMeds,
         current_herbal_remedies:  ayurvedicMeds,
+        known_allergies:          fetchedAllergies,
+        chronic_conditions:       fetchedChronicConditions,
       };
       const authToken = localStorage.getItem('token') || localStorage.getItem('access_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -975,19 +976,38 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     }
   };
 
+  const startVitalsScan = useCallback(() => {
+    setVitalsScan('scanning');
+    setTimeout(() => {
+      // Realistic simulated telemetry
+      const pod: VitalsPod = {
+        bp_systolic:  124 + Math.round((Math.random() - 0.5) * 10),
+        bp_diastolic:  82 + Math.round((Math.random() - 0.5) * 8),
+        spo2:         97 + Math.round(Math.random() * 2),
+        pulse:        76 + Math.round((Math.random() - 0.5) * 8),
+        temp:        parseFloat((98.4 + (Math.random() - 0.5) * 0.6).toFixed(1)),
+      };
+      setVitals(pod);
+      setVitalsScan('done');
+    }, 2500);
+  }, []);
+
   const resetKiosk = () => {
     clearCountdown();
-    setPatientName(''); setAge(''); setGender(''); setAbhaId('');
+    setPatientName(''); setAge(''); setGender(''); setAgeGroup(''); setAbhaId('');
     setPatientId(`PT-${Date.now()}`); setSelectedCategory('');
     setComplaint(''); setIsListening(false);
     setAgni(''); setKoshtha(''); setPainScale(3);
+    setVitals(null); setVitalsScan('idle');
     setAllopathicMeds([]); setAyurvedicMeds([]);
     setAlloInput(''); setAyurInput('');
+    setAbhaPreview(null); setAbhaIdInput('');
+    setFetchedAllergies([]); setFetchedChronicConditions([]);
     setStep(0); setResult(null); setError('');
   };
   resetKioskRef.current = resetKiosk;
 
-  // ─── Theme helpers ────────────────────────────────────────────────────────
+  // â”€â”€â”€ Theme helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const th = {
     screen:    dark ? 'bg-slate-950 text-white'        : 'bg-slate-100 text-slate-900',
@@ -1030,37 +1050,164 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     errorCard: dark ? 'bg-red-900/30 border-red-500/60 text-red-300' : 'bg-red-50 border-red-300 text-red-700',
   };
 
-  // ─── Step renderers ────────────────────────────────────────────────────────
+  // --- Step renderers -------------------------------------------------------
 
-  const renderStep0 = () => (
-    <div className="space-y-7">
-      <div>
-        <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${th.stepLabel}`}>Step 1 of 4</p>
-        <h2 className={`text-2xl font-extrabold ${th.heading}`}>{L.patientName}</h2>
-        <p className={`text-sm mt-0.5 ${th.subtext}`}>मरीज़ की जानकारी दर्ज करें</p>
-      </div>
+  const renderStep0 = () => {
+    const isHindi = langCode === 'hi-IN' || langCode === 'pa-IN';
+    const AGE_GROUPS: Array<{ id: string; label: string; labelHi: string; icon: React.ReactNode; desc: string; descHi: string }> = [
+      { id: 'child',  label: '<18',   labelHi: '<18',   icon: <Baby className="w-5 h-5" />,           desc: 'Child',  descHi: '\u092C\u091A\u094D\u091A\u093E'     },
+      { id: 'adult',  label: '18-40', labelHi: '18-40', icon: <User className="w-5 h-5" />,           desc: 'Adult',  descHi: '\u092F\u0941\u0935\u093E'           },
+      { id: 'middle', label: '40-60', labelHi: '40-60', icon: <UserCheck className="w-5 h-5" />,      desc: 'Middle', descHi: '\u092A\u094D\u0930\u094C\u0922\u093C' },
+      { id: 'senior', label: '60+',   labelHi: '60+',   icon: <HeartHandshake className="w-5 h-5" />, desc: 'Senior', descHi: '\u0935\u0930\u093F\u0937\u094D\u0920' },
+    ];
+    const GENDERS: Array<{ id: string; label: string; icon: React.ReactNode }> = [
+      { id: 'male',   label: L.male,   icon: <User className="w-5 h-5" /> },
+      { id: 'female', label: L.female, icon: <User className="w-5 h-5" /> },
+      { id: 'other',  label: L.other,  icon: <User className="w-5 h-5" /> },
+    ];
+    return (
+      <div className="space-y-6">
+        <div>
+          <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${th.stepLabel}`}>Step 1 of 4 - Demographics &amp; Complaint</p>
+          <h2 className={`text-2xl font-extrabold ${th.heading}`}>{L.patientName}</h2>
+          <p className={`text-sm mt-0.5 ${th.subtext}`}>Patient Details - Enter basic demographic info or scan ABHA card</p>
+        </div>
 
-      {/* ABHA QR quick actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setShowAbhaModal(true)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
-            dark ? 'border-emerald-600 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50'
-                 : 'border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-          }`}
-        >
-          <QrCode className="w-3.5 h-3.5" /> {L.scanAbha}
-        </button>
-        {abhaId && (
-          <span className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs ${dark ? 'bg-emerald-900/40 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}>
-            <CheckCircle2 className="w-3 h-3" /> ABHA: {abhaId.slice(0, 14)}…
-          </span>
+        {/* ABHA ID Entry & QR Scan Row */}
+        <div className={`rounded-2xl border-2 border-dashed p-3 space-y-2 ${
+          abhaId
+            ? (dark ? 'border-emerald-500 bg-emerald-900/20' : 'border-emerald-400 bg-emerald-50')
+            : (dark ? 'border-slate-600 bg-slate-800/50' : 'border-slate-300 bg-slate-50')
+        }`}>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAbhaModal(true)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all shrink-0 ${
+                dark ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              }`}
+            >
+              <QrCode className="w-4 h-4" /> {L.scanAbha}
+            </button>
+            <div className="flex flex-1 gap-1.5">
+              <input
+                type="text"
+                value={abhaIdInput}
+                onChange={(e) => setAbhaIdInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAbhaIdLookup()}
+                placeholder="Enter ABHA ID manually (e.g. 91-4521-8890-1204)"
+                className={`flex-1 px-3 py-2 rounded-xl border text-xs focus:outline-none focus:ring-2 ${th.input}`}
+              />
+              <button
+                onClick={handleAbhaIdLookup}
+                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                  dark ? 'bg-slate-700 hover:bg-slate-600 text-emerald-300 border border-slate-600' : 'bg-white hover:bg-slate-50 text-emerald-700 border border-slate-300'
+                }`}
+              >
+                Fetch
+              </button>
+            </div>
+          </div>
+          {abhaId && (
+            <span className={`flex items-center gap-1.5 text-xs font-semibold ${dark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+              <CheckCircle2 className="w-3.5 h-3.5" /> ABHA Verified: {abhaId}
+            </span>
+          )}
+        </div>
+
+        {/* ABHA Profile Preview Card */}
+        {abhaPreview && (
+          <div className={`rounded-2xl border-2 p-4 space-y-3 animate-fade-in ${
+            dark ? 'border-emerald-500 bg-emerald-950/40' : 'border-emerald-400 bg-emerald-50'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className={`w-5 h-5 ${dark ? 'text-emerald-400' : 'text-emerald-600'}`} />
+                <span className={`font-extrabold text-sm ${dark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                  ABHA Profile Verified
+                </span>
+              </div>
+              <button
+                onClick={() => setAbhaPreview(null)}
+                className={`text-xs ${dark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Dismiss
+              </button>
+            </div>
+
+            {/* Patient info grid */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+              {abhaPreview.name && (
+                <div>
+                  <span className={`font-semibold uppercase tracking-wider text-[10px] ${th.label}`}>Name</span>
+                  <p className={`font-bold ${th.heading}`}>{abhaPreview.name}</p>
+                </div>
+              )}
+              <div>
+                <span className={`font-semibold uppercase tracking-wider text-[10px] ${th.label}`}>ABHA ID</span>
+                <p className={`font-mono font-bold text-emerald-600 dark:text-emerald-300`}>{abhaPreview.abhaId}</p>
+              </div>
+              {abhaPreview.age && (
+                <div>
+                  <span className={`font-semibold uppercase tracking-wider text-[10px] ${th.label}`}>Age</span>
+                  <p className={`font-bold ${th.heading}`}>{abhaPreview.age} yrs</p>
+                </div>
+              )}
+              {abhaPreview.gender && (
+                <div>
+                  <span className={`font-semibold uppercase tracking-wider text-[10px] ${th.label}`}>Gender</span>
+                  <p className={`font-bold capitalize ${th.heading}`}>{abhaPreview.gender}</p>
+                </div>
+              )}
+              {abhaPreview.bloodGroup && (
+                <div>
+                  <span className={`font-semibold uppercase tracking-wider text-[10px] ${th.label}`}>Blood Group</span>
+                  <p className={`font-bold ${th.heading}`}>{abhaPreview.bloodGroup}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Allergies badges */}
+            {abhaPreview.allergies && abhaPreview.allergies.length > 0 && (
+              <div>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${th.label}`}>Known Allergies</span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {abhaPreview.allergies.map((a) => (
+                    <span key={a} className="bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-red-200 dark:border-red-700">
+                      {a}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Chronic conditions badges */}
+            {abhaPreview.chronicConditions && abhaPreview.chronicConditions.length > 0 && (
+              <div>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${th.label}`}>Chronic Conditions</span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {abhaPreview.chronicConditions.map((c) => (
+                    <span key={c} className="bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-700">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Confirm button */}
+            <button
+              onClick={handleAbhaConfirm}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                dark ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" /> Confirm Details &amp; Auto-Fill
+            </button>
+          </div>
         )}
-      </div>
 
-      {/* Name / age / gender */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="col-span-2">
+        {/* Patient name */}
+        <div>
           <label className={`text-xs font-semibold uppercase tracking-wider block mb-1.5 ${th.label}`}>
             <User className="inline w-3.5 h-3.5 mr-1" />{L.patientName} *
           </label>
@@ -1072,86 +1219,169 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
             className={`w-full px-4 py-3 rounded-xl border text-base focus:outline-none focus:ring-2 ${th.input}`}
           />
         </div>
-        <div>
-          <label className={`text-xs font-semibold uppercase tracking-wider block mb-1.5 ${th.label}`}>{L.age}</label>
-          <input
-            type="number" value={age} onChange={(e) => setAge(e.target.value)}
-            placeholder="e.g. 45"
-            className={`w-full px-4 py-3 rounded-xl border text-base focus:outline-none focus:ring-2 ${th.input}`}
-          />
-        </div>
-        <div>
-          <label className={`text-xs font-semibold uppercase tracking-wider block mb-1.5 ${th.label}`}>{L.gender}</label>
-          <select
-            value={gender} onChange={(e) => setGender(e.target.value)}
-            className={`w-full px-4 py-3 rounded-xl border text-base focus:outline-none focus:ring-2 ${th.select}`}
-          >
-            <option value="">{L.selectGender}</option>
-            <option value="male">{L.male}</option>
-            <option value="female">{L.female}</option>
-            <option value="other">{L.other}</option>
-          </select>
-        </div>
-      </div>
 
-      {/* Category cards — dynamically localized */}
-      <div>
-        <label className={`text-xs font-semibold uppercase tracking-wider block mb-3 ${th.label}`}>
-          Chief Complaint — Quick Tap *
-        </label>
-        <div className="grid grid-cols-5 gap-2 sm:gap-3">
-          {complaintCategories.map((cat) => {
-            const isSelected = selectedCategory === cat.complaint;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.complaint)}
-                className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${
-                  isSelected
-                    ? (dark ? 'border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400'
-                             : 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 shadow-sm')
-                    : (dark ? 'border-slate-600 bg-slate-800 hover:border-emerald-600'
-                             : 'border-slate-200 bg-white hover:border-emerald-400 shadow-sm')
-                }`}
-              >
-                <span className="text-3xl">{cat.emoji}</span>
-                <span className={`text-xs font-bold leading-tight text-center ${dark ? 'text-white' : 'text-slate-800'}`}>{cat.label}</span>
-                <span className={`text-[10px] leading-tight text-center ${th.subtext}`}>{cat.sub}</span>
-              </button>
-            );
-          })}
+        {/* Age group 1-tap */}
+        <div>
+          <label className={`text-xs font-semibold uppercase tracking-wider block mb-2 ${th.label}`}>
+            {L.age} - 1-Tap Group *
+          </label>
+          <div className="grid grid-cols-4 gap-2">
+            {AGE_GROUPS.map((ag) => {
+              const sel = ageGroup === ag.id;
+              return (
+                <button
+                  key={ag.id}
+                  onClick={() => { setAgeGroup(ag.id); setAge(''); }}
+                  className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-2xl border-2 text-center transition-all ${
+                    sel
+                      ? (dark ? 'border-blue-400 bg-blue-900/40 ring-2 ring-blue-400' : 'border-blue-500 bg-blue-50 ring-2 ring-blue-400')
+                      : (dark ? 'border-slate-600 bg-slate-800 hover:border-blue-500' : 'border-slate-200 bg-white hover:border-blue-400 shadow-sm')
+                  }`}
+                >
+                  <span className={sel ? (dark ? 'text-blue-300' : 'text-blue-700') : (dark ? 'text-slate-300' : 'text-slate-500')}>
+                    {ag.icon}
+                  </span>
+                  <span className={`text-xs font-black ${sel ? (dark ? 'text-blue-300' : 'text-blue-700') : (dark ? 'text-white' : 'text-slate-800')}`}>{ag.label}</span>
+                  <span className={`text-[10px] ${th.subtext}`}>{isHindi ? ag.descHi : ag.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+          {/* Optional precise age override */}
+          <div className="mt-2 flex items-center gap-2">
+            <input
+              type="number" value={age} onChange={(e) => { setAge(e.target.value); setAgeGroup(''); }}
+              placeholder="Or type exact age..."
+              className={`flex-1 px-3 py-2 rounded-xl border text-sm focus:outline-none focus:ring-2 ${th.input}`}
+            />
+          </div>
+        </div>
+
+        {/* Gender icon buttons */}
+        <div>
+          <label className={`text-xs font-semibold uppercase tracking-wider block mb-2 ${th.label}`}>{L.gender}</label>
+          <div className="flex gap-3">
+            {GENDERS.map((g) => {
+              const sel = gender === g.id;
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => setGender(g.id)}
+                  className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-2xl border-2 transition-all ${
+                    sel
+                      ? (dark ? 'border-purple-400 bg-purple-900/40 ring-2 ring-purple-400' : 'border-purple-500 bg-purple-50 ring-2 ring-purple-400')
+                      : (dark ? 'border-slate-600 bg-slate-800 hover:border-purple-500' : 'border-slate-200 bg-white hover:border-purple-400 shadow-sm')
+                  }`}
+                >
+                  <span className={sel ? (dark ? 'text-purple-300' : 'text-purple-700') : (dark ? 'text-slate-300' : 'text-slate-500')}>
+                    {g.icon}
+                  </span>
+                  <span className={`text-xs font-bold ${sel ? (dark ? 'text-purple-300' : 'text-purple-700') : (dark ? 'text-white' : 'text-slate-700')}`}>{g.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Primary Health Concern — 6 Clinical Categories */}
+        <div>
+          <label className={`text-xs font-semibold uppercase tracking-wider block mb-1 ${th.label}`}>
+            Primary Health Concern / <span className="normal-case">\u092E\u0941\u0916\u094D\u092F \u0938\u094D\u0935\u093E\u0938\u094D\u0925\u094D\u092F \u0938\u092E\u0938\u094D\u092F\u093E</span> *
+          </label>
+          <div className="grid grid-cols-3 gap-2 mt-2">
+            {([
+              { id: 'fever',     icon: <Thermometer className="w-5 h-5 text-amber-500" />,  labelEn: 'Fever & Weakness',        labelHi: '\u092C\u0941\u0916\u093E\u0930 / \u0915\u092E\u091C\u093C\u094B\u0930\u0940',                complaint: 'fever'        },
+              { id: 'cough',     icon: <Wind         className="w-5 h-5 text-cyan-500" />,   labelEn: 'Cough & Cold',            labelHi: '\u0916\u093E\u0902\u0938\u0940 / \u091C\u0941\u0915\u093E\u092E / \u0938\u093E\u0902\u0938',    complaint: 'cough'        },
+              { id: 'stomach',   icon: <Activity     className="w-5 h-5 text-rose-500" />,   labelEn: 'Stomach & Digestion',     labelHi: '\u092A\u0947\u091F \u0926\u0930\u094D\u0926 / \u090F\u0938\u093F\u0921\u093F\u091F\u0940 / \u0909\u0932\u094D\u091F\u0940 / \u0926\u0938\u094D\u0924', complaint: 'stomach_pain' },
+              { id: 'joints',    icon: <Bone         className="w-5 h-5 text-indigo-500" />, labelEn: 'Joints & Muscle',         labelHi: '\u091C\u094B\u0921\u093C\u094B\u0902 \u0915\u093E \u0926\u0930\u094D\u0926 / \u0917\u0920\u093F\u092F\u093E',                  complaint: 'joint_pain'   },
+              { id: 'bp_sugar',  icon: <HeartPulse   className="w-5 h-5 text-red-500" />,    labelEn: 'Blood Pressure & Sugar',  labelHi: '\u092C\u0940\u092A\u0940 / \u0936\u0941\u0917\u0930 / \u091A\u0915\u094D\u0915\u0930',             complaint: 'hypertension' },
+              { id: 'skin',      icon: <Sparkles     className="w-5 h-5 text-emerald-500" />,labelEn: 'Skin & Allergy',          labelHi: '\u0916\u0941\u091C\u0932\u0940 / \u0926\u093E\u0928\u0947 / \u0938\u094D\u0915\u093F\u0928 \u090F\u0932\u0930\u094D\u091C\u0940',   complaint: 'skin_allergy' },
+            ] as Array<{ id: string; icon: React.ReactNode; labelEn: string; labelHi: string; complaint: string }>).map((cat) => {
+              const isSelected = selectedCategory === cat.complaint;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.complaint)}
+                  className={`flex flex-col items-center gap-2 py-4 px-2 rounded-2xl border-2 transition-all ${
+                    isSelected
+                      ? (dark ? 'border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400 scale-105' : 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 scale-105 shadow-md')
+                      : (dark ? 'border-slate-600 bg-slate-800 hover:border-emerald-600' : 'border-slate-200 bg-white hover:border-emerald-400 shadow-sm')
+                  }`}
+                >
+                  {cat.icon}
+                  <span className={`text-[11px] font-bold leading-tight text-center ${dark ? 'text-white' : 'text-slate-800'}`}>
+                    {isHindi ? cat.labelHi : cat.labelEn}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {selectedCategory && (
+            <p className={`mt-2 text-xs font-medium flex items-center gap-1.5 ${dark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Chief complaint selected: <span className="font-bold capitalize">{selectedCategory.replace(/_/g,' ')}</span>
+            </p>
+          )}
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStep1 = () => (
     <div className="space-y-6">
       <div>
         <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${th.stepLabel}`}>Step 2 of 4</p>
         <h2 className={`text-2xl font-extrabold ${th.heading}`}>{L.complaint}</h2>
-        <p className={`text-sm mt-0.5 ${th.subtext}`}>मुख्य शिकायत बताएं — speak or type</p>
+        <p className={`text-sm mt-0.5 ${th.subtext}`}>{'मुख्य शिकायत बताएं'} &mdash; speak or type</p>
       </div>
 
-      {/* Big mic button */}
-      <div className="flex flex-col items-center gap-4 py-3">
-        <button
-          onClick={isListening ? stopListening : startListening}
-          className={`w-32 h-32 rounded-full flex flex-col items-center justify-center gap-2 border-4 transition-all shadow-xl font-bold text-sm ${
-            isListening
-              ? 'border-red-500 bg-red-900/40 text-red-300 animate-pulse shadow-red-500/30'
-              : (dark
-                  ? 'border-emerald-500 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50 shadow-emerald-500/20'
-                  : 'border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 shadow-emerald-200')
-          }`}
-        >
-          {isListening ? <MicOff className="w-12 h-12" /> : <Mic className="w-12 h-12" />}
-          <span className="text-xs">{isListening ? L.stop : L.speak}</span>
-        </button>
+      {/* â”€â”€ Hero Voice Orb â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      <div className={`rounded-3xl border-2 p-5 flex flex-col items-center gap-4 ${
+        isListening
+          ? (dark ? 'border-red-500 bg-red-950/40' : 'border-red-400 bg-red-50')
+          : (dark ? 'border-emerald-600/60 bg-emerald-950/30' : 'border-emerald-300 bg-emerald-50/60')
+      }`}>
+        {/* Multi-ring pulsing orb */}
+        <div className="relative flex items-center justify-center">
+          {/* Outer pulse ring */}
+          {isListening && (
+            <>
+              <span className="absolute w-44 h-44 rounded-full bg-red-500/10 animate-ping" style={{ animationDuration: '1.2s' }} />
+              <span className="absolute w-36 h-36 rounded-full bg-red-500/15 animate-ping" style={{ animationDuration: '0.9s', animationDelay: '0.2s' }} />
+            </>
+          )}
+          {!isListening && (
+            <>
+              <span className="absolute w-44 h-44 rounded-full bg-emerald-500/10 animate-ping" style={{ animationDuration: '2s' }} />
+              <span className="absolute w-36 h-36 rounded-full bg-emerald-500/10 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.5s' }} />
+            </>
+          )}
+          {/* Core orb button */}
+          <button
+            onClick={isListening ? stopListening : startListening}
+            className={`relative w-28 h-28 rounded-full flex flex-col items-center justify-center gap-2 border-4 transition-all shadow-2xl z-10 ${
+              isListening
+                ? 'border-red-400 bg-red-600 text-white shadow-red-500/50'
+                : (dark
+                    ? 'border-emerald-400 bg-emerald-700 text-white hover:bg-emerald-600 shadow-emerald-500/30'
+                    : 'border-emerald-500 bg-emerald-600 text-white hover:bg-emerald-500 shadow-emerald-300')
+            }`}
+          >
+            {isListening ? <MicOff className="w-10 h-10" /> : <Mic className="w-10 h-10" />}
+            <span className="text-[11px] font-bold">{isListening ? L.stop : L.speak}</span>
+          </button>
+        </div>
+        <div className="text-center space-y-1">
+          <p className={`font-bold text-sm ${dark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+            {isListening ? 'Listening... speak clearly' : 'Tap & Speak Symptoms in Any Language'}
+          </p>
+          <p className={`text-xs ${th.subtext}`}>Hindi - Punjabi - English - Bengali - Tamil - Telugu - ...</p>
+        </div>
+        {/* Live waveform */}
         {isListening && (
           <div className="flex gap-1 items-end h-8">
-            {[4, 7, 5, 9, 6, 8, 4, 6, 9].map((h, i) => (
-              <div key={i} className="w-1.5 bg-red-400 rounded-full animate-bounce" style={{ height: `${h * 3}px`, animationDelay: `${i * 80}ms` }} />
+            {[4, 7, 5, 9, 6, 8, 4, 6, 9, 5, 7].map((h, i) => (
+              <div key={i} className="w-1.5 bg-red-400 rounded-full animate-bounce" style={{ height: `${h * 3}px`, animationDelay: `${i * 70}ms` }} />
             ))}
           </div>
         )}
@@ -1181,8 +1411,126 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     <div className="space-y-7">
       <div>
         <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${th.stepLabel}`}>Step 3 of 4</p>
-        <h2 className={`text-2xl font-extrabold ${th.heading}`}>Dashavidha Assessment</h2>
-        <p className={`text-sm mt-0.5 ${th.subtext}`}>पाचन व दर्द — Pictorial Ayurvedic Parameters</p>
+        <h2 className={`text-2xl font-extrabold ${th.heading}`}>Vital Sense Pod + Dashavidha</h2>
+        <p className={`text-sm mt-0.5 ${th.subtext}`}>IoT Vitals + Digestion &amp; Pain - Pictorial Ayurvedic Parameters</p>
+      </div>
+
+      {/* Vital Sense Pod Simulator */}
+      <div className={`rounded-3xl border-2 overflow-hidden ${
+        vitalsScan === 'done'
+          ? (dark ? 'border-emerald-500 bg-emerald-950/30' : 'border-emerald-400 bg-emerald-50/60')
+          : vitalsScan === 'scanning'
+            ? (dark ? 'border-cyan-500 bg-cyan-950/30' : 'border-cyan-400 bg-cyan-50')
+            : (dark ? 'border-slate-600 bg-slate-800/50' : 'border-slate-300 bg-slate-50')
+      }`}>
+        {/* Pod header */}
+        <div className={`px-4 py-2.5 flex items-center justify-between ${
+          dark ? 'bg-slate-900/60 border-b border-slate-700' : 'bg-white/70 border-b border-slate-200'
+        }`}>
+          <div className="flex items-center gap-2">
+            <div className={`w-2.5 h-2.5 rounded-full ${vitalsScan === 'scanning' ? 'bg-cyan-400 animate-pulse' : vitalsScan === 'done' ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+            <span className={`text-xs font-extrabold uppercase tracking-wider ${dark ? 'text-white' : 'text-slate-800'}`}>
+                Vital Sense Pod
+              </span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+              vitalsScan === 'done' ? (dark ? 'bg-emerald-800 text-emerald-200' : 'bg-emerald-100 text-emerald-700')
+              : vitalsScan === 'scanning' ? (dark ? 'bg-cyan-900 text-cyan-300 animate-pulse' : 'bg-cyan-100 text-cyan-700 animate-pulse')
+              : (dark ? 'bg-slate-700 text-slate-400' : 'bg-slate-100 text-slate-500')
+            }`}>
+              {vitalsScan === 'done' ? <><CheckCircle2 className="inline w-3 h-3 mr-0.5" /> SCAN COMPLETE</> : vitalsScan === 'scanning' ? 'SCANNING\u2026' : 'READY'}
+            </span>
+          </div>
+          {vitalsScan !== 'scanning' && (
+            <button
+              onClick={startVitalsScan}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                vitalsScan === 'done'
+                  ? (dark ? 'border border-emerald-600 bg-emerald-900/30 text-emerald-300 hover:bg-emerald-900/50' : 'border border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100')
+                  : (dark ? 'bg-cyan-700 hover:bg-cyan-600 text-white' : 'bg-cyan-600 hover:bg-cyan-500 text-white')
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              {vitalsScan === 'done' ? 'Re-Scan' : 'Start Scan'}
+            </button>
+          )}
+        </div>
+
+        {/* Pod body */}
+        <div className="p-4">
+          {vitalsScan === 'idle' && (
+            <div className="flex flex-col items-center gap-3 py-4">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${dark ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                <Heart className={`w-7 h-7 ${dark ? 'text-slate-500' : 'text-slate-400'}`} />
+              </div>
+              <p className={`text-sm font-semibold ${th.subtext}`}>Place finger on sensor pad, then tap Start Scan</p>
+              <p className={`text-xs ${th.subtext}`}>Measures: BP · SpO₂ · Pulse · Temperature</p>
+            </div>
+          )}
+
+          {vitalsScan === 'scanning' && (
+            <div className="flex flex-col items-center gap-4 py-4">
+              {/* Animated ECG waveform */}
+              <div className="flex gap-0.5 items-end h-12 w-full max-w-xs">
+                {[2,2,2,2,2,8,12,4,2,10,2,2,2,2,2,8,12,4,2,2].map((h, i) => (
+                  <div key={i} className="flex-1 bg-cyan-400 rounded-sm transition-all animate-pulse"
+                    style={{ height: `${h * 4}px`, animationDelay: `${i * 60}ms`, animationDuration: '0.8s' }} />
+                ))}
+              </div>
+              <p className={`text-sm font-bold ${dark ? 'text-cyan-300' : 'text-cyan-700'}`}>Reading biometric signals... 2.5s</p>
+              <div className="flex gap-4 text-center">
+                {['BP','SpOâ‚‚','Pulse','Temp'].map((v) => (
+                  <div key={v} className={`rounded-xl px-3 py-2 min-w-[52px] ${dark ? 'bg-slate-800' : 'bg-white border border-slate-200'}`}>
+                    <p className={`text-[9px] uppercase font-bold ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{v}</p>
+                    <p className={`text-base font-black animate-pulse ${dark ? 'text-cyan-300' : 'text-cyan-600'}`}>--</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {vitalsScan === 'done' && vitals && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                {/* BP */}
+                <div className={`rounded-xl border p-3 ${dark ? 'border-emerald-700/50 bg-slate-900' : 'border-emerald-300 bg-white'}`}>
+                  <p className={`text-[9px] uppercase font-bold mb-0.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>Blood Pressure</p>
+                  <p className={`text-xl font-black tabular-nums ${dark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                    {vitals.bp_systolic}/{vitals.bp_diastolic}
+                    <span className="text-xs font-normal ml-1 text-slate-500">mmHg</span>
+                  </p>
+                  <p className={`text-[10px] font-bold mt-0.5 ${dark ? 'text-emerald-400' : 'text-emerald-600'}`}>Normal</p>
+                </div>
+                {/* SpO2 */}
+                <div className={`rounded-xl border p-3 ${dark ? 'border-cyan-700/50 bg-slate-900' : 'border-cyan-300 bg-white'}`}>
+                  <p className={`text-[9px] uppercase font-bold mb-0.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>SpOâ‚‚</p>
+                  <p className={`text-xl font-black tabular-nums ${dark ? 'text-cyan-300' : 'text-cyan-700'}`}>
+                    {vitals.spo2}%
+                  </p>
+                  <p className={`text-[10px] font-bold mt-0.5 ${dark ? 'text-emerald-400' : 'text-emerald-600'}`}>Normal</p>
+                </div>
+                {/* Pulse */}
+                <div className={`rounded-xl border p-3 ${dark ? 'border-pink-700/50 bg-slate-900' : 'border-pink-300 bg-white'}`}>
+                  <p className={`text-[9px] uppercase font-bold mb-0.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>Pulse</p>
+                  <p className={`text-xl font-black tabular-nums ${dark ? 'text-pink-300' : 'text-pink-700'}`}>
+                    {vitals.pulse} <span className="text-xs font-normal text-slate-500">bpm</span>
+                  </p>
+                  <p className={`text-[10px] font-bold mt-0.5 ${dark ? 'text-emerald-400' : 'text-emerald-600'}`}>Normal</p>
+                </div>
+                {/* Temp */}
+                <div className={`rounded-xl border p-3 ${dark ? 'border-orange-700/50 bg-slate-900' : 'border-orange-300 bg-white'}`}>
+                  <p className={`text-[9px] uppercase font-bold mb-0.5 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>Temperature</p>
+                  <p className={`text-xl font-black tabular-nums ${dark ? 'text-orange-300' : 'text-orange-700'}`}>
+                    {vitals.temp}&deg;F
+                  </p>
+                  <p className={`text-[10px] font-bold mt-0.5 ${dark ? 'text-emerald-400' : 'text-emerald-600'}`}>Normal</p>
+                </div>
+              </div>
+              <p className={`text-xs flex items-center gap-1.5 ${dark ? 'text-emerald-400' : 'text-emerald-600'}`}>
+                <CheckCircle2 className="w-3.5 h-3.5" /> Vitals captured - will be sent to Doctor Cockpit
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Agni */}
@@ -1216,7 +1564,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
       {/* Koshtha */}
       <div>
         <p className={`text-sm font-bold mb-3 ${dark ? 'text-slate-300' : 'text-slate-700'}`}>
-          🚽 {L.koshtha}
+          {L.koshtha}
         </p>
         <div className="grid grid-cols-3 gap-3">
           {KOSHTHA_OPTIONS.map((opt) => (
@@ -1244,7 +1592,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
       <div>
         <p className={`text-sm font-bold mb-3 flex items-center gap-2 ${dark ? 'text-slate-300' : 'text-slate-700'}`}>
           <Activity className="w-4 h-4 text-emerald-500" />
-          Pain Scale (VAS) — दर्द का स्तर:{' '}
+          {"Pain Scale (VAS 1-10) — दर्द का स्तर:"}{' '}
           <span className={`ml-1 ${dark ? 'text-emerald-300' : 'text-emerald-600'}`}>{painScale} / 10</span>
         </p>
         <div className="relative px-1">
@@ -1261,7 +1609,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
             }}
           />
           <div className={`flex justify-between text-xs mt-1.5 ${th.subtext}`}>
-            <span>1 — Mild</span><span>5 — Moderate</span><span>10 — Severe</span>
+            <span>1 - Mild</span><span>5 - Moderate</span><span>10 - Severe</span>
           </div>
         </div>
         <div className={`mt-2 text-xs font-bold text-center py-1.5 rounded-lg ${
@@ -1269,7 +1617,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
           painScale >= 4 ? (dark ? 'bg-amber-900/40 text-amber-400' : 'bg-amber-50 text-amber-700') :
           (dark ? 'bg-emerald-900/40 text-emerald-400' : 'bg-emerald-50 text-emerald-700')
         }`}>
-          {painScale >= 7 ? '🔴 Severe Pain — Priority Flag' : painScale >= 4 ? '🟡 Moderate Pain' : '🟢 Mild Pain'}
+          {painScale >= 7 ? 'Severe Pain - Priority Flag' : painScale >= 4 ? 'Moderate Pain' : 'Mild Pain'}
         </div>
       </div>
     </div>
@@ -1280,7 +1628,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
       <div>
         <p className={`text-xs font-bold uppercase tracking-widest mb-1 ${th.stepLabel}`}>Step 4 of 4</p>
         <h2 className={`text-2xl font-extrabold ${th.heading}`}>{L.medicines}</h2>
-        <p className={`text-sm mt-0.5 ${th.subtext}`}>दवाइयां चुनें — enables Herb-Drug interaction check</p>
+        <p className={`text-sm mt-0.5 ${th.subtext}`}>{'दवाइयां चुनें'} &mdash; enables Herb-Drug interaction check</p>
       </div>
 
       {/* Quick intake shortcuts */}
@@ -1322,7 +1670,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
                   : (dark ? 'border-slate-600 bg-slate-800 text-slate-400 hover:border-blue-500' : 'border-slate-300 bg-white text-slate-600 hover:border-blue-400')
               }`}
             >
-              {allopathicMeds.includes(med) ? '✓ ' : ''}{med}
+              {allopathicMeds.includes(med) ? '\u2713 ' : ''}{med}
             </button>
           ))}
         </div>
@@ -1355,7 +1703,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
                   : (dark ? 'border-slate-600 bg-slate-800 text-slate-400 hover:border-emerald-500' : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400')
               }`}
             >
-              {ayurvedicMeds.includes(herb) ? '✓ ' : ''}{herb}
+              {ayurvedicMeds.includes(herb) ? '\u2713 ' : ''}{herb}
             </button>
           ))}
         </div>
@@ -1397,18 +1745,18 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
   const renderCompletion = () => {
     if (!result) return null;
     const isRed = result.red_flag;
-    // Estimated wait: red-flag → immediate, otherwise ~5 min per queue slot (simple heuristic)
-    const estWait = isRed ? 'Immediate' : '~5–15 min';
-    const cabin = result.cabin || (isRed ? 'Emergency Bay' : 'Cabin 1 – General');
+    // Estimated wait: red-flag -> immediate, otherwise ~5 min per queue slot (simple heuristic)
+    const estWait = isRed ? 'Immediate' : '~5-15 min';
+    const cabin = result.cabin || (isRed ? 'Emergency Bay' : 'Cabin 1 - General');
     return (
       <div className="space-y-5">
         {isRed && (
           <div className="p-4 rounded-xl bg-red-900/50 border-2 border-red-500 flex items-start gap-3 animate-pulse">
             <ShieldAlert className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-red-300 font-extrabold text-base">🚨 CRITICAL — Emergency Alert</p>
-              <p className="text-red-200 text-sm mt-0.5">{result.red_flag_reason || 'Red-flag symptoms detected. Immediate medical attention required.'}</p>
-            </div>
+                <p className="text-red-300 font-extrabold text-base">CRITICAL - Emergency Alert</p>
+                <p className="text-red-200 text-sm mt-0.5">{result.red_flag_reason || 'Red-flag symptoms detected. Immediate medical attention required.'}</p>
+              </div>
           </div>
         )}
 
@@ -1419,24 +1767,25 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
             <p className={`text-xs font-semibold uppercase tracking-widest mb-1 ${th.tokenSub}`}>OPD Token</p>
             <p className={`text-5xl font-black tracking-wider ${th.tokenNum(isRed)}`}>{result.token_id}</p>
             <p className={`text-xs mt-2 ${th.tokenSub}`}>
-              {isRed ? '🔴 Priority — High Urgency' : '🟢 Standard Queue'}
+              {isRed ? 'Priority - High Urgency' : 'Standard Queue'}
             </p>
           </div>
 
           {/* Cabin + Wait Time info strip */}
-          <div className={`w-full grid grid-cols-2 gap-3`}>
+          <div className="w-full grid grid-cols-2 gap-3">
             <div className={`rounded-xl border px-4 py-3 text-center ${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${th.label}`}>Assigned Cabin</p>
-              <p className={`text-sm font-extrabold ${dark ? 'text-emerald-300' : 'text-emerald-700'}`}>🏥 {cabin}</p>
+              <p className={`text-sm font-extrabold flex items-center justify-center gap-1 ${dark ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                <Hospital className="w-3.5 h-3.5" /> {cabin}
+              </p>
             </div>
             <div className={`rounded-xl border px-4 py-3 text-center ${dark ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
               <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${th.label}`}>Est. Wait Time</p>
-              <p className={`text-sm font-extrabold ${isRed ? (dark ? 'text-red-300' : 'text-red-600') : (dark ? 'text-amber-300' : 'text-amber-700')}`}>
-                ⏱ {estWait}
+              <p className={`text-sm font-extrabold flex items-center justify-center gap-1 ${isRed ? (dark ? 'text-red-300' : 'text-red-600') : (dark ? 'text-amber-300' : 'text-amber-700')}`}>
+                <Clock className="w-3.5 h-3.5" /> {estWait}
               </p>
             </div>
           </div>
-
           <p className={`text-sm text-center max-w-sm ${th.subtext}`}>
             Please proceed to the waiting area. Show this token to the reception.
           </p>
@@ -1462,13 +1811,13 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
         </button>
 
         <button onClick={resetKiosk} className={`w-full py-3 rounded-xl border font-semibold text-sm transition-colors ${th.backBtn}`}>
-          नया मरीज़ / New Patient
+          {'नया मरीज़'} / New Patient
         </button>
       </div>
     );
   };
 
-  // ── Step indicator ─────────────────────────────────────────────────────────
+  // â”€â”€ Step indicator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   const StepDots = () => (
     <div className="flex items-center justify-center gap-2 mb-6">
@@ -1494,12 +1843,12 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
     true, true, true,
   ];
 
-  // ── Render ─────────────────────────────────────────────────────────────────
+  // â”€â”€ Render â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   return (
     <div className={`min-h-screen flex flex-col transition-colors duration-200 ${th.screen}`}>
 
-      {/* ── Kiosk Top Bar ──────────────────────────────────────────────────── */}
+      {/* â”€â”€ Kiosk Top Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <header className={`shrink-0 border-b px-5 py-3 flex items-center justify-between gap-4 ${th.header}`}>
         {/* Brand */}
         <div className="flex items-center gap-2.5 min-w-0">
@@ -1508,7 +1857,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
           </div>
           <div className="flex flex-col leading-tight min-w-0">
             <span className={`font-extrabold text-sm tracking-tight truncate ${th.heading}`}>
-              {OPD_NAME} • Charak-Kiosk
+              {OPD_NAME} - Charak-Kiosk
             </span>
             <span className={`text-[10px] font-medium ${th.subtext}`}>
               AIIA PS-26047 · ICD-11 + NAMASTE · Sub-3-min workflow
@@ -1533,7 +1882,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
               <Languages className="w-3.5 h-3.5" />
               <span>{LANG_DICT[langCode].flag}</span>
               <span className="hidden sm:inline">{LANG_DICT[langCode].label}</span>
-              <span className="text-[10px] opacity-60">▼</span>
+              <span className="text-[10px] opacity-60">â–¼</span>
             </button>
 
             {showLangMenu && (
@@ -1575,7 +1924,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
         </div>
       </header>
 
-      {/* ── Main Intake Area ──────────────────────────────────────────────── */}
+      {/* â”€â”€ Main Intake Area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <main className="flex-1 overflow-y-auto pb-20">
         <div className="max-w-2xl mx-auto px-4 py-6">
           <div className={`rounded-2xl border shadow-xl p-6 ${th.card}`}>
@@ -1621,7 +1970,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
         </div>
       </main>
 
-      {/* ── Hackathon Evaluator Floating Pill ─────────────────────────────── */}
+      {/* â”€â”€ Hackathon Evaluator Floating Pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {result && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-auto">
           <a
@@ -1632,13 +1981,13 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onCockpitOpen, onRedFl
             className="flex items-center gap-2 px-5 py-2.5 bg-slate-900/90 backdrop-blur border border-emerald-600/60 text-emerald-300 text-xs font-bold rounded-full shadow-xl shadow-slate-900/50 hover:bg-slate-800 transition-all"
           >
             <Stethoscope className="w-3.5 h-3.5" />
-            👨‍⚕️ Switch to Doctor Cockpit — {result.token_id}
+            ðŸ‘¨â€âš•ï¸ Switch to Doctor Cockpit â€” {result.token_id}
             <ExternalLink className="w-3 h-3 opacity-70" />
           </a>
         </div>
       )}
 
-      {/* ── Modals ────────────────────────────────────────────────────────── */}
+      {/* â”€â”€ Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {showAbhaModal && (
         <AbhaQrModal dark={dark} onClose={() => setShowAbhaModal(false)} onScan={handleAbhaScan} />
       )}
