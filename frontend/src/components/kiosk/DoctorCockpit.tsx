@@ -1,7 +1,7 @@
 /**
  * DoctorCockpit.tsx — Sprint 3
  * Doctor Cockpit: 15-second physician triage view (AIIA PS-26047)
- * Fetches GET http://localhost:8000/api/v1/kiosk/doctor-cockpit/{token_id}
+ * Fetches GET /api/v1/kiosk/doctor-cockpit/{token_id} via configured apiClient.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -22,6 +22,7 @@ import {
   Printer,
   Heart,
 } from 'lucide-react';
+import { apiClient } from '../../services/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -79,8 +80,6 @@ interface CockpitRecord {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 function parseSoap(summary: GraniteSoap | string): GraniteSoap {
   if (typeof summary === 'object' && summary !== null) return summary;
@@ -151,13 +150,14 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
     if (!tokenId) return;
     setLoading(true);
     setError('');
-    fetch(`${API_BASE}/api/v1/kiosk/doctor-cockpit/${encodeURIComponent(tokenId)}`)
-      .then((r) => {
-        if (!r.ok) return r.json().then((e) => { throw new Error(e.detail || 'Token not found'); });
-        return r.json();
-      })
+    apiClient.get(`/kiosk/doctor-cockpit/${encodeURIComponent(tokenId)}`)
+      .then((r) => r.data)
       .then((data) => { setRecord(data); setLoading(false); })
-      .catch((e: any) => { setError(e.message || 'Failed to fetch cockpit data'); setLoading(false); });
+      .catch((e: any) => {
+        const msg = e?.response?.data?.detail || e?.message || 'Failed to fetch cockpit data';
+        setError(msg);
+        setLoading(false);
+      });
   }, [tokenId]);
 
   const copyFhir = () => {
