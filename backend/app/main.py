@@ -46,6 +46,9 @@ async def preflight_handler(rest_of_path: str):
 def init_db():
     from app.db.base import Base
     from app.db.session import engine
+    # Import every model so SQLAlchemy registers their tables on Base.metadata
+    # before create_all is called.  New models (e.g. OpdToken) must appear here.
+    import app.models  # noqa: F401 — side-effect import registers all mappers
     try:
         # Use a raw connection, rollback any stale transaction state, then create tables
         conn = engine.connect()

@@ -189,7 +189,7 @@ export const KioskPage: React.FC<KioskPageProps> = ({ initialTokenId }) => {
       {/* Panel — override normal page padding for dark-mode kiosk */}
       <div className={activeTab === 'intake' || activeTab === 'doctor' ? '-mx-4 sm:-mx-6 lg:-mx-8' : ''}>
         {activeTab === 'intake' && (
-          <CharakKiosk onCockpitOpen={handleCockpitOpen} />
+          <CharakKiosk />
         )}
         {activeTab === 'doctor' && (
           cockpitToken ? (

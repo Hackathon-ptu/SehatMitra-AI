@@ -853,9 +853,7 @@ export const HospitalHubPage: React.FC = () => {
 
         {/* ── TAB 1: Patient Desk (CharakKiosk) ─────────────────────────── */}
         {activeTab === 'patient' && (
-          <CharakKiosk
-            onCockpitOpen={(tokenId) => { setSelectedToken(tokenId); setActiveTab('doctor'); }}
-          />
+          <CharakKiosk />
         )}
 
         {/* ── TAB 2 & 3: Nurse / Doctor Desks ──────────────────────────── */}

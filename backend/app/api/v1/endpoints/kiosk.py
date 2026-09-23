@@ -10,13 +10,13 @@ Two-stage clinical state machine:
   COMPLETED          – doctor marked the encounter finished.
 
 POST /api/v1/kiosk/intake
-    Runs the full triage pipeline, caches cockpit record, and enqueues to OPD.
+    Runs the full triage pipeline, caches cockpit record, and persists to DB.
 
 GET  /api/v1/kiosk/doctor-cockpit/{token_id}
     Retrieves the cached cockpit record for the doctor dashboard.
 
 GET  /api/v1/kiosk/queue
-    Returns active OPD tokens sorted: EMERGENCY_TRIAGE first, then FIFO.
+    Returns active OPD tokens from the DB, sorted: EMERGENCY_TRIAGE first, then FIFO.
 
 POST /api/v1/kiosk/queue/{token_id}/status
     Doctor-side status transition (IN_CONSULTATION | COMPLETED).
@@ -49,6 +49,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.user import User
 from app.models.history import ConsultationHistory
+from app.models.opd_token import OpdToken
 from app.api.v1.deps import get_optional_current_user
 from app.services.ayush_ontology import AyushOntologyEngine
 from app.services.rx_safety import HerbDrugSafetyEngine
@@ -57,12 +58,9 @@ from app.services.ibm_granite import query_granite_triage, build_soap_note
 
 router = APIRouter(prefix="/kiosk", tags=["Charak Kiosk"])
 
-# ── In-memory OPD cockpit store ───────────────────────────────────────────────
+# ── In-memory OPD cockpit store (ephemeral; used only for full SOAP/FHIR record) ─
+# Queue state is now persisted to SQLite; only the richer cockpit record lives here.
 ACTIVE_COCKPIT_STORE: Dict[str, Dict[str, Any]] = {}
-
-# ── In-memory OPD Queue ───────────────────────────────────────────────────────
-# Each entry: token_id → OPDQueueEntry dict
-OPD_QUEUE: Dict[str, Dict[str, Any]] = {}
 
 
 # ── Token helper ─────────────────────────────────────────────────────────────
@@ -123,6 +121,25 @@ _ontology_engine = AyushOntologyEngine()
 _fhir_builder = FhirR4BundleBuilder()
 
 
+# ── Helper: convert OpdToken ORM row → queue entry dict ──────────────────────
+
+def _token_to_dict(tok: OpdToken) -> Dict[str, Any]:
+    return {
+        "token_id":        tok.token_id,
+        "patient_name":    tok.patient_name,
+        "age":             tok.age,
+        "gender":          tok.gender,
+        "chief_complaint": tok.chief_complaint,
+        "pain_scale":      tok.pain_scale,
+        "red_flag":        tok.red_flag,
+        "red_flag_reason": tok.red_flag_reason,
+        "status":          tok.status,
+        "cabin":           tok.assigned_cabin,
+        "created_at":      tok.created_at.isoformat() if tok.created_at else None,
+        "vitals":          tok.vitals or {},
+    }
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/intake")
@@ -138,15 +155,16 @@ def kiosk_intake(
     3. Token generation.
     4. FHIR R4 Bundle construction.
     5. IBM Granite triage summary (15-second SOAP card).
-    6. Cache cockpit record.
+    6. Cache cockpit record (in-memory for rich data).
+    7. Persist queue entry to SQLite so all instances share state.
     """
     # Step 1: AYUSH Ontology Engine
     vitals_dict: Dict[str, Any] = {
-        "bp_systolic": payload.vitals.systolic,
+        "bp_systolic":  payload.vitals.systolic,
         "bp_diastolic": payload.vitals.diastolic,
-        "pulse": payload.vitals.pulse,
-        "spo2": payload.vitals.spo2,
-        "temp": payload.vitals.temp,
+        "pulse":        payload.vitals.pulse,
+        "spo2":         payload.vitals.spo2,
+        "temp":         payload.vitals.temp,
     }
     ontology_result = _ontology_engine.process_intake(
         complaint_key=payload.chief_complaint_key,
@@ -210,28 +228,28 @@ def kiosk_intake(
 
     # Step 6: Cache cockpit record (includes all CDSS fields for the bento grid)
     cockpit_record: Dict[str, Any] = {
-        "token_id": token_id,
-        "patient_id": payload.patient_id,
-        "patient_name": payload.patient_name,
-        "age": payload.age,
-        "gender": payload.gender,
-        "chief_complaint_key": payload.chief_complaint_key,
-        "raw_symptoms": payload.raw_symptoms,
-        "pain_scale": payload.pain_scale,
-        "stress_level": payload.stress_level,
-        "vitals": vitals_dict,
-        "ontology": ontology_result.model_dump(),
+        "token_id":             token_id,
+        "patient_id":           payload.patient_id,
+        "patient_name":         payload.patient_name,
+        "age":                  payload.age,
+        "gender":               payload.gender,
+        "chief_complaint_key":  payload.chief_complaint_key,
+        "raw_symptoms":         payload.raw_symptoms,
+        "pain_scale":           payload.pain_scale,
+        "stress_level":         payload.stress_level,
+        "vitals":               vitals_dict,
+        "ontology":             ontology_result.model_dump(),
         "interaction_warnings": [w.model_dump() for w in interaction_warnings],
-        "fhir_bundle": fhir_bundle,
+        "fhir_bundle":          fhir_bundle,
         # SOAP note always in Clinical English
         "granite_triage_summary": granite_soap,
         # CDSS treatment fields (surfaced directly in the bento grid)
-        "differentials": ontology_result.differentials,
-        "rx_allopathic": ontology_result.rx_allopathic,
-        "rx_ayush": ontology_result.rx_ayush,
+        "differentials":  ontology_result.differentials,
+        "rx_allopathic":  ontology_result.rx_allopathic,
+        "rx_ayush":       ontology_result.rx_ayush,
         # Interlingua / bilingual bridge fields
-        "intake_language": payload.intake_language,
-        "vernacular_text": payload.vernacular_transcript or "",
+        "intake_language":  payload.intake_language,
+        "vernacular_text":  payload.vernacular_transcript or "",
     }
     ACTIVE_COCKPIT_STORE[token_id] = cockpit_record
 
@@ -247,7 +265,7 @@ def kiosk_intake(
             )
             convo = [
                 {"sender": "user", "text": f"Kiosk intake: {payload.chief_complaint_key}"},
-                {"sender": "ai", "text": granite_summary or summary_text},
+                {"sender": "ai",   "text": granite_summary or summary_text},
             ]
             history_entry = ConsultationHistory(
                 user_id=current_user.id,
@@ -264,8 +282,7 @@ def kiosk_intake(
             db.rollback()
             print(f"[kiosk endpoint] Failed to save triage to history: {db_err}")
 
-    # Step 7: Enqueue to OPD queue
-    # Assign a default cabin from complaint key; nurse can override via /nurse-verify.
+    # Step 7: Assign default cabin and initial status.
     _CABIN_MAP = {
         "stomach_pain": "Cabin 2 - Gastro",
         "joint_pain":   "Cabin 3 - Ortho",
@@ -273,31 +290,39 @@ def kiosk_intake(
         "diabetes":     "Cabin 4 - Endocrinology",
         "hypertension": "Cabin 4 - Cardiology",
     }
-    cabin = _CABIN_MAP.get(payload.chief_complaint_key, "Cabin 1 - General")
-    # Initial status: EMERGENCY_TRIAGE for red-flags, TRIAGE_PENDING for routine.
+    cabin          = _CABIN_MAP.get(payload.chief_complaint_key, "Cabin 1 - General")
     initial_status = "EMERGENCY_TRIAGE" if ontology_result.red_flag_alert else "TRIAGE_PENDING"
-    OPD_QUEUE[token_id] = {
-        "token_id": token_id,
-        "patient_name": payload.patient_name,
-        "age": payload.age,
-        "gender": payload.gender,
-        "chief_complaint": payload.chief_complaint_key,
-        "pain_scale": payload.pain_scale,
-        "red_flag": ontology_result.red_flag_alert,
-        "red_flag_reason": ontology_result.red_flag_reason,
-        "status": initial_status,
-        "cabin": cabin,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "vitals": vitals_dict,
-    }
+
+    # Step 8: Persist to SQLite — guarantees cross-instance / cross-restart consistency.
+    new_token = OpdToken(
+        token_id=token_id,
+        patient_name=payload.patient_name,
+        age=payload.age,
+        gender=payload.gender,
+        chief_complaint=payload.chief_complaint_key,
+        pain_scale=payload.pain_scale,
+        vitals=vitals_dict,
+        red_flag=ontology_result.red_flag_alert,
+        red_flag_reason=ontology_result.red_flag_reason,
+        status=initial_status,
+        assigned_cabin=cabin,
+        created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+    )
+    try:
+        db.add(new_token)
+        db.commit()
+        db.refresh(new_token)
+    except Exception as db_err:
+        db.rollback()
+        print(f"[kiosk endpoint] Failed to persist OPD token to DB: {db_err}")
 
     return {
-        "status": "success",
-        "token_id": token_id,
-        "red_flag": ontology_result.red_flag_alert,
-        "red_flag_reason": ontology_result.red_flag_reason,
-        "cabin": cabin,
-        "cockpit_url": f"/api/v1/kiosk/doctor-cockpit/{token_id}",
+        "status":           "success",
+        "token_id":         token_id,
+        "red_flag":         ontology_result.red_flag_alert,
+        "red_flag_reason":  ontology_result.red_flag_reason,
+        "cabin":            cabin,
+        "cockpit_url":      f"/api/v1/kiosk/doctor-cockpit/{token_id}",
         "saved_to_history": saved_to_history,
     }
 
@@ -314,9 +339,12 @@ def doctor_cockpit(token_id: str) -> Dict[str, Any]:
 # ── OPD Queue Endpoints ───────────────────────────────────────────────────────
 
 @router.get("/queue")
-def get_opd_queue(include_all: bool = False) -> Dict[str, Any]:
+def get_opd_queue(
+    include_all: bool = False,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
     """
-    Return OPD queue entries.
+    Return OPD queue entries from SQLite.
 
     By default returns only active tokens (excludes COMPLETED and CANCELLED).
     Pass ``?include_all=true`` to return the full history (for the Analytics tab).
@@ -336,13 +364,16 @@ def get_opd_queue(include_all: bool = False) -> Dict[str, Any]:
         "COMPLETED":        4,
         "CANCELLED":        5,
     }
-    all_entries = list(OPD_QUEUE.values())
+    query = db.query(OpdToken).order_by(OpdToken.created_at.asc())
+    all_rows = query.all()
     if include_all:
-        entries = all_entries
+        rows = all_rows
     else:
-        entries = [e for e in all_entries if e["status"] not in ("COMPLETED", "CANCELLED")]
-    entries.sort(key=lambda e: (_STATUS_ORDER.get(e["status"], 9), e["created_at"]))
-    return {"queue": entries, "total": len(entries), "total_all": len(all_entries)}
+        rows = [r for r in all_rows if r.status not in ("COMPLETED", "CANCELLED")]
+
+    entries = [_token_to_dict(r) for r in rows]
+    entries.sort(key=lambda e: (_STATUS_ORDER.get(e["status"], 9), e["created_at"] or ""))
+    return {"queue": entries, "total": len(entries), "total_all": len(all_rows)}
 
 
 class QueueStatusUpdate(BaseModel):
@@ -350,25 +381,34 @@ class QueueStatusUpdate(BaseModel):
 
 
 @router.post("/queue/{token_id}/status")
-def update_queue_status(token_id: str, body: QueueStatusUpdate) -> Dict[str, Any]:
+def update_queue_status(
+    token_id: str,
+    body: QueueStatusUpdate,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
     """Doctor-side status transition: IN_CONSULTATION or COMPLETED."""
-    entry = OPD_QUEUE.get(token_id)
+    entry = db.query(OpdToken).filter(OpdToken.token_id == token_id).first()
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Token '{token_id}' not in queue.")
-    entry["status"] = body.status
+    entry.status = body.status
+    db.commit()
     return {"token_id": token_id, "status": body.status}
 
 
 @router.post("/queue/{token_id}/cancel")
-def cancel_queue_token(token_id: str) -> Dict[str, Any]:
+def cancel_queue_token(
+    token_id: str,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
     """Mark a token as CANCELLED (no-show or duplicate). Idempotent."""
-    entry = OPD_QUEUE.get(token_id)
+    entry = db.query(OpdToken).filter(OpdToken.token_id == token_id).first()
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Token '{token_id}' not in queue.")
-    if entry["status"] == "COMPLETED":
+    if entry.status == "COMPLETED":
         raise HTTPException(status_code=409, detail="Cannot cancel a completed consultation.")
-    entry["status"] = "CANCELLED"
-    entry["cancelled_at"] = datetime.now(timezone.utc).isoformat()
+    entry.status = "CANCELLED"
+    entry.cancelled_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    db.commit()
     return {"token_id": token_id, "status": "CANCELLED"}
 
 
@@ -386,27 +426,29 @@ class NurseVerifyPayload(BaseModel):
 
 
 @router.post("/queue/{token_id}/nurse-verify")
-def nurse_verify(token_id: str, body: NurseVerifyPayload) -> Dict[str, Any]:
+def nurse_verify(
+    token_id: str,
+    body: NurseVerifyPayload,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
     """
     Nurse verification endpoint.
 
-    1. Merges nurse-measured vitals into the queue entry and the cockpit store.
+    1. Merges nurse-measured vitals into the DB row and the cockpit store.
     2. Flags vitals as verified_by_nurse = True.
     3. Transitions status from TRIAGE_PENDING / EMERGENCY_TRIAGE → READY_FOR_DOCTOR.
     4. Optionally updates assigned cabin and red_flag escalation.
     5. Returns the full updated queue entry.
     """
-    queue_entry = OPD_QUEUE.get(token_id)
+    queue_entry = db.query(OpdToken).filter(OpdToken.token_id == token_id).first()
     if queue_entry is None:
         raise HTTPException(status_code=404, detail=f"Token '{token_id}' not in queue.")
 
     # Only allow the transition from nurse-pending states.
-    # If somehow already IN_CONSULTATION / COMPLETED, silently update vitals but don't
-    # regress the status.
-    nurse_pending = queue_entry["status"] in ("TRIAGE_PENDING", "EMERGENCY_TRIAGE")
+    nurse_pending = queue_entry.status in ("TRIAGE_PENDING", "EMERGENCY_TRIAGE")
 
     # Merge vitals — only overwrite fields that were explicitly supplied (not None).
-    existing_vitals: Dict[str, Any] = queue_entry.get("vitals") or {}
+    existing_vitals: Dict[str, Any] = dict(queue_entry.vitals or {})
     if body.bp_systolic  is not None: existing_vitals["bp_systolic"]  = body.bp_systolic
     if body.bp_diastolic is not None: existing_vitals["bp_diastolic"] = body.bp_diastolic
     if body.pulse        is not None: existing_vitals["pulse"]        = body.pulse
@@ -415,19 +457,22 @@ def nurse_verify(token_id: str, body: NurseVerifyPayload) -> Dict[str, Any]:
     existing_vitals["verified_by_nurse"] = True
     if body.nurse_notes:
         existing_vitals["nurse_notes"] = body.nurse_notes
-    queue_entry["vitals"] = existing_vitals
+    queue_entry.vitals = existing_vitals
 
     # Nurse can manually escalate red_flag.
     if body.red_flag is not None:
-        queue_entry["red_flag"] = body.red_flag
+        queue_entry.red_flag = body.red_flag
 
     # Cabin assignment override.
     if body.assigned_cabin:
-        queue_entry["cabin"] = body.assigned_cabin
+        queue_entry.assigned_cabin = body.assigned_cabin
 
     # Transition state → READY_FOR_DOCTOR only if we're coming from a nurse-pending state.
     if nurse_pending:
-        queue_entry["status"] = "READY_FOR_DOCTOR"
+        queue_entry.status = "READY_FOR_DOCTOR"
+
+    db.commit()
+    db.refresh(queue_entry)
 
     # Mirror verified vitals into the cockpit store so doctor sees them immediately.
     cockpit = ACTIVE_COCKPIT_STORE.get(token_id)
@@ -441,7 +486,7 @@ def nurse_verify(token_id: str, body: NurseVerifyPayload) -> Dict[str, Any]:
         cockpit_vitals["verified_by_nurse"] = True
         cockpit["vitals"] = cockpit_vitals
 
-    return queue_entry
+    return _token_to_dict(queue_entry)
 
 
 # ── OCR Prescription Endpoint ─────────────────────────────────────────────────

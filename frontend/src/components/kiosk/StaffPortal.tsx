@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef, Component, ErrorInfo, ReactNode } from 'react';
+import { apiClient } from '../../services/api';
 import {
   ShieldAlert,
   Stethoscope,
@@ -40,7 +41,6 @@ import {
   Zap,
 } from 'lucide-react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -341,32 +341,24 @@ const NurseTriageModal: React.FC<NurseTriageModalProps> = ({ entry, onClose, onV
     setSaving(true);
     setSaveError('');
     try {
-      const res = await fetch(
-        `${API_BASE}/api/v1/kiosk/queue/${encodeURIComponent(entry.token_id)}/nurse-verify`,
+      const res = await apiClient.post(
+        `/kiosk/queue/${encodeURIComponent(entry.token_id)}/nurse-verify`,
         {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bp_systolic:    bpSys      ? Number(bpSys)  : null,
-            bp_diastolic:   bpDia      ? Number(bpDia)  : null,
-            pulse:          pulse      ? Number(pulse)  : null,
-            spo2:           spo2       ? Number(spo2)   : null,
-            temp:           temp       ? Number(temp)   : null,
-            nurse_notes:    nurseNotes || null,
-            assigned_cabin: cabin,
-            red_flag:       redFlag,
-          }),
+          bp_systolic:    bpSys      ? Number(bpSys)  : null,
+          bp_diastolic:   bpDia      ? Number(bpDia)  : null,
+          pulse:          pulse      ? Number(pulse)  : null,
+          spo2:           spo2       ? Number(spo2)   : null,
+          temp:           temp       ? Number(temp)   : null,
+          nurse_notes:    nurseNotes || null,
+          assigned_cabin: cabin,
+          red_flag:       redFlag,
         }
       );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).detail || `HTTP ${res.status}`);
-      }
-      const updated: QueueEntry = await res.json();
+      const updated: QueueEntry = res.data;
       onVerified(updated);
       onClose();
     } catch (e: any) {
-      setSaveError(e.message || 'Network error');
+      setSaveError(e.response?.data?.detail || e.message || 'Network error');
     } finally {
       setSaving(false);
     }
@@ -540,11 +532,8 @@ const CockpitDrawer: React.FC<CockpitDrawerProps> = ({ tokenId, nurseVerified, o
     setLoading(true);
     setFetchError('');
     setRecord(null);
-    fetch(`${API_BASE}/api/v1/kiosk/doctor-cockpit/${encodeURIComponent(tokenId)}`)
-      .then(r => {
-        if (!r.ok) throw new Error(`Record not found (HTTP ${r.status})`);
-        return r.json();
-      })
+    apiClient.get(`/kiosk/doctor-cockpit/${encodeURIComponent(tokenId)}`)
+      .then(r => r.data)
       .then((data: Record<string, any>) => {
         const safeRecord: CockpitRecord = {
           token_id:              String(data.token_id ?? tokenId),
@@ -600,11 +589,10 @@ const CockpitDrawer: React.FC<CockpitDrawerProps> = ({ tokenId, nurseVerified, o
   const handleMarkComplete = async () => {
     setUpdatingStatus(true);
     try {
-      await fetch(`${API_BASE}/api/v1/kiosk/queue/${encodeURIComponent(tokenId)}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'COMPLETED' }),
-      });
+      await apiClient.post(
+        `/kiosk/queue/${encodeURIComponent(tokenId)}/status`,
+        { status: 'COMPLETED' }
+      );
       onStatusUpdate(tokenId, 'COMPLETED');
       onClose();
     } catch { /* ignore network errors */ } finally {
@@ -615,11 +603,10 @@ const CockpitDrawer: React.FC<CockpitDrawerProps> = ({ tokenId, nurseVerified, o
   const handleMarkInConsultation = async () => {
     setUpdatingStatus(true);
     try {
-      await fetch(`${API_BASE}/api/v1/kiosk/queue/${encodeURIComponent(tokenId)}/status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'IN_CONSULTATION' }),
-      });
+      await apiClient.post(
+        `/kiosk/queue/${encodeURIComponent(tokenId)}/status`,
+        { status: 'IN_CONSULTATION' }
+      );
       onStatusUpdate(tokenId, 'IN_CONSULTATION');
     } catch { /* ignore network errors */ } finally {
       setUpdatingStatus(false);
@@ -1309,12 +1296,9 @@ export const StaffPortal: React.FC = () => {
   const fetchQueue = useCallback(async () => {
     setQueueLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/v1/kiosk/queue`);
-      if (res.ok) {
-        const data = await res.json();
-        setQueue(data.queue || []);
-        setLastUpdated(new Date());
-      }
+      const res = await apiClient.get('/kiosk/queue');
+      setQueue(res.data.queue || []);
+      setLastUpdated(new Date());
     } catch { /* network error */ } finally {
       setQueueLoading(false);
     }
