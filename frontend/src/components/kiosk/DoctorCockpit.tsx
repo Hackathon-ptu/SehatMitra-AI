@@ -1,6 +1,6 @@
 /**
- * DoctorCockpit.tsx — Sprint 3
- * Doctor Cockpit: 15-second physician triage view (AIIA PS-26047)
+ * DoctorCockpit.tsx — Sprint 4
+ * Doctor Cockpit: 15-second physician triage view with Human-in-the-Loop CDSS (AIIA PS-26047)
  * Fetches GET /api/v1/kiosk/doctor-cockpit/{token_id} via configured apiClient.
  */
 
@@ -21,6 +21,10 @@ import {
   Flame,
   Printer,
   Heart,
+  Plus,
+  X,
+  Pill,
+  Leaf,
 } from 'lucide-react';
 import { apiClient } from '../../services/api';
 
@@ -134,17 +138,42 @@ const VPKBar: React.FC<{ label: string; value: number; color: string }> = ({ lab
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-interface DoctorCockpitProps {
-  tokenId: string;
+// ── Medication type ───────────────────────────────────────────────────────────
+interface Medication {
+  id: string;
+  name: string;
+  dosage: string;
+  type: 'allopathic' | 'ayush';
 }
 
-export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
+interface DoctorCockpitProps {
+  tokenId: string;
+  onBack?: () => void;
+}
+
+export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack }) => {
   const [record, setRecord]   = useState<CockpitRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
   const [tab, setTab]         = useState<'cockpit' | 'fhir'>('cockpit');
   const [soapOpen, setSoapOpen] = useState(true);
   const [copied, setCopied]   = useState(false);
+
+  // ── Human-in-the-Loop CDSS prescription state ────────────────────────────
+  const [medications, setMedications] = useState<Medication[]>([
+    { id: '1', name: 'Ambroxol HCl Syrup 30mg', dosage: 'TDS × 5 days', type: 'allopathic' },
+    { id: '2', name: 'Levocetirizine 5mg',       dosage: 'OD at night',  type: 'allopathic' },
+    { id: '3', name: 'Sitopaladi Churna 3g',      dosage: 'BD with honey', type: 'ayush'     },
+  ]);
+  const [customMedName, setCustomMedName]   = useState('');
+  const [customMedDosage, setCustomMedDosage] = useState('');
+  const [customMedType, setCustomMedType]   = useState<'allopathic' | 'ayush'>('allopathic');
+  const [doctorAdvice, setDoctorAdvice]     = useState('Steam inhalation twice daily. Avoid cold exposure.');
+
+  // ── Action-button UI state ────────────────────────────────────────────────
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [toast, setToast]                   = useState<{ msg: string; color: string } | null>(null);
+  const [actionLoading, setActionLoading]   = useState<'approve' | 'escalate' | null>(null);
 
   useEffect(() => {
     if (!tokenId) return;
@@ -167,145 +196,61 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const printOpdSlip = () => {
+  // ── Prescription pad helpers ─────────────────────────────────────────────
+  const showToast = (msg: string, color: string) => {
+    setToast({ msg, color });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  const addMedication = () => {
+    if (!customMedName.trim()) return;
+    const newMed: Medication = {
+      id: Date.now().toString(),
+      name: customMedName.trim(),
+      dosage: customMedDosage.trim() || 'As directed',
+      type: customMedType,
+    };
+    setMedications((prev) => [...prev, newMed]);
+    setCustomMedName('');
+    setCustomMedDosage('');
+  };
+
+  const removeMedication = (id: string) => {
+    setMedications((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  // ── Action Handlers ──────────────────────────────────────────────────────
+
+  const handleApprove = async () => {
     if (!record) return;
-    const v = record.vitals;
-    const bpStr  = (v.bp_systolic && v.bp_diastolic) ? `${v.bp_systolic}/${v.bp_diastolic} mmHg` : 'Not recorded';
-    const spo2Str = v.spo2 ? `${v.spo2}%`  : 'N/A';
-    const pulseStr = v.pulse ? `${v.pulse} bpm` : 'N/A';
-    const tempStr  = v.temp  ? `${v.temp}°C`   : 'N/A';
-    const ont = record.ontology;
-    const rx_allo  = (record as any).rx_allopathic ?? [];
-    const rx_ayush = (record as any).rx_ayush ?? [];
-    const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>OPD Clinical Slip — ${record.token_id}</title>
-  <style>
-    * { box-sizing: border-box; margin:0; padding:0; font-family:'Segoe UI',system-ui,sans-serif; }
-    body { background:#f0f4f8; padding:20px; }
-    .slip { max-width:680px; margin:auto; background:#fff; border-radius:12px; box-shadow:0 4px 20px #0002; overflow:hidden; }
-    .header { background:linear-gradient(135deg,#065f46 0%,#047857 100%); color:#fff; padding:20px 24px; }
-    .header h1 { font-size:18px; font-weight:900; letter-spacing:.5px; }
-    .header p  { font-size:11px; opacity:.8; margin-top:2px; }
-    .subheader { background:#064e3b; color:#6ee7b7; padding:8px 24px; font-size:11px; font-weight:700; letter-spacing:1px; display:flex; align-items:center; justify-content:space-between; }
-    .token { font-size:28px; font-weight:900; font-family:monospace; color:#10b981; }
-    .body { padding:20px 24px; }
-    .section-title { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:#6b7280; margin-bottom:8px; margin-top:16px; border-bottom:1px solid #e5e7eb; padding-bottom:4px; }
-    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .info-box { background:#f9fafb; border-radius:8px; padding:10px 14px; border:1px solid #e5e7eb; }
-    .info-label { font-size:9px; text-transform:uppercase; color:#9ca3af; font-weight:700; margin-bottom:2px; }
-    .info-val { font-size:14px; font-weight:800; color:#111827; }
-    .vitals-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
-    .vital-card { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:8px; text-align:center; }
-    .vital-label { font-size:9px; color:#6b7280; font-weight:700; text-transform:uppercase; }
-    .vital-val { font-size:16px; font-weight:900; color:#065f46; margin:2px 0; }
-    .vital-status { font-size:9px; color:#10b981; font-weight:700; }
-    .badge-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
-    .badge { padding:4px 10px; border-radius:20px; font-size:10px; font-weight:800; border:1.5px solid; }
-    .badge-icd { background:#eff6ff; border-color:#93c5fd; color:#1d4ed8; }
-    .badge-ayush { background:#f5f3ff; border-color:#c4b5fd; color:#7c3aed; }
-    .rx-list { list-style:none; }
-    .rx-list li { padding:6px 10px; border-radius:6px; margin-bottom:4px; font-size:12px; font-weight:600; display:flex; align-items:center; gap:6px; }
-    .rx-allo { background:#eff6ff; color:#1e40af; }
-    .rx-ayush { background:#f0fdf4; color:#065f46; }
-    .rx-num { width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:900; flex-shrink:0; }
-    .footer { background:#f9fafb; border-top:1px solid #e5e7eb; padding:12px 24px; display:flex; align-items:center; justify-content:space-between; }
-    .disclaimer { font-size:9px; color:#9ca3af; max-width:380px; line-height:1.5; }
-    .qr-placeholder { width:60px; height:60px; border:2px solid #d1d5db; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:9px; color:#9ca3af; text-align:center; }
-    @media print { body{ padding:0; background:#fff; } .slip { box-shadow:none; border-radius:0; } }
-  </style>
-</head>
-<body>
-  <div class="slip">
-    <div class="header">
-      <h1>🏥 Government District Hospital — OPD Clinical Slip</h1>
-      <p>AIIA PS-26047 · SehatMitra-AI · ICD-11 + NAMASTE Dual-Ontology</p>
-    </div>
-    <div class="subheader">
-      <span>TOKEN</span>
-      <span class="token">${record.token_id}</span>
-      <span>${new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</span>
-    </div>
+    setActionLoading('approve');
+    try {
+      await apiClient.post(`/kiosk/queue/${record.token_id}/complete`, {
+        final_medications: medications,
+        doctor_advice: doctorAdvice,
+        status: 'COMPLETED',
+      });
+      showToast('✅ Prescription Finalized & Pushed to ABDM', '#065f46');
+      setTimeout(() => { if (onBack) onBack(); }, 1500);
+    } catch (e: any) {
+      showToast(`Error: ${e?.response?.data?.detail || e?.message || 'Failed to finalize'}`, '#7f1d1d');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
-    <div class="body">
-      <!-- Patient -->
-      <div class="section-title">Patient Information</div>
-      <div class="two-col">
-        <div class="info-box">
-          <div class="info-label">Full Name</div>
-          <div class="info-val">${record.patient_name}</div>
-        </div>
-        <div class="info-box">
-          <div class="info-label">Age · Gender</div>
-          <div class="info-val">${record.age ?? '—'} yrs · ${record.gender ?? '—'}</div>
-        </div>
-      </div>
-      <div class="info-box" style="margin-top:8px">
-        <div class="info-label">Chief Complaint</div>
-        <div class="info-val" style="text-transform:capitalize">${record.chief_complaint_key.replace(/_/g,' ')}</div>
-      </div>
-
-      <!-- Vitals -->
-      <div class="section-title" style="margin-top:16px">Measured Vitals</div>
-      <div class="vitals-grid">
-        <div class="vital-card">
-          <div class="vital-label">Blood Pressure</div>
-          <div class="vital-val" style="font-size:13px">${bpStr}</div>
-          <div class="vital-status">${v.bp_systolic ? (v.bp_systolic >= 140 ? '⚠ Elevated' : '✓ Normal') : ''}</div>
-        </div>
-        <div class="vital-card">
-          <div class="vital-label">SpO₂</div>
-          <div class="vital-val">${spo2Str}</div>
-          <div class="vital-status">${v.spo2 ? (v.spo2 < 94 ? '⚠ Low' : '✓ Normal') : ''}</div>
-        </div>
-        <div class="vital-card">
-          <div class="vital-label">Pulse</div>
-          <div class="vital-val">${pulseStr}</div>
-          <div class="vital-status">${v.pulse ? (v.pulse > 100 || v.pulse < 60 ? '⚠ Irregular' : '✓ Normal') : ''}</div>
-        </div>
-        <div class="vital-card">
-          <div class="vital-label">Temperature</div>
-          <div class="vital-val">${tempStr}</div>
-          <div class="vital-status">${v.temp ? (v.temp > 38.5 ? '⚠ Fever' : '✓ Normal') : ''}</div>
-        </div>
-      </div>
-
-      <!-- Dual Ontology -->
-      <div class="section-title" style="margin-top:16px">Dual-Ontology Classification</div>
-      <div class="badge-row">
-        <div class="badge badge-icd">ICD-11: ${ont.icd11_code} — ${ont.icd11_title}</div>
-        <div class="badge badge-ayush">NAMASTE: ${ont.namaste_code} — ${ont.namaste_title}</div>
-      </div>
-
-      <!-- Rx -->
-      ${rx_allo.length > 0 ? `
-      <div class="section-title" style="margin-top:16px">Allopathic Prescription</div>
-      <ul class="rx-list">
-        ${rx_allo.map((r: string, i: number) => `<li class="rx-allo"><span class="rx-num" style="background:#1d4ed8;color:#fff">${i+1}</span>${r}</li>`).join('')}
-      </ul>` : ''}
-
-      ${rx_ayush.length > 0 ? `
-      <div class="section-title" style="margin-top:12px">AYUSH Complementary</div>
-      <ul class="rx-list">
-        ${rx_ayush.map((r: string, i: number) => `<li class="rx-ayush"><span class="rx-num" style="background:#065f46;color:#fff">${i+1}</span>${r}</li>`).join('')}
-      </ul>` : ''}
-    </div>
-
-    <div class="footer">
-      <div class="disclaimer">
-        ⚕️ This slip is computer-generated and clinically verified. Medications should be dispensed as per physician's final order.<br>
-        Powered by IBM Granite · SehatMitra-AI · AIIA PS-26047
-      </div>
-      <div class="qr-placeholder">QR<br>Verify</div>
-    </div>
-  </div>
-  <script>window.onload = () => window.print();<\/script>
-</body>
-</html>`;
-    const win = window.open('', '_blank', 'width=780,height=900');
-    if (win) { win.document.write(html); win.document.close(); }
+  const handleEscalate = async () => {
+    if (!record) return;
+    setActionLoading('escalate');
+    try {
+      await apiClient.post(`/kiosk/queue/${record.token_id}/escalate`, { red_flag: true });
+      showToast('⚠️ Patient Escalated to Emergency Red-Flag Priority', '#7c2d12');
+      setTimeout(() => { if (onBack) onBack(); }, 1500);
+    } catch (e: any) {
+      showToast(`Error: ${e?.response?.data?.detail || e?.message || 'Failed to escalate'}`, '#7f1d1d');
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   // ── Loading / error states ──────────────────────────────────────────────────
@@ -339,6 +284,161 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
+
+      {/* ── Toast Notification ── */}
+      {toast && (
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl text-white font-bold text-sm border border-white/10 backdrop-blur"
+          style={{ background: toast.color }}
+        >
+          {toast.msg}
+        </div>
+      )}
+
+      {/* ── ABDM OPD Prescription Slip Modal ── */}
+      {showPrintModal && record && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="bg-emerald-700 text-white px-6 py-4 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-black tracking-wide">GOVERNMENT CIVIL HOSPITAL, JALANDHAR</h2>
+                  <p className="text-emerald-200 text-xs mt-0.5 font-semibold">OPD SLIP · AIIA PS-26047 · SehatMitra-AI · ICD-11 + NAMASTE Dual-Ontology</p>
+                </div>
+                <button
+                  onClick={() => setShowPrintModal(false)}
+                  className="text-emerald-200 hover:text-white transition-colors p-1"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Token banner */}
+            <div className="bg-emerald-900 text-emerald-200 px-6 py-2 flex justify-between items-center text-xs font-bold">
+              <span>TOKEN</span>
+              <span className="text-2xl font-black font-mono text-emerald-300">{record.token_id}</span>
+              <span>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+
+            <div className="p-6 space-y-4 print:p-4">
+              {/* Patient Info */}
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-1 mb-2">Patient Information</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <p className="text-[9px] text-gray-400 font-bold uppercase">Full Name</p>
+                    <p className="text-gray-900 font-extrabold text-sm mt-0.5">{record.patient_name}</p>
+                  </div>
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-3">
+                    <p className="text-[9px] text-gray-400 font-bold uppercase">Age · Gender · Token</p>
+                    <p className="text-gray-900 font-extrabold text-sm mt-0.5">
+                      {record.age ?? '—'}y · {record.gender ?? '—'} · <span className="font-mono">{record.token_id}</span>
+                    </p>
+                  </div>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 mt-2">
+                  <p className="text-[9px] text-gray-400 font-bold uppercase">Chief Complaint</p>
+                  <p className="text-gray-900 font-bold text-sm mt-0.5 capitalize">{record.chief_complaint_key.replace(/_/g, ' ')}</p>
+                </div>
+              </div>
+
+              {/* Vitals */}
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-1 mb-2">Measured Vitals</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { label: 'BP', value: record.vitals.bp_systolic ? `${record.vitals.bp_systolic}/${record.vitals.bp_diastolic} mmHg` : '—' },
+                    { label: 'Pulse', value: record.vitals.pulse ? `${record.vitals.pulse} bpm` : '—' },
+                    { label: 'SpO₂', value: record.vitals.spo2 ? `${record.vitals.spo2}%` : '—' },
+                    { label: 'Temp', value: record.vitals.temp ? `${record.vitals.temp}°C` : '—' },
+                  ].map((v) => (
+                    <div key={v.label} className="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-center">
+                      <p className="text-[9px] text-gray-500 font-bold uppercase">{v.label}</p>
+                      <p className="text-emerald-800 font-extrabold text-xs mt-0.5">{v.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Diagnosis */}
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-1 mb-2">Dual-Ontology Diagnosis</p>
+                <div className="flex flex-wrap gap-2">
+                  <span className="px-3 py-1 bg-blue-50 border border-blue-300 text-blue-800 text-xs font-bold rounded-full">
+                    ICD-11: {record.ontology.icd11_code} — {record.ontology.icd11_title}
+                  </span>
+                  <span className="px-3 py-1 bg-purple-50 border border-purple-300 text-purple-800 text-xs font-bold rounded-full">
+                    NAMASTE: {record.ontology.namaste_code} — {record.ontology.namaste_title}
+                  </span>
+                </div>
+              </div>
+
+              {/* Rx Section */}
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-1 mb-2">℞ Prescription</p>
+                <div className="space-y-2">
+                  {medications.map((med, i) => (
+                    <div key={med.id} className={`flex items-center gap-3 p-2.5 rounded-xl border text-sm font-semibold ${
+                      med.type === 'allopathic'
+                        ? 'bg-blue-50 border-blue-200 text-blue-900'
+                        : 'bg-green-50 border-green-200 text-green-900'
+                    }`}>
+                      <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white flex-shrink-0 ${
+                        med.type === 'allopathic' ? 'bg-blue-600' : 'bg-green-700'
+                      }`}>{i + 1}</span>
+                      <span className="font-bold">{med.name}</span>
+                      <span className="ml-auto text-xs opacity-70">{med.dosage}</span>
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                        med.type === 'allopathic' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-700'
+                      }`}>{med.type === 'allopathic' ? 'Allo' : 'AYUSH'}</span>
+                    </div>
+                  ))}
+                  {medications.length === 0 && (
+                    <p className="text-gray-400 text-xs italic">No medications prescribed.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Doctor Advice */}
+              {doctorAdvice && (
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-1 mb-2">Clinical Advice</p>
+                  <p className="text-gray-700 text-sm bg-amber-50 border border-amber-200 rounded-xl p-3">{doctorAdvice}</p>
+                </div>
+              )}
+
+              {/* Doctor Signature Block */}
+              <div className="flex items-end justify-between border-t border-gray-200 pt-4 mt-2">
+                <div>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase">Physician Signature</p>
+                  <div className="w-40 border-b border-gray-400 mt-6 mb-1" />
+                  <p className="text-[9px] text-gray-500">MBBS / BAMS · Reg. No. ___________</p>
+                </div>
+                <div className="text-center">
+                  <div className="w-16 h-16 border-2 border-gray-300 rounded-lg flex items-center justify-center text-[9px] text-gray-400 font-bold">
+                    QR<br />Verify
+                  </div>
+                  <p className="text-[9px] text-gray-400 mt-1">ABDM Verified</p>
+                </div>
+              </div>
+
+              {/* Print Button */}
+              <div className="flex justify-center pt-2">
+                <button
+                  onClick={() => window.print()}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-600 text-white font-bold text-sm rounded-xl transition-colors"
+                >
+                  <Printer className="w-4 h-4" />
+                  🖨️ Print Document
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Top Bar ── */}
       <div className={`sticky top-0 z-20 px-4 py-3 flex flex-wrap items-center gap-3 border-b ${
         isRed ? 'bg-red-950/80 border-red-700' : 'bg-slate-800/90 border-slate-700'
@@ -633,27 +733,132 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId }) => {
               )}
             </div>
 
+            {/* ── Active Doctor Prescription Workspace (Human-in-the-Loop CDSS) ── */}
+            <div className="bg-slate-800 rounded-2xl border border-emerald-700/60">
+              <div className="flex items-center gap-2 p-4 border-b border-slate-700">
+                <ClipboardList className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <p className="text-white font-bold text-sm">Active Doctor Prescription Workspace</p>
+                  <p className="text-slate-400 text-xs">AI suggestions pre-loaded — edit, remove, or add medications before approving</p>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Current medication badges */}
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">℞ Current Medications</p>
+                  {medications.length === 0 ? (
+                    <p className="text-slate-500 text-xs italic py-2">No medications added yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {medications.map((med) => (
+                        <div
+                          key={med.id}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold ${
+                            med.type === 'allopathic'
+                              ? 'bg-blue-900/30 border-blue-700/50 text-blue-200'
+                              : 'bg-emerald-900/30 border-emerald-700/50 text-emerald-200'
+                          }`}
+                        >
+                          {med.type === 'allopathic'
+                            ? <Pill className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                            : <Leaf className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                          <span className="font-bold">{med.name}</span>
+                          <span className="text-xs opacity-70">— {med.dosage}</span>
+                          <span className={`ml-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                            med.type === 'allopathic' ? 'bg-blue-800 text-blue-300' : 'bg-emerald-800 text-emerald-300'
+                          }`}>{med.type === 'allopathic' ? 'Allo' : 'AYUSH'}</span>
+                          <button
+                            onClick={() => removeMedication(med.id)}
+                            className="ml-auto text-slate-500 hover:text-red-400 transition-colors p-0.5 rounded"
+                            title="Remove medication"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Add medication row */}
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Add Medication</p>
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <input
+                      type="text"
+                      value={customMedName}
+                      onChange={(e) => setCustomMedName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addMedication()}
+                      placeholder="Medicine Name"
+                      className="flex-1 min-w-[180px] bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    />
+                    <input
+                      type="text"
+                      value={customMedDosage}
+                      onChange={(e) => setCustomMedDosage(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addMedication()}
+                      placeholder="Dosage (e.g. BD × 3 days)"
+                      className="flex-1 min-w-[160px] bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                    />
+                    <select
+                      value={customMedType}
+                      onChange={(e) => setCustomMedType(e.target.value as 'allopathic' | 'ayush')}
+                      className="bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    >
+                      <option value="allopathic">Allopathic</option>
+                      <option value="ayush">AYUSH</option>
+                    </select>
+                    <button
+                      onClick={addMedication}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm rounded-xl transition-colors border border-emerald-600"
+                    >
+                      <Plus className="w-4 h-4" /> Add
+                    </button>
+                  </div>
+                </div>
+
+                {/* Doctor Clinical Advice */}
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Doctor Clinical Advice / Instructions</p>
+                  <textarea
+                    value={doctorAdvice}
+                    onChange={(e) => setDoctorAdvice(e.target.value)}
+                    rows={3}
+                    placeholder="Add clinical instructions, lifestyle advice, follow-up notes…"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 resize-none"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Triage action buttons */}
             <div className="grid grid-cols-3 gap-3">
               <button
-                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/40 border border-emerald-600"
-                onClick={() => alert(`Triage approved for ${record.token_id}. Opening E-Prescription...`)}
+                disabled={actionLoading === 'approve'}
+                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/40 border border-emerald-600"
+                onClick={handleApprove}
               >
-                <CheckCircle2 className="w-5 h-5" />
+                {actionLoading === 'approve'
+                  ? <Loader2 className="w-5 h-5 animate-spin" />
+                  : <CheckCircle2 className="w-5 h-5" />}
                 Approve &amp; E-Prescription
               </button>
               <button
                 className="flex items-center justify-center gap-2 py-4 rounded-xl bg-blue-700 hover:bg-blue-600 text-white font-bold text-sm transition-all shadow-lg shadow-blue-900/40 border border-blue-600"
-                onClick={printOpdSlip}
+                onClick={() => setShowPrintModal(true)}
               >
                 <Printer className="w-5 h-5" />
                 🖨️ Print Clinical Slip
               </button>
               <button
-                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-red-700 hover:bg-red-600 text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 border border-red-600"
-                onClick={() => alert(`OPD Priority Escalated for ${record.token_id}`)}
+                disabled={actionLoading === 'escalate'}
+                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-red-700 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 border border-red-600"
+                onClick={handleEscalate}
               >
-                <ArrowUpCircle className="w-5 h-5" />
+                {actionLoading === 'escalate'
+                  ? <Loader2 className="w-5 h-5 animate-spin" />
+                  : <ArrowUpCircle className="w-5 h-5" />}
                 Escalate Priority
               </button>
             </div>

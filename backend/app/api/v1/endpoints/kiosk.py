@@ -647,6 +647,71 @@ def cancel_queue_token(
     return {"token_id": token_id, "status": "CANCELLED"}
 
 
+# ── Doctor Complete & Escalate Endpoints ────────────────────────────────────
+
+class CompletePayload(BaseModel):
+    final_medications: List[Dict[str, Any]] = Field(default_factory=list, description="Doctor-finalised medication list.")
+    doctor_advice: Optional[str] = Field(None, description="Free-text clinical advice / instructions.")
+    status: Literal["COMPLETED"] = "COMPLETED"
+
+
+@router.post("/queue/{token_id}/complete")
+def complete_consultation(
+    token_id: str,
+    body: CompletePayload,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Doctor finalises a consultation.
+
+    Stores the approved Rx + clinical advice into the vitals JSON column and
+    transitions the token to COMPLETED.
+    """
+    entry = db.query(OpdToken).filter(OpdToken.token_id == token_id).first()
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Token '{token_id}' not found.")
+    if entry.status == "COMPLETED":
+        return {"success": True, "token_id": token_id}  # idempotent
+
+    # Persist final Rx into the vitals JSON column (flexible storage).
+    vitals: Dict[str, Any] = dict(entry.vitals or {})
+    vitals["final_rx"] = body.final_medications
+    if body.doctor_advice:
+        vitals["doctor_advice"] = body.doctor_advice
+    entry.vitals = vitals
+    entry.status = "COMPLETED"
+    db.commit()
+    return {"success": True, "token_id": token_id}
+
+
+class EscalatePayload(BaseModel):
+    red_flag: bool = True
+
+
+@router.post("/queue/{token_id}/escalate")
+def escalate_token(
+    token_id: str,
+    body: EscalatePayload,
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Doctor escalates a token to emergency priority.
+
+    Sets red_flag = True and transitions status to EMERGENCY_TRIAGE so that
+    the queue view surfaces the card at the top with a red pulse animation.
+    """
+    entry = db.query(OpdToken).filter(OpdToken.token_id == token_id).first()
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Token '{token_id}' not found.")
+
+    entry.red_flag = True
+    entry.status = "EMERGENCY_TRIAGE"
+    if not entry.red_flag_reason:
+        entry.red_flag_reason = "Doctor-escalated: Emergency Red-Flag"
+    db.commit()
+    return {"success": True, "token_id": token_id}
+
+
 # ── Nurse Verify Endpoint ─────────────────────────────────────────────────────
 
 class NurseVerifyPayload(BaseModel):
