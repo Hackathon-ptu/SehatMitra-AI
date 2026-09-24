@@ -7,6 +7,7 @@ import {
   Loader2,
   Upload,
   AlertCircle,
+  IdCard,
 } from 'lucide-react';
 import { authService } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -338,9 +339,9 @@ export const AbhaLinkModal: React.FC<Props> = ({ onClose }) => {
                 {/* Sample card button */}
                 <button
                   onClick={loadSample}
-                  className="w-full py-2.5 rounded-xl border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors"
+                  className="w-full py-2.5 rounded-xl border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors inline-flex items-center justify-center gap-1.5"
                 >
-                  🪪 Load Sample ABHA Card (Hackathon Demo)
+                  <IdCard className="w-4 h-4" /> Load Sample ABHA Card (Hackathon Demo)
                 </button>
               </div>
             )}
@@ -417,9 +418,9 @@ export const AbhaLinkModal: React.FC<Props> = ({ onClose }) => {
 
                 <button
                   onClick={loadSample}
-                  className="w-full py-2 rounded-xl border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors"
+                  className="w-full py-2 rounded-xl border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/20 transition-colors inline-flex items-center justify-center gap-1.5"
                 >
-                  🪪 Load Sample ABHA Card (Hackathon Demo)
+                  <IdCard className="w-4 h-4" /> Load Sample ABHA Card (Hackathon Demo)
                 </button>
               </div>
             )}

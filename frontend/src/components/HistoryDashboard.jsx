@@ -16,7 +16,8 @@ import {
   LogIn, 
   CheckCircle2, 
   AlertTriangle,
-  RefreshCw
+  RefreshCw,
+  X,
 } from 'lucide-react';
 
 export const HistoryDashboard = () => {
@@ -530,9 +531,10 @@ export const HistoryDashboard = () => {
               </div>
               <button
                 onClick={() => setSelectedConsultation(null)}
-                className="text-white/80 hover:text-white font-bold text-sm"
+                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                aria-label="Close"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
             

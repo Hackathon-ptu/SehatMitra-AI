@@ -25,6 +25,7 @@ import {
   X,
   Pill,
   Leaf,
+  Siren,
 } from 'lucide-react';
 import { apiClient } from '../../services/api';
 
@@ -184,7 +185,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
 
   // ── Action-button UI state ────────────────────────────────────────────────
   const [showPrintModal, setShowPrintModal] = useState(false);
-  const [toast, setToast]                   = useState<{ msg: string; color: string } | null>(null);
+  const [toast, setToast]                   = useState<{ msg: string; color: string; tone: 'success' | 'warning' | 'error' } | null>(null);
   const [actionLoading, setActionLoading]   = useState<'approve' | 'escalate' | null>(null);
 
   useEffect(() => {
@@ -241,8 +242,8 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
   };
 
   // ── Prescription pad helpers ─────────────────────────────────────────────
-  const showToast = (msg: string, color: string) => {
-    setToast({ msg, color });
+  const showToast = (msg: string, color: string, tone: 'success' | 'warning' | 'error' = 'error') => {
+    setToast({ msg, color, tone });
     setTimeout(() => setToast(null), 4000);
   };
 
@@ -276,7 +277,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
         { final_medications: medications, doctor_advice: doctorAdvice, status: 'COMPLETED' },
         { maxRedirects: 0 },
       );
-      showToast('✅ Prescription Finalized & Pushed to ABDM', '#065f46');
+      showToast('Prescription Finalized & Pushed to ABDM', '#065f46', 'success');
       setTimeout(() => { if (onBack) onBack(); }, 1500);
     } catch (e: any) {
       showToast(`Error: ${e?.response?.data?.detail || e?.message || 'Failed to finalize'}`, '#7f1d1d');
@@ -295,7 +296,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
         { red_flag: true },
         { maxRedirects: 0 },
       );
-      showToast('⚠️ Patient Escalated to Emergency Red-Flag Priority', '#7c2d12');
+      showToast('Patient Escalated to Emergency Red-Flag Priority', '#7c2d12', 'warning');
       setTimeout(() => { if (onBack) onBack(); }, 1500);
     } catch (e: any) {
       showToast(`Error: ${e?.response?.data?.detail || e?.message || 'Failed to escalate'}`, '#7f1d1d');
@@ -339,10 +340,13 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
       {/* ── Toast Notification ── */}
       {toast && (
         <div
-          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl text-white font-bold text-sm border border-white/10 backdrop-blur"
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl shadow-2xl text-white font-bold text-sm border border-white/10 backdrop-blur flex items-center gap-2 max-w-[calc(100vw-2rem)]"
           style={{ background: toast.color }}
         >
-          {toast.msg}
+          {toast.tone === 'success'
+            ? <CheckCircle2 className="w-4 h-4 shrink-0" />
+            : <AlertTriangle className="w-4 h-4 shrink-0" />}
+          <span>{toast.msg}</span>
         </div>
       )}
 
@@ -482,7 +486,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
                   className="flex items-center gap-2 px-6 py-2.5 bg-blue-700 hover:bg-blue-600 text-white font-bold text-sm rounded-xl transition-colors"
                 >
                   <Printer className="w-4 h-4" />
-                  🖨️ Print Document
+                  Print Document
                 </button>
               </div>
             </div>
@@ -498,7 +502,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl font-black ${
             isRed ? 'bg-red-700 text-white' : 'bg-emerald-700 text-white'
           }`}>
-            {isRed ? '🔴' : '🟢'}
+            {isRed ? <Siren className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
           </div>
           <div>
             <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">OPD Token</p>
@@ -577,7 +581,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
                         (record.vitals.bp_systolic || 0) >= 180 ? 'bg-red-800 text-red-200' :
                         (record.vitals.bp_systolic || 0) >= 140 ? 'bg-amber-800 text-amber-200' :
                         'bg-emerald-800 text-emerald-200'
-                      }`}>{(record.vitals.bp_systolic || 0) >= 180 ? 'Crisis' : (record.vitals.bp_systolic || 0) >= 140 ? 'Elevated' : '✓ Normal'}</span>
+                      }`}>{(record.vitals.bp_systolic || 0) >= 180 ? 'Crisis' : (record.vitals.bp_systolic || 0) >= 140 ? 'Elevated' : 'Normal'}</span>
                     )}
                   </div>
                 </div>
@@ -590,7 +594,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
                     </span>
                     {record.vitals.pulse && (
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${(record.vitals.pulse || 0) > 100 || (record.vitals.pulse || 0) < 60 ? 'bg-amber-800 text-amber-200' : 'bg-emerald-800 text-emerald-200'}`}>
-                        {(record.vitals.pulse || 0) > 100 || (record.vitals.pulse || 0) < 60 ? '⚠ Irregular' : '✓ Normal'}
+                        {(record.vitals.pulse || 0) > 100 || (record.vitals.pulse || 0) < 60 ? 'Irregular' : 'Normal'}
                       </span>
                     )}
                   </div>
@@ -604,7 +608,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
                     </span>
                     {record.vitals.spo2 && (
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${(record.vitals.spo2 || 100) < 90 ? 'bg-red-800 text-red-200' : (record.vitals.spo2 || 100) < 94 ? 'bg-amber-800 text-amber-200' : 'bg-emerald-800 text-emerald-200'}`}>
-                        {(record.vitals.spo2 || 100) < 90 ? 'Critical' : (record.vitals.spo2 || 100) < 94 ? '⚠ Low' : '✓ Normal'}
+                        {(record.vitals.spo2 || 100) < 90 ? 'Critical' : (record.vitals.spo2 || 100) < 94 ? 'Low' : 'Normal'}
                       </span>
                     )}
                   </div>
@@ -618,7 +622,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
                     </span>
                     {record.vitals.temp && (
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${(record.vitals.temp || 0) > 38.5 ? 'bg-red-800 text-red-200' : 'bg-emerald-800 text-emerald-200'}`}>
-                        {(record.vitals.temp || 0) > 38.5 ? '⚠ Fever' : '✓ Normal'}
+                        {(record.vitals.temp || 0) > 38.5 ? 'Fever' : 'Normal'}
                       </span>
                     )}
                   </div>
@@ -900,7 +904,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
                 onClick={() => setShowPrintModal(true)}
               >
                 <Printer className="w-5 h-5" />
-                🖨️ Print Clinical Slip
+                Print Clinical Slip
               </button>
               <button
                 disabled={actionLoading === 'escalate'}

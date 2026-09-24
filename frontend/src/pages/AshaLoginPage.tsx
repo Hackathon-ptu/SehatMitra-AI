@@ -17,7 +17,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Loader2, ShieldCheck, Hospital, ArrowRight } from 'lucide-react';
 import API_BASE_URL from '../config/api';
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ export const AshaLoginPage: React.FC = () => {
         className="absolute top-4 left-4 sm:top-5 sm:left-5 flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
-        ← Return to SehatMitra Citizen AI
+        Return to SehatMitra Citizen AI
       </Link>
 
       <div className="w-full max-w-sm">
@@ -208,7 +208,7 @@ export const AshaLoginPage: React.FC = () => {
               to="/hospital"
               className="inline-flex items-center gap-1.5 text-xs font-bold text-sky-400 hover:text-sky-300 transition-colors"
             >
-              🏥 Switch to Hospital Hub →
+              <Hospital className="w-3.5 h-3.5" /> Switch to Hospital Hub <ArrowRight className="w-3.5 h-3.5" />
             </Link>
           </div>
 

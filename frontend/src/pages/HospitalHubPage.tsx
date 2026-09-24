@@ -19,12 +19,19 @@ import { Link } from 'react-router-dom';
 import { CharakKiosk } from '../components/kiosk/CharakKiosk';
 import { DoctorCockpit } from '../components/kiosk/DoctorCockpit';
 import { apiClient } from '../services/api';
+import { toggleThemeWithReveal } from '../utils/themeTransition';
 import {
   Hospital, Sun, Moon, Lock, Eye, EyeOff,
   Activity, Stethoscope, AlertTriangle, CheckCircle2,
   RefreshCw, Clock, Users, Zap, Timer, TrendingUp,
   X, Loader2, ShieldAlert, Shield,
   MonitorSmartphone, ArrowLeft, Home,
+  Siren,
+  Check,
+  MapPin,
+  KeyRound,
+  Megaphone,
+  Volume2,
 } from 'lucide-react';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -261,8 +268,8 @@ const TokenCard: React.FC<TokenCardProps> = ({ entry, actionLabel, actionClass, 
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />{meta.label}
             </span>
-            {isEmg && <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-red-700/30 border border-red-500 text-red-400 uppercase tracking-wide animate-pulse">🚨 Emergency</span>}
-            {entry.vitals?.verified_by_nurse && <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/30 border border-emerald-600/50 text-emerald-400">✓ Nurse Verified</span>}
+            {isEmg && <span className="inline-flex items-center gap-1 text-[9px] font-black px-2 py-0.5 rounded-full bg-red-700/30 border border-red-500 text-red-400 uppercase tracking-wide animate-pulse"><Siren className="w-2.5 h-2.5" /> Emergency</span>}
+            {entry.vitals?.verified_by_nurse && <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/30 border border-emerald-600/50 text-emerald-400"><Check className="w-2.5 h-2.5" /> Nurse Verified</span>}
           </div>
           <p className={`font-semibold text-sm truncate ${txt}`}>{entry.patient_name}</p>
           <p className={`text-xs capitalize truncate mt-0.5 ${muted}`}>
@@ -272,7 +279,7 @@ const TokenCard: React.FC<TokenCardProps> = ({ entry, actionLabel, actionClass, 
             {entry.pain_scale != null && <span className={muted}>Pain: <span className={`font-bold ${entry.pain_scale >= 7 ? 'text-red-400' : entry.pain_scale >= 4 ? 'text-amber-400' : 'text-emerald-400'}`}>{entry.pain_scale}/10</span></span>}
             {entry.vitals?.bp_systolic && <span className={muted}>BP: <span className={`font-bold ${dark ? 'text-slate-200' : 'text-slate-700'}`}>{entry.vitals.bp_systolic}/{entry.vitals.bp_diastolic}</span></span>}
             {entry.vitals?.spo2 && <span className={muted}>SpO₂: <span className={`font-bold ${entry.vitals.spo2 < 94 ? 'text-red-400' : 'text-emerald-400'}`}>{entry.vitals.spo2}%</span></span>}
-            {entry.cabin && <span className={muted}>📍 {entry.cabin}</span>}
+            {entry.cabin && <span className={`inline-flex items-center gap-1 ${muted}`}><MapPin className="w-3 h-3" /> {entry.cabin}</span>}
           </div>
         </div>
         {canAct && (
@@ -298,6 +305,7 @@ interface RoleConfig {
   pin: string[];         // accepted PINs
   landingTab: WorkTab;   // where they land after login
   badge: string;         // header badge text
+  Icon: React.ElementType; // header badge icon
 }
 
 const ROLE_CONFIGS: RoleConfig[] = [
@@ -306,21 +314,24 @@ const ROLE_CONFIGS: RoleConfig[] = [
     title: 'Chief Medical Officer / Doctor',
     pin: ['1234'],
     landingTab: 'doctor',
-    badge: '👨‍⚕️ Dr. Sharma (CMO) • Cabin 1',
+    badge: 'Dr. Sharma (CMO) • Cabin 1',
+    Icon: Stethoscope,
   },
   {
     id: 'nurse',
     title: 'OPD Triage Nurse',
     pin: ['5678'],
     landingTab: 'nurse',
-    badge: '👩‍⚕️ Nurse Sunita (Triage) • Desk A',
+    badge: 'Nurse Sunita (Triage) • Desk A',
+    Icon: Activity,
   },
   {
     id: 'registration',
     title: 'OPD Registration Desk',
     pin: ['0000', '1234'],
     landingTab: 'patient',
-    badge: '🖥️ OPD Registration Desk',
+    badge: 'OPD Registration Desk',
+    Icon: MonitorSmartphone,
   },
 ];
 
@@ -387,7 +398,7 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onAuthenticate }) => {
         <ArrowLeft className="w-4 h-4" /> <span className="hidden sm:inline">Back to SehatMitra Citizen AI</span><span className="sm:hidden">Back to Citizen AI</span>
       </Link>
       {/* Theme toggle */}
-      <button onClick={() => setDark(v => !v)}
+      <button onClick={(e) => toggleThemeWithReveal(e, () => setDark(v => !v))}
         className={`absolute top-4 right-4 p-2.5 rounded-xl border text-xs font-bold transition-all ${
           dark ? 'bg-slate-800 border-slate-700 text-amber-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'
         }`}>
@@ -431,8 +442,8 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onAuthenticate }) => {
               className={`w-full px-4 py-3 rounded-xl border font-mono text-sm focus:outline-none focus:ring-2 transition-colors uppercase tracking-wide ${inp}`}
             />
             {facilityId && FACILITY_NAMES[facilityId.trim().toUpperCase()] && (
-              <p className={`text-xs mt-1 font-semibold ${dark ? 'text-emerald-400' : 'text-emerald-700'}`}>
-                ✓ {FACILITY_NAMES[facilityId.trim().toUpperCase()]}
+              <p className={`text-xs mt-1 font-semibold flex items-center gap-1 ${dark ? 'text-emerald-400' : 'text-emerald-700'}`}>
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" /> {FACILITY_NAMES[facilityId.trim().toUpperCase()]}
               </p>
             )}
           </div>
@@ -479,7 +490,7 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onAuthenticate }) => {
           <div className={`flex items-start gap-2.5 px-4 py-3 rounded-xl border text-xs ${
             dark ? 'bg-slate-700/50 border-slate-600 text-slate-300' : 'bg-amber-50 border-amber-200 text-amber-800'
           }`}>
-            <span className="text-base shrink-0 mt-0.5">🔑</span>
+            <KeyRound className="w-4 h-4 shrink-0 mt-0.5" />
             <div className="space-y-0.5">
               <div><span className="font-bold">Demo Facility:</span> PB-JAL-001</div>
               <div><span className="font-bold">Doctor PIN:</span> 1234 &nbsp;|&nbsp; <span className="font-bold">Nurse PIN:</span> 5678 &nbsp;|&nbsp; <span className="font-bold">Reg PIN:</span> 0000</div>
@@ -494,7 +505,7 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onAuthenticate }) => {
           >
             {loading
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Authenticating…</>
-              : '🏥 Authenticate & Open Hospital Workstation'
+              : <><Hospital className="w-4 h-4" /> Authenticate &amp; Open Hospital Workstation</>
             }
           </button>
 
@@ -586,15 +597,15 @@ export const HospitalHubPage: React.FC = () => {
 
   const GATE_META: Record<WorkTab, { title: string; description: string }> = {
     patient: {
-      title:       '🔒 Registration Operator PIN Required',
+      title:       'Registration Operator PIN Required',
       description: 'Enter Registration Desk PIN to access Patient Intake Kiosk',
     },
     nurse: {
-      title:       '🔒 Nurse Authorization Required',
+      title:       'Nurse Authorization Required',
       description: 'Enter Nurse PIN (5678) to access Vitals & Triage Station',
     },
     doctor: {
-      title:       '🔒 Doctor Authorization Required',
+      title:       'Doctor Authorization Required',
       description: 'Enter Doctor PIN (1234) to access Clinical Cockpit & Prescriptions',
     },
   };
@@ -674,14 +685,14 @@ export const HospitalHubPage: React.FC = () => {
         <div className="shrink-0 bg-slate-800 border-b border-slate-700 px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3">
           <button onClick={() => setSelectedToken(null)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-700 text-slate-300 text-xs font-bold hover:bg-slate-600 transition-colors">
-            ← <span className="hidden sm:inline">Back to Doctor Desk</span><span className="sm:hidden">Back</span>
+            <ArrowLeft className="w-3.5 h-3.5" /><span className="hidden sm:inline">Back to Doctor Desk</span><span className="sm:hidden">Back</span>
           </button>
           <span className="text-slate-400 text-xs truncate min-w-0">
             Doctor Cockpit — <span className="text-emerald-400 font-mono font-bold">{selectedToken}</span>
           </span>
           <button onClick={handleLock}
             className="ml-auto shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-700/50 bg-red-900/30 text-red-400 text-xs font-bold hover:bg-red-900/50 transition-colors">
-            <Lock className="w-3.5 h-3.5" /><span className="hidden sm:inline">🔒 Lock &amp; Logout</span>
+            <Lock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Lock &amp; Logout</span>
           </button>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -754,21 +765,24 @@ export const HospitalHubPage: React.FC = () => {
               {hospitalName} <span className={`hidden sm:inline font-mono text-xs font-medium ${th.muted}`}>(ID: {hospitalId})</span><span className="hidden sm:inline"> • General OPD</span>
             </div>
             <div className={`text-[10px] font-mono truncate ${th.muted}`}>
-              <span className="text-emerald-500">● Active Session</span><span className="hidden sm:inline"> · AIIA PS-26047 · SehatMitra-AI</span>
+              <span className="inline-flex items-center gap-1 text-emerald-500"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Active Session</span><span className="hidden sm:inline"> · AIIA PS-26047 · SehatMitra-AI</span>
             </div>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Role badge */}
-          <div className={`hidden sm:flex items-center px-3 py-1.5 rounded-lg border text-xs font-bold ${
+          <div className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold ${
             activeRole === 'doctor'
               ? dark ? 'border-blue-600/60 bg-blue-900/30 text-blue-300' : 'border-blue-200 bg-blue-50 text-blue-700'
               : activeRole === 'nurse'
               ? dark ? 'border-teal-600/60 bg-teal-900/30 text-teal-300' : 'border-teal-200 bg-teal-50 text-teal-700'
               : dark ? 'border-slate-600 bg-slate-800 text-slate-300' : 'border-slate-200 bg-slate-100 text-slate-600'
           }`}>
-            {ROLE_CONFIGS.find(r => r.id === activeRole)?.badge ?? ''}
+            {(() => {
+              const cfg = ROLE_CONFIGS.find(r => r.id === activeRole);
+              return cfg ? <><cfg.Icon className="w-3.5 h-3.5 shrink-0" />{cfg.badge}</> : null;
+            })()}
           </div>
           {/* Citizen AI Home */}
           <Link to="/"
@@ -778,7 +792,7 @@ export const HospitalHubPage: React.FC = () => {
             <Home className="w-3.5 h-3.5 text-emerald-600" /> Citizen AI Home
           </Link>
           {/* Theme toggle */}
-          <button onClick={() => setDark(v => !v)}
+          <button onClick={(e) => toggleThemeWithReveal(e, () => setDark(v => !v))}
             className={`p-2 rounded-lg border text-xs transition-colors ${
               dark ? 'border-slate-600 bg-slate-800 text-amber-400 hover:bg-slate-700' : 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}>
@@ -788,7 +802,7 @@ export const HospitalHubPage: React.FC = () => {
           <button onClick={handleLock}
             title="Lock & Logout"
             className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-600 text-xs font-bold hover:bg-red-100 hover:border-red-400 transition-colors dark:border-red-700/50 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40">
-            <Lock className="w-3.5 h-3.5" /><span className="hidden sm:inline">🔒 Lock &amp; Logout</span>
+            <Lock className="w-3.5 h-3.5" /><span className="hidden sm:inline">Lock &amp; Logout</span>
           </button>
         </div>
       </header>
@@ -980,18 +994,18 @@ export const HospitalHubPage: React.FC = () => {
                     </div>
                   )}
 
-                  {/* 🔊 Call Patient panel */}
+                  {/* Call Patient panel */}
                   {readyForDoctor.length > 0 && (
                     <div className={`rounded-xl border p-4 ${dark ? 'bg-slate-800 border-slate-700' : 'bg-blue-50 border-blue-200'}`}>
-                      <p className={`text-xs font-bold uppercase tracking-wider mb-3 ${dark ? 'text-slate-400' : 'text-blue-700'}`}>
-                        🔊 Call Patient to Cabin
+                      <p className={`text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-1.5 ${dark ? 'text-slate-400' : 'text-blue-700'}`}>
+                        <Megaphone className="w-3.5 h-3.5" /> Call Patient to Cabin
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {readyForDoctor.map(entry => (
                           <button key={entry.token_id}
-                            onClick={() => alert(`📢 Calling ${entry.token_id} — ${entry.patient_name} to Cabin 1 (Dr. Sharma)`)}
+                            onClick={() => alert(`Calling ${entry.token_id} — ${entry.patient_name} to Cabin 1 (Dr. Sharma)`)}
                             className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-xs font-bold transition-colors">
-                            🔊 Call {entry.token_id}
+                            <Volume2 className="w-3.5 h-3.5" /> Call {entry.token_id}
                           </button>
                         ))}
                       </div>

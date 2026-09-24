@@ -43,6 +43,15 @@ import {
   Wifi,
   WifiOff,
   X,
+  Baby,
+  Stethoscope,
+  Hospital,
+  Siren,
+  Coins,
+  Send,
+  Users,
+  Square,
+  Mic,
 } from 'lucide-react';
 import API_BASE_URL from '../config/api';
 
@@ -162,7 +171,7 @@ interface ReferralSuccessInfo {
 
 interface ScenarioChip {
   id: string;
-  emoji: string;
+  Icon: React.ElementType;
   label: string;
   transcript: string;
   lang: string;
@@ -172,7 +181,7 @@ interface ScenarioChip {
 const SCENARIO_CHIPS: ScenarioChip[] = [
   {
     id: 'preeclampsia',
-    emoji: '🤰',
+    Icon: Baby,
     label: 'PMSMA High-Risk Protocol: Preeclampsia Triage (Kamla Devi, BP 152/96)',
     transcript: 'कमला देवी, 28 साल, 6 महीने की गर्भवती, कल रात से तेज़ सिरदर्द और पैरों में भारी सूजन, बीपी 152/96',
     lang: 'hi',
@@ -180,7 +189,7 @@ const SCENARIO_CHIPS: ScenarioChip[] = [
   },
   {
     id: 'vaccine',
-    emoji: '💉',
+    Icon: Syringe,
     label: 'Universal Immunization (UIP): Due Vaccine Outreach (Aarav, 9m)',
     transcript: 'बच्चा आरव, उम्र 9 महीने, मां सुनीता, खसरा एमआर-1 का टीका 12 दिन से छूटा हुआ है',
     lang: 'hi',
@@ -188,7 +197,7 @@ const SCENARIO_CHIPS: ScenarioChip[] = [
   },
   {
     id: 'ncd',
-    emoji: '🩺',
+    Icon: Stethoscope,
     label: 'NCD-CBAC Screening: Glycemic & BP Risk (Ram Lal, 62y)',
     transcript: 'राम लाल जी, 62 साल, सीबीएसी स्कोर 6, बहुत ज्यादा प्यास लग रही है और रैंडम शुगर 210 आया',
     lang: 'hi',
@@ -240,7 +249,7 @@ const IncentiveWallet: React.FC<{ total: number; flashAmount: number | null }> =
   }, [flashAmount]);
   return (
     <div className="relative flex items-center gap-1.5 sm:gap-2 bg-emerald-900/60 border border-emerald-700/70 rounded-xl sm:rounded-2xl px-2.5 sm:px-4 py-1.5 sm:py-2 select-none">
-      <span className="text-base sm:text-xl" role="img" aria-label="coin">🪙</span>
+      <Coins className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300 shrink-0" aria-hidden="true" />
       <div className="flex flex-col">
         <span className="text-[9px] sm:text-[10px] text-emerald-400 font-bold uppercase tracking-wider leading-none">This Month</span>
         <span className="text-sm sm:text-lg font-extrabold text-white leading-tight">
@@ -330,16 +339,17 @@ function riskBorderColor(risk: string): string {
 }
 
 function caseTypeIcon(type: string): React.ReactNode {
-  if (type === 'MCH')          return <span className="text-base">🤰</span>;
-  if (type === 'IMMUNIZATION') return <span className="text-base">💉</span>;
-  if (type === 'NCD_30PLUS')   return <span className="text-base">🩺</span>;
-  return <span className="text-base">🏥</span>;
+  const cls = 'w-4 h-4 shrink-0 text-slate-300';
+  if (type === 'MCH')          return <Baby className={cls} />;
+  if (type === 'IMMUNIZATION') return <Syringe className={cls} />;
+  if (type === 'NCD_30PLUS')   return <Stethoscope className={cls} />;
+  return <Hospital className={cls} />;
 }
 
-function riskLabel(risk: string): { text: string; color: string } {
-  if (risk === 'RED_LAL_PATAKA') return { text: '🚨 LAL PATAKA', color: 'text-red-300 bg-red-900/40 border-red-700/60' };
-  if (risk === 'YELLOW_MONITOR') return { text: '⚠ MONITOR', color: 'text-amber-300 bg-amber-900/40 border-amber-700/60' };
-  return { text: '✓ NORMAL', color: 'text-emerald-300 bg-emerald-900/40 border-emerald-700/60' };
+function riskLabel(risk: string): { text: string; color: string; Icon: React.ElementType } {
+  if (risk === 'RED_LAL_PATAKA') return { text: 'LAL PATAKA', color: 'text-red-300 bg-red-900/40 border-red-700/60', Icon: Siren };
+  if (risk === 'YELLOW_MONITOR') return { text: 'MONITOR', color: 'text-amber-300 bg-amber-900/40 border-amber-700/60', Icon: AlertTriangle };
+  return { text: 'NORMAL', color: 'text-emerald-300 bg-emerald-900/40 border-emerald-700/60', Icon: CheckCircle2 };
 }
 
 // ─── Case Card ────────────────────────────────────────────────────────────────
@@ -375,10 +385,10 @@ const CaseCard: React.FC<CaseCardProps> = ({ rec, onRefer }) => {
         {rec.opd_token && (
           <button
             onClick={() => onRefer(rec)}
-            className="text-[9px] font-bold bg-red-700 text-white px-1.5 py-0.5 rounded shrink-0 font-mono hover:bg-red-600 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1 text-[9px] font-bold bg-red-700 text-white px-1.5 py-0.5 rounded shrink-0 font-mono hover:bg-red-600 transition-colors cursor-pointer"
             title="View Hospital Token"
           >
-            🏥 {rec.opd_token}
+            <Hospital className="w-2.5 h-2.5" /> {rec.opd_token}
           </button>
         )}
       </div>
@@ -390,8 +400,8 @@ const CaseCard: React.FC<CaseCardProps> = ({ rec, onRefer }) => {
       </div>
 
       {/* Risk pill */}
-      <span className={`self-start text-[11px] font-bold px-2.5 py-1 rounded-full border ${rl.color}`}>
-        {rl.text}
+      <span className={`self-start inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border ${rl.color}`}>
+        <rl.Icon className="w-3 h-3" />{rl.text}
       </span>
 
       {/* Clinical notes (collapsed) */}
@@ -405,13 +415,13 @@ const CaseCard: React.FC<CaseCardProps> = ({ rec, onRefer }) => {
           onClick={() => onRefer(rec)}
           className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-bold transition-colors"
         >
-          <ExternalLink className="w-3 h-3" /> 🏥 Fast-Track Refer
+          <ExternalLink className="w-3 h-3" /> Fast-Track Refer
         </button>
         <button className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-bold transition-colors">
-          <Phone className="w-3 h-3" /> 📞 Call Family
+          <Phone className="w-3 h-3" /> Call Family
         </button>
         <button className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-[11px] font-bold transition-colors">
-          <Edit3 className="w-3 h-3" /> 📋 View Case Notes
+          <Edit3 className="w-3 h-3" /> View Case Notes
         </button>
       </div>
     </div>
@@ -426,7 +436,7 @@ const ReferralSuccessModal: React.FC<{
 }> = ({ info, onClose }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
     <div className="w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto bg-slate-900 border-2 border-red-500 rounded-3xl p-5 sm:p-6 text-center space-y-4 shadow-2xl">
-      <div className="text-4xl">🚨</div>
+      <Siren className="w-10 h-10 text-red-400 mx-auto" />
       <h2 className="text-lg font-extrabold text-white">Emergency Referral Generated</h2>
       <div className="bg-red-600 rounded-2xl py-4 px-4">
         <p className="text-xs text-red-100 mb-1">OPD Token</p>
@@ -440,7 +450,7 @@ const ReferralSuccessModal: React.FC<{
           Vitals: <span className="text-white font-semibold">{info.vitals}</span>
         </p>
         <p className="text-xs text-slate-400">
-          Status: <span className="text-emerald-300 font-bold">Pushed to Civil Hospital Queue ✓</span>
+          Status: <span className="inline-flex items-center gap-1 text-emerald-300 font-bold">Pushed to Civil Hospital Queue <CheckCircle2 className="w-3.5 h-3.5" /></span>
         </p>
         {info.incentive > 0 && (
           <p className="text-xs text-slate-400">
@@ -480,10 +490,11 @@ const TriageReviewCard: React.FC<{
     : 'bg-emerald-900/60 border-emerald-500 text-emerald-200';
 
   const bannerText = isRed
-    ? '🚨 LAL PATAKA — IMMEDIATE PHC/HOSPITAL REFERRAL REQUIRED'
+    ? 'LAL PATAKA — IMMEDIATE PHC/HOSPITAL REFERRAL REQUIRED'
     : isYellow
-    ? '⚠ MODERATE RISK — SCHEDULE FIELD VISIT'
-    : '✓ ROUTINE HEALTHY';
+    ? 'MODERATE RISK — SCHEDULE FIELD VISIT'
+    : 'ROUTINE HEALTHY';
+  const BannerIcon = isRed ? Siren : isYellow ? AlertTriangle : CheckCircle2;
 
   const vitalsStr = formatVitalsChips(result.vitals ?? {});
 
@@ -492,7 +503,7 @@ const TriageReviewCard: React.FC<{
       <div className="w-full max-w-lg max-h-[92dvh] flex flex-col bg-slate-900 border border-slate-700 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden">
         {/* Risk banner */}
         <div className={`border-b ${bannerClass} px-5 py-3 flex items-center justify-between`}>
-          <span className="text-sm font-extrabold tracking-wide">{bannerText}</span>
+          <span className="text-sm font-extrabold tracking-wide flex items-center gap-2"><BannerIcon className="w-4 h-4 shrink-0" />{bannerText}</span>
           <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors p-1">
             <X className="w-4 h-4" />
           </button>
@@ -541,8 +552,8 @@ const TriageReviewCard: React.FC<{
 
           {/* Incentive tag */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-bold text-emerald-300 bg-emerald-900/40 border border-emerald-700/60 px-3 py-1 rounded-full">
-              💰 Incentive: +₹{incentive} Earned
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300 bg-emerald-900/40 border border-emerald-700/60 px-3 py-1 rounded-full">
+              <Coins className="w-3.5 h-3.5" /> Incentive: +₹{incentive} Earned
             </span>
             {result._engine && (
               <span className="text-[10px] text-slate-500">Engine: {result._engine}</span>
@@ -558,7 +569,7 @@ const TriageReviewCard: React.FC<{
             {isSubmitting ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> Dispatching…</>
             ) : (
-              <>🚀 Save Case &amp; Dispatch Emergency Referral to Civil Hospital</>
+              <><Send className="w-4 h-4 shrink-0" /> Save Case &amp; Dispatch Emergency Referral to Civil Hospital</>
             )}
           </button>
         </div>
@@ -918,15 +929,15 @@ export const AshaPortalPage: React.FC = () => {
 
       {/* Offline banner */}
       {!online && (
-        <div className="bg-amber-900/60 border-b border-amber-700/60 text-amber-300 text-xs font-semibold text-center py-2 px-4">
-          📴 Offline Mode — Cases saved to device, auto-sync on reconnect.
+        <div className="bg-amber-900/60 border-b border-amber-700/60 text-amber-300 text-xs font-semibold text-center py-2 px-4 flex items-center justify-center gap-1.5">
+          <WifiOff className="w-3.5 h-3.5 shrink-0" /> Offline Mode — Cases saved to device, auto-sync on reconnect.
         </div>
       )}
 
       {/* Data error banner — discreet inline badge instead of alarming red bar */}
       {dataError && (
-        <div className="bg-slate-800/80 border-b border-slate-700/60 text-slate-400 text-xs font-medium text-center py-1.5 px-4">
-          📶 Offline Cache Sync — reconnecting to NHM data server…
+        <div className="bg-slate-800/80 border-b border-slate-700/60 text-slate-400 text-xs font-medium text-center py-1.5 px-4 flex items-center justify-center gap-1.5">
+          <Wifi className="w-3.5 h-3.5 shrink-0" /> Offline Cache Sync — reconnecting to NHM data server…
         </div>
       )}
 
@@ -954,7 +965,7 @@ export const AshaPortalPage: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Card 1: Village Coverage */}
             <KpiCard
-              icon={<span className="text-sm">🏘️</span>}
+              icon={<Users className="w-4 h-4 text-emerald-400" />}
               title="Village Coverage"
               value={`${stats.households_mapped} / 160 HH`}
               sub="Households Mapped"
@@ -984,7 +995,7 @@ export const AshaPortalPage: React.FC = () => {
               title="Teekakaran Due"
               value={`${stats.immunization_due_count} Infant${stats.immunization_due_count !== 1 ? 's' : ''} Due`}
               sub="Vaccine overdue this week"
-              badge={stats.immunization_due_count > 0 ? '⚠ DUE' : '✓ OK'}
+              badge={stats.immunization_due_count > 0 ? 'DUE' : 'OK'}
               badgeColor={stats.immunization_due_count > 0 ? 'bg-amber-500 text-white' : 'bg-slate-600 text-slate-300'}
               borderColor="border-amber-700/60"
             />
@@ -1057,16 +1068,18 @@ export const AshaPortalPage: React.FC = () => {
                 }`}
                 aria-label={isRecording ? 'Stop recording' : 'Start recording'}
               >
-                <span className="text-4xl select-none">{isRecording ? '⏹' : '🎙️'}</span>
+                {isRecording
+                  ? <Square className="w-8 h-8 text-white fill-current" />
+                  : <Mic className="w-10 h-10 text-white" />}
                 {isRecording && (
                   <span className="absolute -inset-2 rounded-full border-2 border-red-400/60 animate-ping" />
                 )}
               </button>
               <p className="text-xs text-slate-400 text-center">
                 {isRecording
-                  ? '🔴 Recording… tap to stop'
+                  ? 'Recording… tap to stop'
                   : isAnalyzing
-                  ? '⚙️ AI analyzing transcript…'
+                  ? 'AI analyzing transcript…'
                   : 'Tap to speak — Hindi, Punjabi, Bengali, or English'}
               </p>
               {micTranscript && !isRecording && (
@@ -1082,14 +1095,14 @@ export const AshaPortalPage: React.FC = () => {
               <div className="flex items-center justify-center gap-3 py-3">
                 <Loader2 className="w-5 h-5 animate-spin text-emerald-400 shrink-0" />
                 <span className="text-xs sm:text-sm text-emerald-300 font-semibold">
-                  Groq → Gemini → IBM Granite triage engine running…
+                  Groq · Gemini · IBM Granite triage engine running…
                 </span>
               </div>
             )}
 
             {analyzeError && (
-              <p className="text-xs text-red-400 bg-red-900/30 border border-red-700/60 rounded-xl px-3 py-2">
-                ⚠ {analyzeError}
+              <p className="text-xs text-red-400 bg-red-900/30 border border-red-700/60 rounded-xl px-3 py-2 flex items-start gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" /> {analyzeError}
               </p>
             )}
 
@@ -1111,7 +1124,7 @@ export const AshaPortalPage: React.FC = () => {
                     {activeChipId === chip.id && isAnalyzing ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
                     ) : (
-                      <span className="text-base shrink-0">{chip.emoji}</span>
+                      <chip.Icon className="w-4 h-4 shrink-0" />
                     )}
                     {chip.label}
                   </button>
@@ -1123,7 +1136,7 @@ export const AshaPortalPage: React.FC = () => {
             <div className="flex">
               <button className="w-full sm:w-auto flex flex-wrap items-center justify-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-3 rounded-2xl bg-slate-700 hover:bg-slate-600 border border-slate-600 hover:border-emerald-500 text-slate-200 text-sm font-bold transition-all group">
                 <Camera className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
-                <span>📸 Scan Mother-Child (MCP) Card</span>
+                <span>Scan Mother-Child (MCP) Card</span>
                 <span className="ml-1 text-[10px] bg-emerald-700/60 border border-emerald-600/60 text-emerald-300 px-2 py-0.5 rounded-full font-bold">
                   Gemini Vision
                 </span>
@@ -1151,21 +1164,22 @@ export const AshaPortalPage: React.FC = () => {
           {/* Filter tabs */}
           <div className="flex flex-wrap gap-2 mb-4">
             {([
-              { id: 'ALL',            label: `All Beneficiaries (${cases.length})` },
-              { id: 'RED_LAL_PATAKA', label: `🚨 Lal Pataka (${redCount})` },
-              { id: 'MCH',            label: `🤰 MCH (${mchCount})` },
-              { id: 'IMMUNIZATION',   label: `💉 Vaccines (${immCount})` },
-              { id: 'NCD_30PLUS',     label: `🩺 NCD (${ncdCount})` },
-            ] as { id: FilterTab; label: string }[]).map((t) => (
+              { id: 'ALL',            label: `All Beneficiaries (${cases.length})`, Icon: null },
+              { id: 'RED_LAL_PATAKA', label: `Lal Pataka (${redCount})`, Icon: Siren },
+              { id: 'MCH',            label: `MCH (${mchCount})`, Icon: Baby },
+              { id: 'IMMUNIZATION',   label: `Vaccines (${immCount})`, Icon: Syringe },
+              { id: 'NCD_30PLUS',     label: `NCD (${ncdCount})`, Icon: Stethoscope },
+            ] as { id: FilterTab; label: string; Icon: React.ElementType | null }[]).map((t) => (
               <button
                 key={t.id}
                 onClick={() => setFilterTab(t.id)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-full border transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-full border transition-colors ${
                   filterTab === t.id
                     ? 'bg-emerald-600 border-emerald-500 text-white'
                     : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-emerald-500 hover:text-slate-200'
                 }`}
               >
+                {t.Icon && <t.Icon className="w-3.5 h-3.5" />}
                 {t.label}
               </button>
             ))}

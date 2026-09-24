@@ -17,7 +17,9 @@ import {
   X,
   Compass,
   AlertCircle,
-  LocateFixed
+  LocateFixed,
+  Landmark,
+  Siren,
 } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
@@ -260,7 +262,7 @@ export const HospitalLocator = () => {
             className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 disabled:opacity-75 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-sm transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
           >
             <Compass className={`w-4 h-4 ${locatingGPS ? 'animate-spin' : ''}`} />
-            <span>{locatingGPS ? (langCode === 'hi' ? 'स्थान खोजा जा रहा है...' : 'Detecting GPS...') : (langCode === 'hi' ? '📍 मेरी वर्तमान स्थिति (GPS)' : '📍 Detect My Live GPS')}</span>
+            <span>{locatingGPS ? (langCode === 'hi' ? 'स्थान खोजा जा रहा है...' : 'Detecting GPS...') : (langCode === 'hi' ? 'मेरी वर्तमान स्थिति (GPS)' : 'Detect My Live GPS')}</span>
           </button>
 
           {/* Search Input Form */}
@@ -304,13 +306,13 @@ export const HospitalLocator = () => {
                 key={idx}
                 type="button"
                 onClick={() => handleSelectPreset(region)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                   coords && coords.lat === region.lat && coords.lon === region.lon
                     ? 'bg-teal-600 text-white font-bold shadow-xs'
                     : 'bg-surface-elevated hover:bg-teal-50 hover:text-teal-700 hover:border-teal-300 border border-surface-border text-content-secondary'
                 }`}
               >
-                📍 {region.name}
+                <MapPin className="w-3.5 h-3.5 shrink-0" /> {region.name}
               </button>
             ))}
           </div>
@@ -340,19 +342,21 @@ export const HospitalLocator = () => {
               className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
             >
               <Compass className="w-4 h-4" />
-              <span>{langCode === 'hi' ? '📍 GPS से स्वतः खोजें' : '📍 Detect Live GPS Location'}</span>
+              <span>{langCode === 'hi' ? 'GPS से स्वतः खोजें' : 'Detect Live GPS Location'}</span>
             </button>
             <button
               onClick={() => handleSelectPreset(QUICK_REGIONS[0])}
-              className="px-4 py-2.5 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer"
+              className="px-4 py-2.5 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2"
             >
-              <span>{langCode === 'hi' ? '📍 पंजाब (Patiala) केंद्र देखें' : '📍 Patiala (Punjab) Preset'}</span>
+              <MapPin className="w-4 h-4 text-teal-600 shrink-0" />
+              <span>{langCode === 'hi' ? 'पंजाब (Patiala) केंद्र देखें' : 'Patiala (Punjab) Preset'}</span>
             </button>
             <button
               onClick={() => handleSelectPreset(QUICK_REGIONS[1])}
-              className="px-4 py-2.5 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer"
+              className="px-4 py-2.5 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary text-xs sm:text-sm font-bold rounded-xl transition-all cursor-pointer flex items-center gap-2"
             >
-              <span>{langCode === 'hi' ? '📍 दिल्ली NCR केंद्र देखें' : '📍 Delhi NCR Preset'}</span>
+              <MapPin className="w-4 h-4 text-teal-600 shrink-0" />
+              <span>{langCode === 'hi' ? 'दिल्ली NCR केंद्र देखें' : 'Delhi NCR Preset'}</span>
             </button>
           </div>
         </div>
@@ -364,20 +368,21 @@ export const HospitalLocator = () => {
             {/* Facility type filter tabs */}
             <div className="flex flex-wrap gap-2">
               {[
-                { id: 'all', label: langCode === 'hi' ? 'सभी केंद्र (All)' : 'All Facilities' },
-                { id: 'govt', label: langCode === 'hi' ? '🏛️ सरकारी PHC / CHC' : '🏛️ Govt PHC / CHC' },
-                { id: 'private', label: langCode === 'hi' ? '🏥 निजी मल्टी-स्पेशियलिटी' : '🏥 Private Hospitals' },
-                { id: 'emergency', label: langCode === 'hi' ? '🚨 24x7 आपातकालीन' : '🚨 24x7 Emergency' },
+                { id: 'all', label: langCode === 'hi' ? 'सभी केंद्र (All)' : 'All Facilities', Icon: null },
+                { id: 'govt', label: langCode === 'hi' ? 'सरकारी PHC / CHC' : 'Govt PHC / CHC', Icon: Landmark },
+                { id: 'private', label: langCode === 'hi' ? 'निजी मल्टी-स्पेशियलिटी' : 'Private Hospitals', Icon: HospitalIcon },
+                { id: 'emergency', label: langCode === 'hi' ? '24x7 आपातकालीन' : '24x7 Emergency', Icon: Siren },
               ].map(tab => (
                 <button
                   key={tab.id}
                   onClick={() => setFacilityFilter(tab.id)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     facilityFilter === tab.id
                       ? 'bg-teal-600 text-white shadow-sm'
                       : 'bg-surface-card border border-surface-border text-content-secondary hover:bg-surface-elevated'
                   }`}
                 >
+                  {tab.Icon && <tab.Icon className="w-3.5 h-3.5 shrink-0" />}
                   {tab.label}
                 </button>
               ))}
@@ -447,8 +452,8 @@ export const HospitalLocator = () => {
                   {/* User Current GPS marker */}
                   <Marker position={[coords.lat, coords.lon]}>
                     <Popup>
-                      <div className="text-left font-bold text-xs p-1">
-                        📍 {locationName || 'Your Selected Location'}
+                      <div className="text-left font-bold text-xs p-1 flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0" /> {locationName || 'Your Selected Location'}
                       </div>
                     </Popup>
                   </Marker>

@@ -277,8 +277,8 @@ export const ProfilePage: React.FC = () => {
                       <ShieldCheck className="w-3 h-3" /> ABDM VERIFIED
                     </span>
                   ) : (
-                    <span className="bg-slate-700/50 text-slate-300 border border-slate-600 px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0">
-                      ⚪ UNLINKED
+                    <span className="bg-slate-700/50 text-slate-300 border border-slate-600 px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shrink-0">
+                      <Link2Off className="w-3 h-3" /> UNLINKED
                     </span>
                   )}
                 </div>
@@ -411,13 +411,13 @@ export const ProfilePage: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200 dark:border-emerald-800">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                🟢 ABDM VERIFIED
+                ABDM VERIFIED
               </span>
             </div>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold border border-slate-200 dark:border-slate-700">
               <span className="w-2 h-2 rounded-full bg-slate-400" />
-              ⚪ ABHA Not Linked
+              ABHA Not Linked
             </span>
           )}
 
@@ -441,7 +441,7 @@ export const ProfilePage: React.FC = () => {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm"
             >
               <LinkIcon className="w-3.5 h-3.5" />
-              📷 Link Existing ABHA Card / QR
+              Link Existing ABHA Card / QR
             </button>
           )}
         </div>

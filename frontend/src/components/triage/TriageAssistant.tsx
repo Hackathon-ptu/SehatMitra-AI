@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { apiClient, historyService } from '../../services/api';
 import { playGlobalSpeech, stopAllSpeech } from '../../utils/speech';
-import { Mic, MicOff, Volume2, ShieldAlert, Loader2, RefreshCw, Sparkles, AlertTriangle } from 'lucide-react';
+import { Mic, MicOff, Volume2, ShieldAlert, Loader2, RefreshCw, Sparkles, AlertTriangle, Square, Thermometer, HeartPulse, Activity, Wind, FileDown } from 'lucide-react';
 import { Button } from '../common/Button';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -563,11 +563,11 @@ export const TriageAssistant: React.FC = () => {
                   }`}
                   title={isSpeaking ? "Stop Voice" : "Replay Question"}
                 >
-                  <Volume2 className={`w-4 h-4 ${isSpeaking ? 'animate-bounce' : ''}`} />
+                  {isSpeaking ? <Square className="w-3.5 h-3.5 fill-current" /> : <Volume2 className="w-4 h-4" />}
                   <span className="text-xs font-bold whitespace-nowrap">
                     {isSpeaking 
-                      ? (language.split('-')[0] === 'hi' ? '⏹️ आवाज रोकें' : language.split('-')[0] === 'pa' ? '⏹️ ਆਵਾਜ਼ ਰੋਕੋ' : '⏹️ Stop Voice')
-                      : (language.split('-')[0] === 'hi' ? '🔊 आवाज दोबारा सुनें' : language.split('-')[0] === 'pa' ? '🔊 ਸਵਾਲ ਸੁਣੋ' : language.split('-')[0] === 'bn' ? '🔊 আবার শুনুন' : language.split('-')[0] === 'te' ? '🔊 మళ్లీ వినండి' : '🔊 Replay Question')}
+                      ? (language.split('-')[0] === 'hi' ? 'आवाज रोकें' : language.split('-')[0] === 'pa' ? 'ਆਵਾਜ਼ ਰੋਕੋ' : 'Stop Voice')
+                      : (language.split('-')[0] === 'hi' ? 'आवाज दोबारा सुनें' : language.split('-')[0] === 'pa' ? 'ਸਵਾਲ ਸੁਣੋ' : language.split('-')[0] === 'bn' ? 'আবার শুনুন' : language.split('-')[0] === 'te' ? 'మళ్లీ వినండి' : 'Replay Question')}
                   </span>
                 </button>
               </div>
@@ -598,20 +598,20 @@ export const TriageAssistant: React.FC = () => {
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {(language.split('-')[0] === 'hi' ? [
-                    { label: "🌡️ 2 दिन से तेज़ बुखार", text: "मुझे 2 दिनों से तेज़ बुखार और सिरदर्द है।" },
-                    { label: "🫁 सीने में तेज दर्द व सांस फूलना", text: "सीने में बहुत तेज दर्द है और सांस लेने में भारीपन महसूस हो रहा है।" },
-                    { label: "🤢 पेट दर्द और उल्टी", text: "सुबह से पेट के ऊपरी हिस्से में तेज दर्द और उल्टी हो रही है।" },
-                    { label: "🤧 लगातार सूखी खांसी व खराश", text: "गले में खराश और 4 दिनों से लगातार खांसी आ रही है।" }
+                    { label: "2 दिन से तेज़ बुखार", text: "मुझे 2 दिनों से तेज़ बुखार और सिरदर्द है।" },
+                    { label: "सीने में तेज दर्द व सांस फूलना", text: "सीने में बहुत तेज दर्द है और सांस लेने में भारीपन महसूस हो रहा है।" },
+                    { label: "पेट दर्द और उल्टी", text: "सुबह से पेट के ऊपरी हिस्से में तेज दर्द और उल्टी हो रही है।" },
+                    { label: "लगातार सूखी खांसी व खराश", text: "गले में खराश और 4 दिनों से लगातार खांसी आ रही है।" }
                   ] : language.split('-')[0] === 'pa' ? [
-                    { label: "🌡️ 2 ਦਿਨਾਂ ਤੋਂ ਤੇਜ਼ ਬੁਖ਼ਾਰ", text: "ਮੈਨੂੰ 2 ਦਿਨਾਂ ਤੋਂ ਤੇਜ਼ ਬੁਖ਼ਾਰ ਅਤੇ ਸਿਰ ਦਰਦ ਹੈ।" },
-                    { label: "🫁 ਛਾਤੀ ਵਿੱਚ ਦਰਦ ਤੇ ਸਾਹ ਦੀ ਤਕਲੀਫ਼", text: "ਛਾਤੀ ਵਿੱਚ ਬਹੁਤ ਤੇਜ਼ ਦਰਦ ਹੈ ਅਤੇ ਸਾਹ ਲੈਣ 'ਚ ਔਖ ਹੋ ਰਹੀ ਹੈ।" },
-                    { label: "🤢 ਪੇਟ ਦਰਦ ਤੇ ਉਲਟੀ", text: "ਸਵੇਰ ਤੋਂ ਪੇਟ ਵਿੱਚ ਤੇਜ਼ ਦਰਦ ਅਤੇ ਉਲਟੀਆਂ ਆ ਰਹੀਆਂ ਹਨ।" },
-                    { label: "🤧 ਲਗਾਤਾਰ ਖੰਘ", text: "ਗਲੇ ਵਿੱਚ ਖਰਾਸ਼ ਅਤੇ ਪਿਛਲੇ 3 ਦਿਨਾਂ ਤੋਂ ਖੰਘ ਹੈ।" }
+                    { label: "2 ਦਿਨਾਂ ਤੋਂ ਤੇਜ਼ ਬੁਖ਼ਾਰ", text: "ਮੈਨੂੰ 2 ਦਿਨਾਂ ਤੋਂ ਤੇਜ਼ ਬੁਖ਼ਾਰ ਅਤੇ ਸਿਰ ਦਰਦ ਹੈ।" },
+                    { label: "ਛਾਤੀ ਵਿੱਚ ਦਰਦ ਤੇ ਸਾਹ ਦੀ ਤਕਲੀਫ਼", text: "ਛਾਤੀ ਵਿੱਚ ਬਹੁਤ ਤੇਜ਼ ਦਰਦ ਹੈ ਅਤੇ ਸਾਹ ਲੈਣ 'ਚ ਔਖ ਹੋ ਰਹੀ ਹੈ।" },
+                    { label: "ਪੇਟ ਦਰਦ ਤੇ ਉਲਟੀ", text: "ਸਵੇਰ ਤੋਂ ਪੇਟ ਵਿੱਚ ਤੇਜ਼ ਦਰਦ ਅਤੇ ਉਲਟੀਆਂ ਆ ਰਹੀਆਂ ਹਨ।" },
+                    { label: "ਲਗਾਤਾਰ ਖੰਘ", text: "ਗਲੇ ਵਿੱਚ ਖਰਾਸ਼ ਅਤੇ ਪਿਛਲੇ 3 ਦਿਨਾਂ ਤੋਂ ਖੰਘ ਹੈ।" }
                   ] : [
-                    { label: "🌡️ High Fever & Shivering (2 days)", text: "I have had a high fever with body chills and headache for 2 days." },
-                    { label: "🫁 Severe Chest Pain & Breathlessness", text: "I have sharp chest tightness and severe difficulty breathing." },
-                    { label: "🤢 Acute Stomach Cramps & Nausea", text: "Experiencing severe abdominal pain with vomiting since morning." },
-                    { label: "🤧 Persistent Cough & Sore Throat", text: "Persistent dry cough, sore throat and fatigue for 4 days." }
+                    { label: "High Fever & Shivering (2 days)", text: "I have had a high fever with body chills and headache for 2 days." },
+                    { label: "Severe Chest Pain & Breathlessness", text: "I have sharp chest tightness and severe difficulty breathing." },
+                    { label: "Acute Stomach Cramps & Nausea", text: "Experiencing severe abdominal pain with vomiting since morning." },
+                    { label: "Persistent Cough & Sore Throat", text: "Persistent dry cough, sore throat and fatigue for 4 days." }
                   ]).map((item, idx) => (
                     <button
                       key={idx}
@@ -620,8 +620,12 @@ export const TriageAssistant: React.FC = () => {
                         setSymptomInput(item.text);
                         handleTriageSubmit(item.text);
                       }}
-                      className="px-2.5 py-1.5 bg-surface-elevated hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 border border-surface-border rounded-lg text-xs font-semibold text-content-secondary transition-all"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-surface-elevated hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 border border-surface-border rounded-lg text-xs font-semibold text-content-secondary transition-all"
                     >
+                      {(() => {
+                        const PresetIcon = [Thermometer, HeartPulse, Activity, Wind][idx] ?? Activity;
+                        return <PresetIcon className="w-3.5 h-3.5 shrink-0 text-brand-600" />;
+                      })()}
                       {item.label}
                     </button>
                   ))}
@@ -814,7 +818,7 @@ export const TriageAssistant: React.FC = () => {
                     onClick={handlePrintSlip}
                     className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2"
                   >
-                    📄 Download Doctor Slip (PDF)
+                    <FileDown className="w-4 h-4" /> Download Doctor Slip (PDF)
                   </button>
                 </div>
               </div>

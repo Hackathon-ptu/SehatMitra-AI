@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { healthService, historyService } from '../services/api';
 import { playGlobalSpeech, stopAllSpeech } from '../utils/speech';
-import { Mic, MicOff, Send, RefreshCw, AlertTriangle, Sparkles, ImagePlus, X as XIcon, ClipboardList } from 'lucide-react';
+import { Mic, MicOff, Send, RefreshCw, AlertTriangle, Sparkles, ImagePlus, X as XIcon, ClipboardList, Volume2, FileDown } from 'lucide-react';
 import { BHASHINI_LANGUAGES } from '../constants/languages';
 import { useAuth } from '../context/AuthContext';
 import { generateConsultationSlip } from '../utils/pdfGenerator';
@@ -446,7 +446,10 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
                           <span>Stop</span>
                         </>
                       ) : (
-                        <span>🔊 Speak</span>
+                        <>
+                          <Volume2 className="w-3 h-3" />
+                          <span>Speak</span>
+                        </>
                       )}
                     </button>
                   ) : <div />}
@@ -575,8 +578,8 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
           )}
 
           {isListening && (
-            <p className="text-[11px] text-red-500 font-semibold animate-pulse text-left">
-              🎙️ {t('listening') || 'Listening...'} ({selectedLangConfig.name})
+            <p className="text-[11px] text-red-500 font-semibold animate-pulse text-left flex items-center gap-1.5">
+              <Mic className="w-3.5 h-3.5 shrink-0" /> {t('listening') || 'Listening...'} ({selectedLangConfig.name})
             </p>
           )}
         </form>
@@ -710,7 +713,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
                 onClick={handleDownloadSlip}
                 className="mt-4 w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2"
               >
-                📄 {t('download_doctor_slip') || 'Download Doctor Slip (PDF)'}
+                <FileDown className="w-4 h-4" /> {t('download_doctor_slip') || 'Download Doctor Slip (PDF)'}
               </button>
             </div>
           </div>

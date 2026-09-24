@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { WifiOff, AlertTriangle } from 'lucide-react';
+import { WifiOff, AlertTriangle, LifeBuoy } from 'lucide-react';
 
 export const OfflineBanner = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -29,9 +29,9 @@ export const OfflineBanner = () => {
       </div>
       <button
         onClick={() => window.dispatchEvent(new CustomEvent('open-sos'))}
-        className="px-3 py-1 bg-white text-red-700 font-extrabold text-[10px] uppercase rounded-full tracking-wider whitespace-nowrap shadow-sm hover:bg-slate-100 transition-colors"
+        className="px-3 py-1 bg-white text-red-700 font-extrabold text-[10px] uppercase rounded-full tracking-wider whitespace-nowrap shadow-sm hover:bg-slate-100 transition-colors inline-flex items-center gap-1"
       >
-        🆘 View First Aid / SOS
+        <LifeBuoy className="w-3 h-3" /> View First Aid / SOS
       </button>
     </div>
   );

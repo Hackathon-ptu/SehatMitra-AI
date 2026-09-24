@@ -16,7 +16,7 @@ import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { CharakKiosk } from '../components/kiosk/CharakKiosk';
 import { DoctorCockpit } from '../components/kiosk/DoctorCockpit';
-import { ShieldAlert, X } from 'lucide-react';
+import { ShieldAlert, X, ArrowLeft, Stethoscope } from 'lucide-react';
 
 // ── Kiosk shell — /kiosk ──────────────────────────────────────────────────────
 
@@ -39,7 +39,7 @@ export const StandaloneKioskPage: React.FC = () => {
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-white shrink-0 animate-bounce" />
             <span className="font-extrabold text-sm text-white">
-              🚨 RED FLAG — {redFlagReason || 'Emergency condition detected. Escalate immediately.'}
+              RED FLAG — {redFlagReason || 'Emergency condition detected. Escalate immediately.'}
             </span>
           </div>
           <button
@@ -78,7 +78,7 @@ export const DoctorCockpitPage: React.FC = () => {
           to="/kiosk"
           className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
         >
-          ← Patient Kiosk
+          <ArrowLeft className="w-3 h-3" /> Patient Kiosk
         </Link>
         <span className="text-[10px] text-slate-600 font-mono truncate">Doctor Cockpit · Charak-Kiosk · AIIA PS-26047</span>
       </div>
@@ -106,7 +106,7 @@ const DoctorCockpitTokenEntry: React.FC = () => {
             onClick={() => setSubmitted('')}
             className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
           >
-            ← Search Another Token
+            <ArrowLeft className="w-3 h-3" /> Search Another Token
           </button>
           <span className="text-[10px] text-slate-600 font-mono truncate">Doctor Cockpit · Charak-Kiosk</span>
         </div>
@@ -121,7 +121,7 @@ const DoctorCockpitTokenEntry: React.FC = () => {
         {/* Header */}
         <div className="flex flex-col items-center gap-3">
           <div className="w-14 h-14 rounded-2xl bg-emerald-800 flex items-center justify-center shadow-lg shadow-emerald-900/50">
-            <span className="text-2xl">🩺</span>
+            <Stethoscope className="w-7 h-7 text-emerald-200" />
           </div>
           <div>
             <h1 className="text-white font-extrabold text-xl leading-tight">Doctor Cockpit</h1>
@@ -154,9 +154,9 @@ const DoctorCockpitTokenEntry: React.FC = () => {
 
         <Link
           to="/kiosk"
-          className="block text-xs text-slate-600 hover:text-slate-400 transition-colors"
+          className="inline-flex items-center gap-1 text-xs text-slate-600 hover:text-slate-400 transition-colors"
         >
-          ← Back to Patient Kiosk
+          <ArrowLeft className="w-3 h-3" /> Back to Patient Kiosk
         </Link>
       </div>
     </div>

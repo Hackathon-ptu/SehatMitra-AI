@@ -12,6 +12,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import API_BASE_URL from '../../config/api';
+import { toggleThemeWithReveal } from '../../utils/themeTransition';
 import {
   Flame,
   Activity,
@@ -44,6 +45,12 @@ import {
   Bone,
   HeartPulse,
   Sparkles,
+  Waves,
+  Mountain,
+  CircleDot,
+  Droplets,
+  Check,
+  ChevronDown,
 } from 'lucide-react';
 
 // --- Types -------------------------------------------------------------------
@@ -75,7 +82,6 @@ type LangCode =
 
 interface LangStrings {
   label: string;       // native name shown in selector
-  flag: string;        // emoji flag
   patientName: string;
   age: string;
   gender: string;
@@ -101,7 +107,7 @@ interface LangStrings {
 
 const LANG_DICT: Record<LangCode, LangStrings> = {
   'en-IN': {
-    label: 'English', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: 'English',
     patientName: 'Patient Name', age: 'Age', gender: 'Gender',
     complaint: 'Voice Complaint', agni: 'Digestive Fire (Agni)',
     koshtha: 'Bowel Type (Koshtha)', medicines: 'Current Medicines',
@@ -112,7 +118,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'Select...', male: 'Male', female: 'Female', other: 'Other',
   },
   'hi-IN': {
-    label: '\u0939\u093F\u0902\u0926\u0940', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: '\u0939\u093F\u0902\u0926\u0940',
     patientName: 'मरीज़ का नाम', age: 'आयु', gender: 'लिंग',
     complaint: 'मुख्य शिकायत', agni: 'पाचन शक्ति (अग्नि)',
     koshtha: 'मल प्रकृति (कोष्ठ)', medicines: 'वर्तमान दवाइयां',
@@ -123,7 +129,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'चुनें...', male: 'पुरुष', female: 'महिला', other: 'अन्य',
   },
   'pa-IN': {
-    label: '\u0A2A\u0A70\u0A1C\u0A3E\u0A2C\u0A40', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: '\u0A2A\u0A70\u0A1C\u0A3E\u0A2C\u0A40',
     patientName: 'ਮਰੀਜ਼ ਦਾ ਨਾਮ', age: 'ਉਮਰ', gender: 'ਲਿੰਗ',
     complaint: 'ਮੁੱਖ ਸ਼ਿਕਾਇਤ', agni: 'ਪਾਚਨ ਸ਼ਕਤੀ (ਅਗਨੀ)',
     koshtha: 'ਟੱਟੀ ਕਿਸਮ (ਕੋਸ਼ਠ)', medicines: 'ਮੌਜੂਦਾ ਦਵਾਈਆਂ',
@@ -134,7 +140,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'ਚੁਣੋ...', male: 'ਮਰਦ', female: 'ਔਰਤ', other: 'ਹੋਰ',
   },
   'bn-IN': {
-    label: '\u09AC\u09BE\u0982\u09B2\u09BE', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: '\u09AC\u09BE\u0982\u09B2\u09BE',
     patientName: 'রোগীর নাম', age: 'বয়স', gender: 'লিঙ্গ',
     complaint: 'প্রধান অভিযোগ', agni: 'পাচন শক্তি (অগ্নি)',
     koshtha: 'মলের ধরন (কোষ্ঠ)', medicines: 'বর্তমান ওষুধ',
@@ -145,7 +151,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'বেছে নিন...', male: 'পুরুষ', female: 'মহিলা', other: 'অন্যান্য',
   },
   'mr-IN': {
-    label: '\u092E\u0930\u093E\u0920\u0940', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: '\u092E\u0930\u093E\u0920\u0940',
     patientName: 'रुग्णाचे नाव', age: 'वय', gender: 'लिंग',
     complaint: 'मुख्य तक्रार', agni: 'पाचन शक्ती (अग्नी)',
     koshtha: 'मल प्रकृती (कोष्ठ)', medicines: 'सध्याची औषधे',
@@ -156,7 +162,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'निवडा...', male: 'पुरुष', female: 'स्त्री', other: 'इतर',
   },
   'te-IN': {
-    label: 'తెలుగు', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: 'తెలుగు',
     patientName: 'రోగి పేరు', age: 'వయస్సు', gender: 'లింగం',
     complaint: 'ప్రధాన ఫిర్యాదు', agni: 'జీర్ణ శక్తి (అగ్ని)',
     koshtha: 'మలం రకం (కోష్ఠ)', medicines: 'ప్రస్తుత మందులు',
@@ -167,7 +173,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'ఎంచుకోండి...', male: 'పురుషుడు', female: 'స్త్రీ', other: 'ఇతర',
   },
   'ta-IN': {
-    label: 'தமிழ்', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: 'தமிழ்',
     patientName: 'நோயாளி பெயர்', age: 'வயது', gender: 'பாலினம்',
     complaint: 'முதன்மை புகார்', agni: 'செரிமான சக்தி (அக்னி)',
     koshtha: 'மல வகை (கோஷ்ட)', medicines: 'தற்போதைய மருந்துகள்',
@@ -178,7 +184,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'தேர்ந்தெடுக்கவும்...', male: 'ஆண்', female: 'பெண்', other: 'மற்றவை',
   },
   'gu-IN': {
-    label: 'ગુજરાતી', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: 'ગુજરાતી',
     patientName: 'દર્દીનું નામ', age: 'ઉંમર', gender: 'જાતિ',
     complaint: 'મુખ્ય ફરિયાદ', agni: 'પાચન શક્તિ (અગ્નિ)',
     koshtha: 'મળ પ્રકૃતિ (કોષ્ઠ)', medicines: 'હાલની દવાઓ',
@@ -189,7 +195,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'પસંદ કરો...', male: 'પુરુષ', female: 'સ્ત્રી', other: 'અન્ય',
   },
   'kn-IN': {
-    label: 'ಕನ್ನಡ', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: 'ಕನ್ನಡ',
     patientName: 'ರೋಗಿಯ ಹೆಸರು', age: 'ವಯಸ್ಸು', gender: 'ಲಿಂಗ',
     complaint: 'ಮುಖ್ಯ ದೂರು', agni: 'ಜೀರ್ಣ ಶಕ್ತಿ (ಅಗ್ನಿ)',
     koshtha: 'ಮಲ ಪ್ರಕೃತಿ (ಕೋಷ್ಠ)', medicines: 'ಪ್ರಸ್ತುತ ಔಷಧಗಳು',
@@ -200,7 +206,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'ಆಯ್ಕೆ ಮಾಡಿ...', male: 'ಪುರುಷ', female: 'ಮಹಿಳೆ', other: 'ಇತರೆ',
   },
   'ml-IN': {
-    label: '\u0D2E\u0D32\u0D2F\u0D3E\u0D33\u0D02', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: '\u0D2E\u0D32\u0D2F\u0D3E\u0D33\u0D02',
     patientName: 'രോഗിയുടെ പേര്', age: 'പ്രായം', gender: 'ലിംഗം',
     complaint: 'പ്രധാന പരാതി', agni: 'ദഹന ശക്തി (അഗ്നി)',
     koshtha: 'മലം തരം (കോഷ്ഠ)', medicines: 'നിലവിലെ മരുന്നുകൾ',
@@ -211,7 +217,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'തിരഞ്ഞെടുക്കൂ...', male: 'പുരുഷൻ', female: 'സ്ത്രീ', other: 'മറ്റുള്ളവ',
   },
   'or-IN': {
-    label: '\u0B13\u0B21\u0B3C\u0B3F\u0B06', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: '\u0B13\u0B21\u0B3C\u0B3F\u0B06',
     patientName: 'ରୋଗୀଙ୍କ ନାମ', age: 'ବୟସ', gender: 'ଲିଙ୍ଗ',
     complaint: 'ମୁଖ୍ୟ ଅଭିଯୋଗ', agni: 'ପାଚନ ଶକ୍ତି (ଅଗ୍ନି)',
     koshtha: 'ମଳ ପ୍ରକୃତି (କୋଷ୍ଠ)', medicines: 'ବର୍ତ୍ତମାନ ଔଷଧ',
@@ -222,7 +228,7 @@ const LANG_DICT: Record<LangCode, LangStrings> = {
     selectGender: 'ବାଛନ୍ତୁ...', male: 'ପୁରୁଷ', female: 'ମହିଳା', other: 'ଅନ୍ୟ',
   },
   'ur-IN': {
-    label: '\u0627\u0631\u062F\u0648', flag: '\uD83C\uDDEE\uD83C\uDDF3',
+    label: '\u0627\u0631\u062F\u0648',
     patientName: 'مریض کا نام', age: 'عمر', gender: 'جنس',
     complaint: 'اہم شکایت', agni: 'ہاضمے کی طاقت (اگنی)',
     koshtha: 'پاخانے کی قسم (کوشٹھ)', medicines: 'موجودہ دوائیں',
@@ -244,28 +250,28 @@ const LANG_ORDER: LangCode[] = [
 
 const AGNI_OPTIONS = [
   {
-    id: 'mandagni', label: 'Mandagni', sublabel: 'Slow / Heavy', hindi: '\u092E\u0902\u0926\u093E\u0917\u094D\u0928\u093F', desc: '\u092D\u093E\u0930\u0940\u092A\u0928, \u0928\u0940\u0902\u0926', emoji: '\uD83C\uDF0A',
+    id: 'mandagni', label: 'Mandagni', sublabel: 'Slow / Heavy', hindi: '\u092E\u0902\u0926\u093E\u0917\u094D\u0928\u093F', desc: '\u092D\u093E\u0930\u0940\u092A\u0928, \u0928\u0940\u0902\u0926', Icon: Waves,
     active_light: 'border-blue-500 bg-blue-50 ring-2 ring-blue-400 text-blue-900',
     active_dark:  'border-blue-400 bg-blue-900/40 ring-2 ring-blue-400',
     inactive_light:'border-slate-300 bg-white hover:border-blue-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-blue-600 text-white',
   },
   {
-    id: 'vishamagni', label: 'Vishamagni', sublabel: 'Irregular / Gas', hindi: '\u0935\u093F\u0937\u092E\u093E\u0917\u094D\u0928\u093F', desc: '\u0905\u0928\u093F\u092F\u092E\u093F\u0924, \u0917\u0948\u0938', emoji: '\uD83D\uDCA8',
+    id: 'vishamagni', label: 'Vishamagni', sublabel: 'Irregular / Gas', hindi: '\u0935\u093F\u0937\u092E\u093E\u0917\u094D\u0928\u093F', desc: '\u0905\u0928\u093F\u092F\u092E\u093F\u0924, \u0917\u0948\u0938', Icon: Wind,
     active_light: 'border-amber-500 bg-amber-50 ring-2 ring-amber-400 text-amber-900',
     active_dark:  'border-amber-400 bg-amber-900/40 ring-2 ring-amber-400',
     inactive_light:'border-slate-300 bg-white hover:border-amber-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-amber-600 text-white',
   },
   {
-    id: 'tikshnagni', label: 'Tikshnagni', sublabel: 'Intense / Acidic', hindi: '\u0924\u0940\u0915\u094D\u0937\u094D\u0923\u093E\u0917\u094D\u0928\u093F', desc: '\u091C\u0932\u0928, \u090F\u0938\u093F\u0921\u093F\u091F\u0940', emoji: '\uD83D\uDD25',
+    id: 'tikshnagni', label: 'Tikshnagni', sublabel: 'Intense / Acidic', hindi: '\u0924\u0940\u0915\u094D\u0937\u094D\u0923\u093E\u0917\u094D\u0928\u093F', desc: '\u091C\u0932\u0928, \u090F\u0938\u093F\u0921\u093F\u091F\u0940', Icon: Flame,
     active_light: 'border-red-500 bg-red-50 ring-2 ring-red-400 text-red-900',
     active_dark:  'border-red-400 bg-red-900/40 ring-2 ring-red-400',
     inactive_light:'border-slate-300 bg-white hover:border-red-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-red-600 text-white',
   },
   {
-    id: 'samagni', label: 'Samagni', sublabel: 'Balanced', hindi: '\u0938\u092E\u093E\u0917\u094D\u0928\u093F', desc: '\u0938\u093E\u092E\u093E\u0928\u094D\u092F', emoji: '\u2705',
+    id: 'samagni', label: 'Samagni', sublabel: 'Balanced', hindi: '\u0938\u092E\u093E\u0917\u094D\u0928\u093F', desc: '\u0938\u093E\u092E\u093E\u0928\u094D\u092F', Icon: CheckCircle2,
     active_light: 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 text-emerald-900',
     active_dark:  'border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400',
     inactive_light:'border-slate-300 bg-white hover:border-emerald-400 text-slate-800 shadow-sm',
@@ -275,21 +281,21 @@ const AGNI_OPTIONS = [
 
 const KOSHTHA_OPTIONS = [
   {
-    id: 'krura', label: 'Krura', sublabel: 'Hard / Constipated', hindi: '\u0915\u094D\u0930\u0942\u0930', emoji: '\uD83E\uDEA8',
+    id: 'krura', label: 'Krura', sublabel: 'Hard / Constipated', hindi: '\u0915\u094D\u0930\u0942\u0930', Icon: Mountain,
     active_light: 'border-stone-500 bg-stone-50 ring-2 ring-stone-400 text-stone-900',
     active_dark:  'border-stone-400 bg-stone-900/40 ring-2 ring-stone-400',
     inactive_light:'border-slate-300 bg-white hover:border-stone-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-stone-500 text-white',
   },
   {
-    id: 'madhyama', label: 'Madhyama', sublabel: 'Regular / Normal', hindi: '\u092E\u0927\u094D\u092F\u092E', emoji: '\uD83D\uDFE2',
+    id: 'madhyama', label: 'Madhyama', sublabel: 'Regular / Normal', hindi: '\u092E\u0927\u094D\u092F\u092E', Icon: CircleDot,
     active_light: 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-400 text-emerald-900',
     active_dark:  'border-emerald-400 bg-emerald-900/40 ring-2 ring-emerald-400',
     inactive_light:'border-slate-300 bg-white hover:border-emerald-400 text-slate-800 shadow-sm',
     inactive_dark: 'border-slate-600 bg-slate-800 hover:border-emerald-500 text-white',
   },
   {
-    id: 'mridu', label: 'Mridu', sublabel: 'Loose / Soft', hindi: '\u092E\u0943\u0926\u0941', emoji: '\uD83D\uDCA7',
+    id: 'mridu', label: 'Mridu', sublabel: 'Loose / Soft', hindi: '\u092E\u0943\u0926\u0941', Icon: Droplets,
     active_light: 'border-cyan-500 bg-cyan-50 ring-2 ring-cyan-400 text-cyan-900',
     active_dark:  'border-cyan-400 bg-cyan-900/40 ring-2 ring-cyan-400',
     inactive_light:'border-slate-300 bg-white hover:border-cyan-400 text-slate-800 shadow-sm',
@@ -1562,7 +1568,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onRedFlag }) => {
                   : (dark ? opt.inactive_dark : opt.inactive_light)
               }`}
             >
-              <span className="text-3xl">{opt.emoji}</span>
+              <opt.Icon className="w-7 h-7" strokeWidth={1.75} />
               <div>
                 <div className={`font-bold text-sm ${dark ? 'text-white' : 'text-slate-800'}`}>{opt.label}</div>
                 <div className={`text-xs ${th.subtext}`}>{opt.sublabel}</div>
@@ -1590,7 +1596,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onRedFlag }) => {
                   : (dark ? opt.inactive_dark : opt.inactive_light)
               }`}
             >
-              <span className="text-3xl sm:text-4xl">{opt.emoji}</span>
+              <opt.Icon className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.75} />
               <div>
                 <div className={`font-bold text-sm ${dark ? 'text-white' : 'text-slate-800'}`}>{opt.label}</div>
                 <div className={`text-xs ${th.subtext}`}>{opt.sublabel}</div>
@@ -1683,7 +1689,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onRedFlag }) => {
                   : (dark ? 'border-slate-600 bg-slate-800 text-slate-400 hover:border-blue-500' : 'border-slate-300 bg-white text-slate-600 hover:border-blue-400')
               }`}
             >
-              {allopathicMeds.includes(med) ? '\u2713 ' : ''}{med}
+              {allopathicMeds.includes(med) && <Check className="inline w-3 h-3 mr-1 -mt-0.5" />}{med}
             </button>
           ))}
         </div>
@@ -1716,7 +1722,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onRedFlag }) => {
                   : (dark ? 'border-slate-600 bg-slate-800 text-slate-400 hover:border-emerald-500' : 'border-slate-300 bg-white text-slate-600 hover:border-emerald-400')
               }`}
             >
-              {ayurvedicMeds.includes(herb) ? '\u2713 ' : ''}{herb}
+              {ayurvedicMeds.includes(herb) && <Check className="inline w-3 h-3 mr-1 -mt-0.5" />}{herb}
             </button>
           ))}
         </div>
@@ -1889,9 +1895,8 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onRedFlag }) => {
               title="Select Language"
             >
               <Languages className="w-3.5 h-3.5" />
-              <span>{LANG_DICT[langCode].flag}</span>
               <span className="hidden sm:inline">{LANG_DICT[langCode].label}</span>
-              <span className="text-[10px] opacity-60">▼</span>
+              <ChevronDown className={`w-3 h-3 opacity-60 transition-transform ${showLangMenu ? 'rotate-180' : ''}`} />
             </button>
 
             {showLangMenu && (
@@ -1911,7 +1916,6 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onRedFlag }) => {
                         : (dark ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50')
                     }`}
                   >
-                    <span>{LANG_DICT[code].flag}</span>
                     <span className="truncate">{LANG_DICT[code].label}</span>
                   </button>
                 ))}
@@ -1921,7 +1925,7 @@ export const CharakKiosk: React.FC<CharakKioskProps> = ({ onRedFlag }) => {
 
           {/* Light / Dark toggle */}
           <button
-            onClick={() => setDark((d) => !d)}
+            onClick={(e) => toggleThemeWithReveal(e, () => setDark((d) => !d))}
             className={`p-2 rounded-xl border transition-all ${
               dark ? 'border-slate-600 bg-slate-800 text-amber-400 hover:bg-slate-700'
                    : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50 shadow-sm'

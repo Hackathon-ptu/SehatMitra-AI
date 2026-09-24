@@ -8,7 +8,7 @@ import {
 } from "firebase/auth";
 import { auth } from "../config/firebase";
 import { useAuth } from "../context/AuthContext";
-import { Eye, EyeOff, Activity } from "lucide-react";
+import { Eye, EyeOff, Activity, ArrowRight } from "lucide-react";
 import { Button } from "./common/Button";
 
 const API_BASE_URL = 
@@ -172,7 +172,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
               className="flex items-center gap-2 w-full mb-4 px-3 py-2 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 text-teal-700 dark:text-teal-300 text-xs font-semibold hover:bg-teal-100 dark:hover:bg-teal-900/40 transition-colors"
             >
               <Activity className="w-3.5 h-3.5 shrink-0" />
-              <span>Login as ASHA Health Worker →</span>
+              <span>Login as ASHA Health Worker</span>
+              <ArrowRight className="w-3.5 h-3.5 ml-auto shrink-0" />
             </a>
           )}
 

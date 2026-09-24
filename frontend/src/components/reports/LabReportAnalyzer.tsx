@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { apiClient, neuralTtsService } from '../../services/api';
-import { UploadCloud, FileText, AlertCircle, FileCheck2, HelpCircle, Camera } from 'lucide-react';
+import { UploadCloud, FileText, AlertCircle, FileCheck2, HelpCircle, Camera, Square, Volume2, FileDown } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from 'react-i18next';
 // @ts-ignore
@@ -573,12 +573,12 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
               >
                 {isSpeaking ? (
                   <>
-                    <span>⏹️</span>
+                    <Square className="w-3 h-3 fill-current" />
                     <span>Stop Audio (रोकें)</span>
                   </>
                 ) : (
                   <>
-                    <span>🔊</span>
+                    <Volume2 className="w-3.5 h-3.5" />
                     <span>Listen Summary (सुनें)</span>
                   </>
                 )}
@@ -649,7 +649,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
               onClick={handleDownloadSlip}
               className="px-6 py-2.5 sm:py-2 justify-center bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-md transition-all flex items-center gap-2"
             >
-              📄 <span>{isHindi ? 'परामर्श पर्ची डाउनलोड करें' : 'Download Consultation Slip'}</span>
+              <FileDown className="w-4 h-4" /> <span>{isHindi ? 'परामर्श पर्ची डाउनलोड करें' : 'Download Consultation Slip'}</span>
             </button>
             <button
               onClick={handleReset}

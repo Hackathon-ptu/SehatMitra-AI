@@ -211,3 +211,41 @@ body.dark {
     animation: none;
   }
 }
+
+/* Theme switch: circular reveal (see utils/themeTransition.ts) */
+.theme-switching,
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
+.theme-reveal-ring {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2147483647;
+  pointer-events: none;
+  overflow: visible;
+  view-transition-name: theme-ring;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-group(theme-ring),
+::view-transition-new(theme-ring) {
+  animation: none;
+}
+
+::view-transition-group(theme-ring) {
+  z-index: 2;
+}
+
+::view-transition-old(theme-ring) {
+  display: none;
+}

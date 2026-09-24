@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { UI_TRANSLATIONS } from '../constants/translations';
-import { Phone, AlertTriangle, MapPin, X, Info, HelpCircle } from 'lucide-react';
+import { Phone, AlertTriangle, MapPin, X, Info, HelpCircle, Map as MapIcon, MessageCircle, MessageSquareText } from 'lucide-react';
 
 export const EmergencySOSModal = ({ isOpen, onClose, selectedLanguage = 'hi-IN' }) => {
   const { user } = useAuth();
@@ -169,7 +169,7 @@ export const EmergencySOSModal = ({ isOpen, onClose, selectedLanguage = 'hi-IN' 
                     rel="noreferrer"
                     className="text-[11px] font-bold text-blue-600 hover:underline inline-flex items-center gap-1"
                   >
-                    🗺️ View on Google Maps
+                    <MapIcon className="w-3.5 h-3.5" /> View on Google Maps
                   </a>
                 </div>
               ) : (
@@ -198,13 +198,13 @@ export const EmergencySOSModal = ({ isOpen, onClose, selectedLanguage = 'hi-IN' 
                   rel="noreferrer"
                   className="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all text-center flex items-center justify-center gap-1.5 active:scale-[0.99]"
                 >
-                  🟢 WhatsApp Live Map
+                  <MessageCircle className="w-4 h-4" /> WhatsApp Live Map
                 </a>
                 <a
                   href={smsUrl}
                   className="py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all text-center flex items-center justify-center gap-1.5 active:scale-[0.99]"
                 >
-                  💬 Send SOS SMS
+                  <MessageSquareText className="w-4 h-4" /> Send SOS SMS
                 </a>
               </div>
             </div>

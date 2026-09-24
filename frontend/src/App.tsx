@@ -10,10 +10,11 @@ import { LanguageSelectorModal } from './components/LanguageSelectorModal';
 import { LanguageSelector } from './components/language/LanguageSelector';
 import { useAuth } from './context/AuthContext';
 import { useLanguage } from './context/LanguageContext';
-import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIcon, Sun, Moon, Mic, Menu, X } from 'lucide-react';
+import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIcon, Sun, Moon, Mic, Menu, X, Hospital, ChevronDown, LogOut } from 'lucide-react';
 import { UI_TRANSLATIONS } from './constants/translations';
 import { EmergencySOSModal } from './components/EmergencySOSModal';
 import { OfflineBanner } from './components/common/OfflineBanner';
+import { toggleThemeWithReveal } from './utils/themeTransition';
 
 export const App = () => {
   const [activeTab, setActiveTab] = useState('chat');
@@ -61,8 +62,13 @@ export const App = () => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(theme === 'light' ? 'dark' : 'light');
+  const toggleTheme = (e?: React.MouseEvent<HTMLElement>) => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    toggleThemeWithReveal(e, () => {
+      // Apply the class synchronously so the reveal captures the new theme.
+      document.documentElement.classList.toggle('dark', next === 'dark');
+      setTheme(next);
+    });
   };
 
   const { language: selectedLanguage, setLanguage, t: translate } = useLanguage();
@@ -202,7 +208,7 @@ export const App = () => {
                 href="/hospital"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold shadow-sm transition-all"
               >
-                🏥 Hospital Portal
+                <Hospital className="w-3.5 h-3.5" /> Hospital Portal
               </a>
 
               {/* Theme Toggle Button */}
@@ -235,7 +241,7 @@ export const App = () => {
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-200 hidden md:inline-block max-w-[120px] truncate">
                       {storedUser.displayName || storedUser.email?.split("@")[0]}
                     </span>
-                    <span className="text-xs text-slate-400">▼</span>
+                    <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${menuOpen ? 'rotate-180' : ''}`} />
                   </button>
 
                   {menuOpen && (
@@ -255,7 +261,7 @@ export const App = () => {
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2"
                       >
-                        👤 My Profile
+                        <UserIcon className="w-4 h-4 text-content-muted" /> My Profile
                       </button>
 
                       <button
@@ -267,7 +273,7 @@ export const App = () => {
                         }}
                         className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2"
                       >
-                        🚪 Sign Out
+                        <LogOut className="w-4 h-4" /> Sign Out
                       </button>
                     </div>
                   )}
@@ -310,7 +316,7 @@ export const App = () => {
               onClick={() => setMobileMenuOpen(false)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-600 text-white text-sm font-bold transition-colors"
             >
-              🏥 Hospital Portal
+              <Hospital className="w-4 h-4" /> Hospital Portal
             </a>
 
             <div className="flex items-center justify-between border-b border-surface-border pb-3">
@@ -359,9 +365,9 @@ export const App = () => {
                       setMobileMenuOpen(false);
                       setActiveTab('profile');
                     }}
-                    className="flex-1 py-2 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary rounded-lg text-xs font-bold transition-colors"
+                    className="flex-1 py-2 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary rounded-lg text-xs font-bold transition-colors inline-flex items-center justify-center gap-1.5"
                   >
-                    👤 My Profile
+                    <UserIcon className="w-3.5 h-3.5" /> My Profile
                   </button>
                   <button
                     onClick={async () => {
@@ -370,9 +376,9 @@ export const App = () => {
                       localStorage.removeItem("user");
                       window.location.reload();
                     }}
-                    className="flex-1 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    className="flex-1 py-2 bg-red-50 dark:bg-red-950/30 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors inline-flex items-center justify-center gap-1.5"
                   >
-                    🚪 Sign Out
+                    <LogOut className="w-3.5 h-3.5" /> Sign Out
                   </button>
                 </div>
               </div>
