@@ -25,6 +25,7 @@
 - [The Rural Bottleneck vs. SehatMitra Solution](#-the-rural-bottleneck-vs-sehatmitra-solution)
 - [Core Architecture](#-core-architecture)
 - [Key Engineering Features](#-key-engineering-features)
+- [ASHA Portal](#-asha-portal)
 - [Tech Stack & Toolchain](#-tech-stack--toolchain)
 - [IBM Bob Technology Integration](#-ibm-bob-technology-integration)
 - [Quickstart & Local Setup](#-quickstart--local-setup)
@@ -62,6 +63,7 @@ flowchart TD
         A["🎙️ Real-time Web Audio Stream"]
         B["🪪 ABDM Digital ABHA QR Canvas"]
         C["🔄 Axios Network Interceptor"]
+        K["👩‍⚕️ ASHA Portal (/asha)"]
     end
 
     subgraph Gateway ["⚡ API Gateway (FastAPI)"]
@@ -73,6 +75,7 @@ flowchart TD
         F["⚡ Groq LPU Triage (SOCRATES Protocol)"]
         G["🔬 Gemini Vision OCR (Biomarker Extraction)"]
         H["🔊 edge-tts (12+ Indic Voice Streaming)"]
+        L["📋 ASHA Care-Plan & Risk Engine"]
     end
 
     subgraph Data ["💾 Edge Persistence & Resilience"]
@@ -105,6 +108,61 @@ flowchart TD
 ### 4. ABDM Digital Health Identity (Turso Edge Replication)
 - Issues an Ayushman Bharat Digital Mission (ABDM) compliant digital ABHA Card with an embedded dynamic QR code.
 - Syncs patient timelines across Turso edge replicas so records remain instantly retrievable even during server latency spikes.
+
+---
+
+## 👩‍⚕️ ASHA Portal
+
+A mobile-first workspace for **ASHA (Accredited Social Health Activist)** workers, built around NHM / MoHFW guidelines. The **family (household)** is the central record: every pregnancy, home visit, vaccine and referral belongs to a family member.
+
+**Open:** `/asha-login` (or *Login as ASHA Health Worker* in the sign-in popup) · **Demo:** `ASHA-101` / M-PIN `1234`
+
+| Screen | What the ASHA does there |
+| :--- | :--- |
+| **Today** | Prioritised work list — overdue, due now, coming up — plus an area snapshot |
+| **Families** | Search/filter households; register a family (with consent) and its members |
+| **Family / Member record** | Members, risk flags, pregnancy timeline (ANC 1–4, Td), child vaccination card, visits, referrals, scheme suggestions |
+| **Record visit** | Guided form per visit type (ANC, HBNC, HBYC, NCD/CBAC, general, follow-up) with vitals, danger signs, counselling, live risk warning, referral and follow-up. Optional **voice note** pre-fills the form |
+| **Referrals** | Confirm whether the person actually reached the facility |
+| **My work** | Monthly report, indicative incentives, community activities (VHSND, meetings) |
+
+**Highlights**
+- **Auto-generated tasks** — derived on every request from LMP/EDD, date of birth, the UIP vaccine schedule, past visits, follow-ups and open referrals. Recording the visit or vaccine clears the task.
+- **Explainable risk rules** — danger signs + vitals (BP, Hb, SpO₂, sugar, temperature, birth weight, MUAC, CBAC score) give LOW / MODERATE / HIGH with reasons.
+- **Emergency referrals** get a token the hospital **Doctor Cockpit** can open.
+- **Low connectivity** — last-seen data opens offline; visits and vaccines saved offline sync automatically (no duplicates).
+- **Privacy** — DB-backed M-PIN login with lockout, each ASHA sees only her households, consent required at registration, reads/writes audit-logged, local data cleared on logout.
+- **Same look as the citizen app** — shared light/dark theme and language switcher; full Hindi translation.
+
+### Data model
+
+```mermaid
+erDiagram
+    ASHA_WORKER ||--o{ HOUSEHOLD : "assigned"
+    HOUSEHOLD ||--o{ FAMILY_MEMBER : "has"
+    FAMILY_MEMBER ||--o{ PREGNANCY : "has"
+    FAMILY_MEMBER ||--o{ CARE_VISIT : "receives"
+    FAMILY_MEMBER ||--o{ IMMUNIZATION : "receives"
+    FAMILY_MEMBER ||--o{ REFERRAL : "referred"
+    CARE_VISIT |o--o| REFERRAL : "raises"
+    ASHA_WORKER ||--o{ ASHA_ACTIVITY : "logs"
+    ASHA_WORKER ||--o{ ASHA_AUDIT_LOG : "audited"
+```
+
+### How the work list is built
+
+```mermaid
+flowchart LR
+    R["Family records<br/>pregnancies · births · vaccines<br/>visits · follow-ups · referrals"] --> E["Care-plan engine<br/>(ANC · HBNC · HBYC · UIP · CBAC)"]
+    E --> T["Today's tasks<br/>overdue → due → upcoming"]
+    T --> V["ASHA records visit / vaccine"]
+    V --> K{"Risk rules"}
+    K -->|HIGH| F["Referral<br/>+ hospital token"]
+    K -->|any| R
+    F --> R
+```
+
+**Code:** `frontend/src/features/asha/` · `backend/app/models/{family,asha}.py` · `backend/app/services/asha/` · `backend/app/api/v1/endpoints/asha.py`
 
 ---
 
@@ -145,8 +203,7 @@ This project references the **IBM Bob** concept (a modular, scalable medical kno
 ```bash
 cd frontend
 npm install
-npm run build
-npm run start
+npm run dev
 ```
 
 ### Backend Setup
@@ -158,10 +215,10 @@ python -m venv .venv
 source .venv/bin/activate
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 ```
 
-> **Note:** For initial testing, the backend will default to **In-Memory SQLite**. For production, configure `DATABASE_URL` for Turso.
+> **Note:** Locally the backend uses a SQLite file (`DATABASE_URL`); for production configure Turso. On first start it creates the tables and seeds the ASHA demo village. To re-seed with fresh dates: `python -m scripts.seed_asha_demo --reset` (from `backend/`).
 
 ---
 
@@ -171,3 +228,5 @@ uvicorn main:app --reload
 3. **Health Insurance Integration**: API-level integration with Indian health insurance providers for instant claim processing.
 4. **Government Dashboard**: A centralized dashboard for Primary Health Centre (PHC) officers to monitor community health trends.
 5. **Offline-First Caching**: Enhanced PWA caching strategies for unreliable 2G/3G rural networks.
+6. **ANM / Supervisor View**: Sub-centre dashboard over the ASHA households, with role-based access.
+7. **Family Self-Access**: Let citizens linked to a household see their own family record.

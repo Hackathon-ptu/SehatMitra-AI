@@ -57,7 +57,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.history import ConsultationHistory
 from app.models.opd_token import OpdToken
-from app.models.asha_visit import AshaCase
+from app.models.asha import CareVisit, Referral
 from app.api.v1.deps import get_optional_current_user
 from app.services.ayush_ontology import AyushOntologyEngine
 from app.services.rx_safety import HerbDrugSafetyEngine
@@ -490,7 +490,7 @@ def doctor_cockpit(
     Return a rich clinical cockpit payload for the given OPD token.
 
     Primary lookup: OpdToken table (direct kiosk intake).
-    Fallback lookup: AshaCase table (ASHA-referred tokens).
+    Fallback lookup: emergency ASHA referrals (Referral.opd_token).
     Falls back to the in-memory ACTIVE_COCKPIT_STORE for tokens generated
     in the same process lifetime (dev / integration tests).
     """
@@ -504,10 +504,10 @@ def doctor_cockpit(
     )
 
     # ── 2. ASHA referral fallback ─────────────────────────────────────────────
-    asha_case: Optional[AshaCase] = None
+    asha_case: Optional[Referral] = None
     if token is None:
         asha_case = (
-            db.query(AshaCase).filter(AshaCase.opd_token == token_id).first()
+            db.query(Referral).filter(Referral.opd_token == token_id).first()
         )
 
     # ── 3. In-memory fallback (dev / same-process integration) ───────────────
@@ -531,18 +531,22 @@ def doctor_cockpit(
         vitals: Dict[str, Any] = token.vitals or {}
         pain_vas       = vitals.get("pain_vas", token.pain_scale or 3)
     else:
-        # asha_case is not None here
-        patient_name   = asha_case.patient_name  # type: ignore[union-attr]
-        age            = asha_case.age or 24       # type: ignore[union-attr]
-        gender         = asha_case.gender or "Female"  # type: ignore[union-attr]
-        chief          = asha_case.suspected_condition or "General Malaise"  # type: ignore[union-attr]
+        # asha_case is an emergency ASHA referral; vitals come from the visit that raised it
+        member         = asha_case.member  # type: ignore[union-attr]
+        patient_name   = member.name
+        age            = max((datetime.utcnow().date() - member.dob).days // 365, 0)
+        gender         = {"F": "Female", "M": "Male"}.get(member.gender, "Other")
+        chief          = asha_case.reason or "General Malaise"  # type: ignore[union-attr]
         status         = "TRIAGE_PENDING"
         assigned_cabin = "Cabin 1 - General"
-        import json as _json
-        try:
-            vitals = _json.loads(asha_case.vitals_json or "{}") if asha_case.vitals_json else {}  # type: ignore[union-attr]
-        except Exception:
-            vitals = {}
+        visit = db.query(CareVisit).filter(CareVisit.id == asha_case.visit_id).first() if asha_case.visit_id else None  # type: ignore[union-attr]
+        vitals = {
+            k: getattr(visit, k)
+            for k in ("bp_systolic", "bp_diastolic", "pulse", "spo2", "hb", "blood_sugar", "weight_kg")
+            if visit is not None and getattr(visit, k) is not None
+        }
+        if visit is not None and visit.temperature_c:
+            vitals["temp"] = round(visit.temperature_c * 9 / 5 + 32, 1)
         pain_vas = vitals.get("pain_vas", 3)
 
     # ── 5. Fill missing vitals with safe clinical defaults ────────────────────

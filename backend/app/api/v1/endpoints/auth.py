@@ -27,6 +27,7 @@ from app.schemas.auth import (
     ResetPasswordRequest,
     FirebaseLoginRequest,
 )
+from app.schemas.asha import AshaLoginRequest
 from app.services.otp_service import generate_and_store_otp
 from app.api.v1.deps import get_current_user
 import json
@@ -799,42 +800,75 @@ def unlink_abha(
  
 
 # ── ASHA Worker Login ─────────────────────────────────────────────────────────
+# ASHA workers sign in with their worker code (or registered mobile) and a
+# numeric M-PIN, checked against the asha_workers table. A 4–6 digit PIN is
+# guessable, so repeated failures lock the account for a while.
 
-_ASHA_VALID_IDS = {"ASHA-101", "ASHA-PB-042", "9876543210"}
-_ASHA_VALID_MPIN = "1234"
+_ASHA_TOKEN_TTL = timedelta(hours=12)          # one field day
+_ASHA_MAX_FAILURES = 5
+_ASHA_LOCKOUT = timedelta(minutes=15)
+_asha_failures: dict = {}                      # identifier -> (count, first_failure_at)
 
-_ASHA_WORKER_PROFILES = {
-    "ASHA-101":     {"name": "Sunita Devi",   "sub_center": "Raipur Sub-Center",  "village_code": "PB-JAL-04"},
-    "ASHA-PB-042":  {"name": "Sunita Devi",   "sub_center": "Raipur Sub-Center",  "village_code": "PB-JAL-04"},
-    "9876543210":   {"name": "Sunita Devi",   "sub_center": "Raipur Sub-Center",  "village_code": "PB-JAL-04"},
-}
+
+def _asha_locked(identifier: str) -> bool:
+    count, since = _asha_failures.get(identifier, (0, None))
+    if since and datetime.utcnow() - since > _ASHA_LOCKOUT:
+        _asha_failures.pop(identifier, None)
+        return False
+    return count >= _ASHA_MAX_FAILURES
+
+
+def _asha_record_failure(identifier: str) -> None:
+    count, since = _asha_failures.get(identifier, (0, None))
+    _asha_failures[identifier] = (count + 1, since or datetime.utcnow())
 
 
 @router.post("/asha-login")
-def asha_login(payload: dict = Body(...)):
-    """
-    Dedicated login endpoint for ASHA health workers.
-    Returns a real, signed JWT with role='asha' on successful credential match.
-    """
-    worker_id = str(payload.get("worker_id", "")).strip().upper()
-    mpin      = str(payload.get("mpin",      "")).strip()
+def asha_login(payload: AshaLoginRequest, db: Session = Depends(get_db)):
+    """Sign in an ASHA worker and return a portal token scoped to that worker."""
+    from app.models.asha import AshaAuditLog, AshaWorker
 
-    if worker_id not in _ASHA_VALID_IDS or mpin != _ASHA_VALID_MPIN:
-        raise HTTPException(status_code=401, detail="Invalid ASHA Worker ID or M-PIN")
+    identifier = payload.worker_id.strip().upper()
+    if _asha_locked(identifier):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many wrong attempts. Please try again after 15 minutes.",
+        )
 
-    profile = _ASHA_WORKER_PROFILES.get(worker_id, _ASHA_WORKER_PROFILES["ASHA-101"])
+    worker = (
+        db.query(AshaWorker)
+        .filter((AshaWorker.worker_code == identifier) | (AshaWorker.phone == identifier))
+        .first()
+    )
+    if worker is None or not worker.is_active or not verify_password(payload.mpin.strip(), worker.mpin_hash):
+        _asha_record_failure(identifier)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid ASHA Worker ID or M-PIN")
+
+    _asha_failures.pop(identifier, None)
+    worker.last_login_at = datetime.utcnow()
+    db.add(AshaAuditLog(asha_id=worker.id, action="LOGIN", entity="asha_worker", entity_id=worker.id))
+    db.commit()
 
     access_token = create_access_token(
-        data={"sub": f"asha_{worker_id}", "role": "asha", "worker_id": worker_id}
+        data={
+            "sub": f"asha_{worker.worker_code}",
+            "role": "asha",
+            "worker_id": worker.worker_code,
+            "asha_db_id": worker.id,
+            "name": worker.full_name,
+        },
+        expires_delta=_ASHA_TOKEN_TTL,
     )
     return {
         "access_token": access_token,
-        "token_type":   "bearer",
+        "token_type": "bearer",
+        "expires_in": int(_ASHA_TOKEN_TTL.total_seconds()),
         "worker": {
-            "worker_id":    worker_id,
-            "name":         profile["name"],
-            "sub_center":   profile["sub_center"],
-            "village_code": profile["village_code"],
-            "role":         "asha",
+            "id": worker.id,
+            "worker_id": worker.worker_code,
+            "name": worker.full_name,
+            "village": worker.village,
+            "sub_center": worker.sub_center,
+            "role": "asha",
         },
     }

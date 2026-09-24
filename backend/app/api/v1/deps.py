@@ -183,3 +183,32 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="Access Denied: Requires Administrator privileges.",
         )
     return current_user
+
+
+# ---------------------------------------------------------------------------
+# ASHA worker identity
+# ---------------------------------------------------------------------------
+
+def get_current_asha(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    Resolves an ASHA portal token (issued by /auth/asha-login) to the
+    AshaWorker row. Every ASHA endpoint scopes its queries to this worker.
+    """
+    from app.models.asha import AshaWorker
+
+    unauthorized = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="ASHA session expired. Please log in again.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except jwt.PyJWTError:
+        raise unauthorized
+    if payload.get("role") != "asha" or payload.get("asha_db_id") is None:
+        raise unauthorized
+
+    worker = db.query(AshaWorker).filter(AshaWorker.id == payload["asha_db_id"]).first()
+    if worker is None or not worker.is_active:
+        raise unauthorized
+    return worker

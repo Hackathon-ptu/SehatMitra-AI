@@ -14,7 +14,7 @@ import { Heart, MessageSquare, FileSpreadsheet, MapPin, History, User as UserIco
 import { UI_TRANSLATIONS } from './constants/translations';
 import { EmergencySOSModal } from './components/EmergencySOSModal';
 import { OfflineBanner } from './components/common/OfflineBanner';
-import { toggleThemeWithReveal } from './utils/themeTransition';
+import { useColorTheme } from './hooks/useColorTheme';
 
 export const App = () => {
   const [activeTab, setActiveTab] = useState('chat');
@@ -48,28 +48,8 @@ export const App = () => {
     return () => window.removeEventListener('open-sos', handleOpenSos);
   }, []);
   
-  // Theme Engine
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem('theme') || 'light';
-  });
-
-  useEffect(() => {
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = (e?: React.MouseEvent<HTMLElement>) => {
-    const next = theme === 'light' ? 'dark' : 'light';
-    toggleThemeWithReveal(e, () => {
-      // Apply the class synchronously so the reveal captures the new theme.
-      document.documentElement.classList.toggle('dark', next === 'dark');
-      setTheme(next);
-    });
-  };
+  // Theme Engine (shared with the ASHA portal)
+  const { theme, toggleTheme } = useColorTheme();
 
   const { language: selectedLanguage, setLanguage, t: translate } = useLanguage();
 
@@ -115,7 +95,7 @@ export const App = () => {
   };
 
   // Citizen-facing tabs only. ASHA Portal and Charak-Kiosk are accessed
-  // via dedicated routes (/portal/asha-login and /kiosk) — not surfaced here.
+  // via dedicated routes (/asha-login and /kiosk) — not surfaced here.
   const tabs = [
     {
       id: 'chat',

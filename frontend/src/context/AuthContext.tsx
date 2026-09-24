@@ -107,8 +107,8 @@ const decodeToken = (token: string): { email: string; role: string } | null => {
 // components never see a transient (null, null, loading=true) state when the
 // user already has a valid cached session.
 //
-// Auth isolation: ASHA workers authenticate via sessionStorage only (keys
-// asha_token / asha_worker). If a stale ASHA-role object somehow ended up in
+// Auth isolation: ASHA workers have their own session (features/asha/api.ts,
+// key 'sehatmitra-asha-session'). If a stale ASHA-role object somehow ended up in
 // the citizen localStorage keys, we discard it here so the citizen context
 // is never corrupted by an ASHA session.
 // ---------------------------------------------------------------------------

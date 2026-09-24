@@ -12,7 +12,7 @@ export const apiClient = axios.create({
 
 // Resolve the active citizen JWT from any of the known storage locations.
 // Priority: localStorage 'token' → 'access_token' → 'sehat_token' → sessionStorage 'token'
-// ASHA tokens (sessionStorage 'asha_token') are intentionally excluded — they
+// ASHA portal tokens (see features/asha/api.ts) are intentionally excluded — they
 // belong to a separate auth context and must never be sent as a citizen token.
 const getCitizenToken = (): string | null =>
   localStorage.getItem('token') ||
@@ -418,110 +418,7 @@ export const neuralTtsService = {
   }
 };
 
-// ASHA Worker & Community Health Portal Service
-export const ashaService = {
-  // ── Legacy analytics routes (community dashboard, MCH, supplies) ──────────
-  async getCommunityStats() {
-    const response = await apiClient.get('/analytics/community-stats');
-    return response.data;
-  },
-  async submitFieldScreening(payload: any) {
-    const response = await apiClient.post('/analytics/field-screening', payload);
-    return response.data;
-  },
-  async getMchRecords() {
-    const response = await apiClient.get('/analytics/mch-records');
-    return response.data;
-  },
-  async addMchRecord(payload: any) {
-    const response = await apiClient.post('/analytics/mch-records', payload);
-    return response.data;
-  },
-  async getSupplies() {
-    const response = await apiClient.get('/analytics/supplies');
-    return response.data;
-  },
-  async requestRestock(payload: any) {
-    const response = await apiClient.post('/analytics/supplies/request', payload);
-    return response.data;
-  },
-  async reportOutbreak(payload: any) {
-    const response = await apiClient.post('/analytics/report-outbreak', payload);
-    return response.data;
-  },
-
-  // ── RBAC-protected ASHA Visit routes (require role=asha|admin) ────────────
-
-  /** Returns the authenticated ASHA worker's profile and stats summary. */
-  async getMe() {
-    const response = await apiClient.get('/asha/me');
-    return response.data;
-  },
-
-  /**
-   * Record a new door-to-door household health visit.
-   * Requires JWT with role=asha or role=admin.
-   * Returns 403 for patients/doctors.
-   */
-  async createVisit(payload: {
-    patient_name: string;
-    age: number;
-    gender: string;
-    village: string;
-    bp_systolic?: number | null;
-    bp_diastolic?: number | null;
-    blood_sugar?: number | null;
-    spo2?: number | null;
-    pulse?: number | null;
-    symptoms?: string | null;
-    risk_level?: string;
-    referral_needed?: boolean;
-  }) {
-    const response = await apiClient.post('/asha/visits', payload);
-    return response.data;
-  },
-
-  /**
-   * List all visits for the current ASHA worker (paginated, filterable).
-   * Admins see all visits.
-   */
-  async listVisits(params?: {
-    village?: string;
-    risk?: string;
-    referral_only?: boolean;
-    skip?: number;
-    limit?: number;
-  }) {
-    const response = await apiClient.get('/asha/visits', { params });
-    return response.data;  // AshaVisitListResponse
-  },
-
-  /** Retrieve a single visit record by ID. */
-  async getVisit(visitId: number) {
-    const response = await apiClient.get(`/asha/visits/${visitId}`);
-    return response.data;
-  },
-
-  /** Update vitals or assessment for an existing visit. */
-  async updateVisit(visitId: number, payload: Partial<{
-    bp_systolic: number;
-    bp_diastolic: number;
-    blood_sugar: number;
-    spo2: number;
-    pulse: number;
-    symptoms: string;
-    risk_level: string;
-    referral_needed: boolean;
-  }>) {
-    const response = await apiClient.patch(`/asha/visits/${visitId}`, payload);
-    return response.data;
-  },
-
-  /** Delete a visit record. */
-  async deleteVisit(visitId: number) {
-    await apiClient.delete(`/asha/visits/${visitId}`);
-  },
-};
+// ASHA portal calls live in features/asha/api.ts (separate auth).
 
 export default apiClient;
 

@@ -253,3 +253,29 @@ body.dark {
 ::view-transition-old(theme-ring) {
   display: none;
 }
+
+/* ASHA portal: sheet & toast entrances */
+@keyframes ashaFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes ashaSheetIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.asha-fade-in {
+  animation: ashaFadeIn 0.2s ease-out both;
+}
+
+.asha-sheet-in {
+  animation: ashaSheetIn 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asha-fade-in,
+  .asha-sheet-in {
+    animation: none;
+  }
+}

@@ -6,5 +6,8 @@ from app.models.interview import HealthInterviewSession
 from app.models.risk import RiskAssessment, RiskLevel
 from app.models.report import MedicalReport
 from app.models.history import ConsultationHistory, ReportHistory
-from app.models.asha_visit import AshaVisit, AshaRiskLevel, AshaCase
+from app.models.family import Household, FamilyMember
+from app.models.asha import (
+    AshaWorker, Pregnancy, CareVisit, Immunization, Referral, AshaActivity, AshaAuditLog,
+)
 from app.models.opd_token import OpdToken
