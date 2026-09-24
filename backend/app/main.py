@@ -95,6 +95,11 @@ def _ensure_user_columns():
         ("phone",                   "VARCHAR"),
         ("username",                "VARCHAR"),
         ("patient_id",              "VARCHAR"),
+        # ABHA / ABDM columns — added post-initial deployment
+        ("is_abha_verified",        "BOOLEAN DEFAULT 0"),
+        ("abha_number",             "VARCHAR"),
+        ("abha_address",            "VARCHAR"),
+        ("abha_meta",               "TEXT"),
     ]
     try:
         with engine.connect() as conn:

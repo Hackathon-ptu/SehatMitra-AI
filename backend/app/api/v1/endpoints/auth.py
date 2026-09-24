@@ -36,6 +36,18 @@ import urllib.error
 router = APIRouter()
 
 from typing import Dict, Any
+from pydantic import BaseModel
+
+class AbhaLinkRequest(BaseModel):
+    abha_number: str
+    abha_address: str
+    full_name: Optional[str] = None
+    gender: Optional[str] = None
+    age: Optional[int] = None
+    dob: Optional[str] = None
+    address: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
 
 OTP_STORE: Dict[str, dict] = {}
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
@@ -697,3 +709,90 @@ def switch_role(current_user: User = Depends(get_current_user), db: Session = De
         "access_token": new_token,
         "token_type": "bearer",
     }
+
+
+# ── ABHA Linking Endpoints ────────────────────────────────────────────────────
+
+def _build_user_payload(user: User) -> dict:
+    """Return a consistent user dict for ABHA link/unlink responses."""
+    resolved_patient_id = user.patient_id or f"SM-2026-{user.id:04d}"
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name or (user.email.split("@")[0] if user.email else "User"),
+        "role": str(user.role.value if hasattr(user.role, "value") else user.role),
+        "patient_id": resolved_patient_id,
+        "abha_id": resolved_patient_id,
+        "username": user.username,
+        "phone": user.phone,
+        "age": getattr(user, "age", None),
+        "gender": getattr(user, "gender", None),
+        "blood_group": getattr(user, "blood_group", None),
+        "village_town": getattr(user, "village_town", None),
+        "district": getattr(user, "district", None),
+        "state": getattr(user, "state", None),
+        "pincode": getattr(user, "pincode", None),
+        "emergency_contact_name": getattr(user, "emergency_contact_name", None),
+        "emergency_contact_phone": getattr(user, "emergency_contact_phone", None),
+        "allergies": getattr(user, "allergies", None) or [],
+        "chronic_conditions": getattr(user, "chronic_conditions", None) or [],
+        "is_profile_completed": user.is_profile_completed,
+        "is_abha_verified": bool(getattr(user, "is_abha_verified", False)),
+        "abha_number": getattr(user, "abha_number", None),
+        "abha_address": getattr(user, "abha_address", None),
+    }
+
+
+@router.post("/link-abha")
+def link_abha(
+    payload: AbhaLinkRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Link a verified ABHA ID to the authenticated user account."""
+    current_user.is_abha_verified = True
+    current_user.abha_number = payload.abha_number
+    current_user.abha_address = payload.abha_address
+
+    # ── Auto-update profile demographics from verified ABHA identity ─────────
+    if payload.full_name and payload.full_name.strip():
+        current_user.full_name = payload.full_name.strip()
+
+    if payload.gender and payload.gender.strip():
+        current_user.gender = payload.gender.strip()
+
+    if payload.age is not None:
+        current_user.age = payload.age
+
+    if payload.district and payload.district.strip():
+        current_user.district = payload.district.strip()
+
+    if payload.state and payload.state.strip():
+        current_user.state = payload.state.strip()
+
+    # Persist ABHA metadata as JSON blob
+    current_user.abha_meta = payload.model_dump()
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return {"success": True, "message": "ABHA ID linked successfully.", "user": _build_user_payload(current_user)}
+
+
+@router.post("/unlink-abha")
+def unlink_abha(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove the ABHA linkage from the authenticated user account."""
+    current_user.is_abha_verified = False
+    current_user.abha_number = None
+    current_user.abha_address = None
+    current_user.abha_meta = None
+
+    db.add(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return {"success": True, "message": "ABHA ID unlinked.", "user": _build_user_payload(current_user)}

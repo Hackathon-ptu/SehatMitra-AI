@@ -188,6 +188,24 @@ export const authService = {
     return response.data;
   },
 
+  async linkAbha(data: {
+    abha_number: string;
+    abha_address: string;
+    full_name?: string;
+    gender?: string;
+    age?: number;
+    dob?: string;
+    address?: string;
+  }) {
+    const response = await apiClient.post('/auth/link-abha', data);
+    return response.data;
+  },
+
+  async unlinkAbha() {
+    const response = await apiClient.post('/auth/unlink-abha');
+    return response.data;
+  },
+
   logout() {
     localStorage.removeItem('token');
   },

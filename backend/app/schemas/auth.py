@@ -60,6 +60,11 @@ class UserProfileResponse(BaseModel):
     chronic_conditions: Optional[List[str]] = []
     allergies: Optional[List[str]] = []
 
+    # ABHA / ABDM digital health identity fields
+    is_abha_verified: Optional[bool] = False
+    abha_number: Optional[str] = None
+    abha_address: Optional[str] = None
+
     # Computed / normalised fields ─────────────────────────────────────────
     abha_id: Optional[str] = None
 

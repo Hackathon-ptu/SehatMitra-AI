@@ -67,6 +67,12 @@ interface GraniteSoap {
   raw?: string;
 }
 
+interface AiRxItem {
+  name: string;
+  dosage: string;
+  type: 'allopathic' | 'ayush';
+}
+
 interface CockpitRecord {
   token_id: string;
   patient_id: string;
@@ -74,6 +80,7 @@ interface CockpitRecord {
   age: number | null;
   gender: string | null;
   chief_complaint_key: string;
+  chief_complaint?: string;
   raw_symptoms: string[];
   pain_scale: number | null;
   vitals: VitalsDict;
@@ -81,6 +88,14 @@ interface CockpitRecord {
   interaction_warnings: InteractionWarning[];
   fhir_bundle: object;
   granite_triage_summary: GraniteSoap | string;
+  // AI-generated Rx pre-seeded from Groq
+  ai_allopathic_rx?: AiRxItem[];
+  ai_ayush_rx?: AiRxItem[];
+  // AI-generated SOAP plan (for doctorAdvice seed)
+  diagnosis?: {
+    granite_soap?: GraniteSoap;
+    [key: string]: unknown;
+  };
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -160,15 +175,12 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
   const [copied, setCopied]   = useState(false);
 
   // ── Human-in-the-Loop CDSS prescription state ────────────────────────────
-  const [medications, setMedications] = useState<Medication[]>([
-    { id: '1', name: 'Ambroxol HCl Syrup 30mg', dosage: 'TDS × 5 days', type: 'allopathic' },
-    { id: '2', name: 'Levocetirizine 5mg',       dosage: 'OD at night',  type: 'allopathic' },
-    { id: '3', name: 'Sitopaladi Churna 3g',      dosage: 'BD with honey', type: 'ayush'     },
-  ]);
+  // Start empty — seeded from backend AI Rx once data loads (see useEffect below)
+  const [medications, setMedications] = useState<Medication[]>([]);
   const [customMedName, setCustomMedName]   = useState('');
   const [customMedDosage, setCustomMedDosage] = useState('');
   const [customMedType, setCustomMedType]   = useState<'allopathic' | 'ayush'>('allopathic');
-  const [doctorAdvice, setDoctorAdvice]     = useState('Steam inhalation twice daily. Avoid cold exposure.');
+  const [doctorAdvice, setDoctorAdvice]     = useState('');
 
   // ── Action-button UI state ────────────────────────────────────────────────
   const [showPrintModal, setShowPrintModal] = useState(false);
@@ -181,7 +193,39 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
     setError('');
     apiClient.get(`/kiosk/doctor-cockpit/${encodeURIComponent(tokenId)}`)
       .then((r) => r.data)
-      .then((data) => { setRecord(data); setLoading(false); })
+      .then((data: CockpitRecord) => {
+        setRecord(data);
+
+        // ── Seed prescription pad from Groq AI suggestions ──────────────────
+        const seedMeds: Medication[] = [];
+        (data.ai_allopathic_rx || []).forEach((rx, i) => {
+          seedMeds.push({
+            id: `ai-allo-${i}`,
+            name: rx.name,
+            dosage: rx.dosage,
+            type: 'allopathic',
+          });
+        });
+        (data.ai_ayush_rx || []).forEach((rx, i) => {
+          seedMeds.push({
+            id: `ai-ayush-${i}`,
+            name: rx.name,
+            dosage: rx.dosage,
+            type: 'ayush',
+          });
+        });
+        if (seedMeds.length > 0) setMedications(seedMeds);
+
+        // ── Seed doctor-advice textarea from SOAP plan ───────────────────────
+        const soapPlan =
+          data.diagnosis?.granite_soap?.plan ||
+          (typeof data.granite_triage_summary === 'object'
+            ? (data.granite_triage_summary as GraniteSoap).plan
+            : undefined);
+        if (soapPlan) setDoctorAdvice(soapPlan);
+
+        setLoading(false);
+      })
       .catch((e: any) => {
         const msg = e?.response?.data?.detail || e?.message || 'Failed to fetch cockpit data';
         setError(msg);

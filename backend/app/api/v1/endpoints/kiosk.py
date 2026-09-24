@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import random
 import re
 import string
@@ -336,6 +337,149 @@ def kiosk_intake(
     }
 
 
+# ── Context-aware fallback when Groq is unavailable ─────────────────────────
+def get_context_aware_fallback(chief_complaint: str) -> Dict[str, Any]:
+    """
+    Returns clinically plausible (but static) CDSS values keyed to the chief
+    complaint so the cockpit is never blank even without a network call.
+    """
+    cc = chief_complaint.lower()
+    is_fever    = any(w in cc for w in ("fever", "pyrexia", "febrile", "temperature"))
+    is_cough    = any(w in cc for w in ("cough", "cold", "bronchitis", "productive"))
+    is_diarrhea = any(w in cc for w in ("diarrhea", "diarrhoea", "loose stool", "loose motion"))
+    is_bp       = any(w in cc for w in ("hypertension", "bp", "blood pressure"))
+    is_diabetes = any(w in cc for w in ("diabetes", "sugar", "hyperglycemia"))
+    is_pain     = any(w in cc for w in ("pain", "headache", "abdomen", "migraine"))
+
+    if is_fever:
+        return {
+            "icd_code": "1D00", "icd_title": "Acute febrile illness",
+            "ayush_code": "AYU-JW-01", "ayush_title": "Jwara Roga (Febrile Disorder)",
+            "differentials": ["Viral fever (most likely)", "Dengue fever (rule out)", "Typhoid (rule out)"],
+            "soap_subjective": f"Chief complaint: {chief_complaint}",
+            "soap_objective":  "Elevated temperature noted. Other vitals recorded.",
+            "soap_assessment": "Acute febrile illness, likely viral aetiology.",
+            "soap_plan":       "Antipyretics, adequate hydration, rest. Monitor for red flags (rash, bleeding).",
+            "allopathic_rx": [
+                {"name": "Paracetamol 650mg", "dosage": "TDS × 3 days (SOS for temp >100.4°F)", "type": "allopathic"},
+                {"name": "ORS Sachet",         "dosage": "After every loose stool / freely",      "type": "allopathic"},
+            ],
+            "ayush_rx": [
+                {"name": "Mahasudarshan Kwath 15ml", "dosage": "BD with warm water × 5 days", "type": "ayush"},
+            ],
+            "dosha": {"vata": 30, "pitta": 55, "kapha": 15, "dominant": "Pitta Pradhana"},
+        }
+    if is_diarrhea:
+        return {
+            "icd_code": "1A00", "icd_title": "Acute diarrhoeal disease",
+            "ayush_code": "AYU-AT-01", "ayush_title": "Atisara (Diarrhoeal Disorder)",
+            "differentials": ["Acute gastroenteritis (most likely)", "Food poisoning (rule out)", "IBS flare (rule out)"],
+            "soap_subjective": f"Chief complaint: {chief_complaint}",
+            "soap_objective":  "Abdomen soft, mildly tender. Vitals recorded.",
+            "soap_assessment": "Acute gastroenteritis — likely infective / dietary.",
+            "soap_plan":       "Oral rehydration, BRAT diet, anti-diarrhoeal if severe. Review if > 3 days.",
+            "allopathic_rx": [
+                {"name": "ORS 200ml",          "dosage": "After every loose stool",    "type": "allopathic"},
+                {"name": "Zinc 20mg",          "dosage": "OD × 14 days",              "type": "allopathic"},
+                {"name": "Loperamide 2mg",     "dosage": "PRN (max 8mg/day)",         "type": "allopathic"},
+            ],
+            "ayush_rx": [
+                {"name": "Bilwadi Churna 3g",  "dosage": "BD with buttermilk × 5 days", "type": "ayush"},
+            ],
+            "dosha": {"vata": 50, "pitta": 30, "kapha": 20, "dominant": "Vata Pradhana"},
+        }
+    if is_bp:
+        return {
+            "icd_code": "BA00", "icd_title": "Essential hypertension",
+            "ayush_code": "AYU-CS-01", "ayush_title": "Vata-Vyadhi / Shonita Dushti",
+            "differentials": ["Primary hypertension (most likely)", "White-coat hypertension (rule out)", "Secondary hypertension (rule out)"],
+            "soap_subjective": f"Chief complaint: {chief_complaint}",
+            "soap_objective":  "Elevated BP recorded. Other vitals stable.",
+            "soap_assessment": "Essential hypertension — newly detected or poorly controlled.",
+            "soap_plan":       "Low-sodium DASH diet, amlodipine/telmisartan initiation. Lifestyle counselling.",
+            "allopathic_rx": [
+                {"name": "Amlodipine 5mg",    "dosage": "OD morning × 30 days", "type": "allopathic"},
+                {"name": "Telmisartan 40mg",  "dosage": "OD morning × 30 days", "type": "allopathic"},
+            ],
+            "ayush_rx": [
+                {"name": "Sarpagandha Ghana Vati 250mg", "dosage": "BD after meals × 30 days", "type": "ayush"},
+            ],
+            "dosha": {"vata": 50, "pitta": 35, "kapha": 15, "dominant": "Vata-Pitta Pradhana"},
+        }
+    if is_cough:
+        return {
+            "icd_code": "CA23", "icd_title": "Acute bronchitis / Productive cough",
+            "ayush_code": "AYU-RS-02", "ayush_title": "Kasa Roga (Bronchial Disorder)",
+            "differentials": ["Acute viral bronchitis (most likely)", "Allergic bronchitis (rule out)", "Early pneumonia (rule out)"],
+            "soap_subjective": f"Chief complaint: {chief_complaint}",
+            "soap_objective":  "Chest clear or mild rhonchi. Vitals recorded.",
+            "soap_assessment": "Acute bronchitis — likely post-viral, no consolidation.",
+            "soap_plan":       "Steam inhalation, expectorants, avoid cold. Antibiotics only if secondary bacterial infection.",
+            "allopathic_rx": [
+                {"name": "Ambroxol HCl Syrup 30mg", "dosage": "TDS × 5 days",     "type": "allopathic"},
+                {"name": "Levocetirizine 5mg",       "dosage": "OD at night × 5 days", "type": "allopathic"},
+            ],
+            "ayush_rx": [
+                {"name": "Sitopaladi Churna 3g with honey", "dosage": "BD × 7 days", "type": "ayush"},
+            ],
+            "dosha": {"vata": 40, "pitta": 20, "kapha": 40, "dominant": "Vata-Kapha Pradhana"},
+        }
+    if is_diabetes:
+        return {
+            "icd_code": "5A11", "icd_title": "Type 2 diabetes mellitus",
+            "ayush_code": "AYU-PM-01", "ayush_title": "Prameha (Metabolic Disorder)",
+            "differentials": ["Type 2 DM (most likely)", "Impaired fasting glucose (rule out)", "Type 1 DM (rule out)"],
+            "soap_subjective": f"Chief complaint: {chief_complaint}",
+            "soap_objective":  "Elevated blood glucose. Other vitals stable.",
+            "soap_assessment": "Type 2 diabetes mellitus — new diagnosis or glycaemic review.",
+            "soap_plan":       "Low GI diet, metformin initiation, HbA1c, kidney function tests.",
+            "allopathic_rx": [
+                {"name": "Metformin 500mg",   "dosage": "BD with meals × 30 days", "type": "allopathic"},
+                {"name": "Glimepiride 1mg",   "dosage": "OD before breakfast × 30 days", "type": "allopathic"},
+            ],
+            "ayush_rx": [
+                {"name": "Chandraprabha Vati 500mg", "dosage": "BD with water × 30 days", "type": "ayush"},
+            ],
+            "dosha": {"vata": 30, "pitta": 35, "kapha": 35, "dominant": "Kapha-Pitta Pradhana"},
+        }
+    if is_pain:
+        return {
+            "icd_code": "MG30.0", "icd_title": "Acute pain — unspecified",
+            "ayush_code": "AYU-VY-01", "ayush_title": "Vata-Vyadhi (Pain Disorder)",
+            "differentials": ["Musculoskeletal pain (most likely)", "Tension headache (if head)", "Visceral pain (rule out)"],
+            "soap_subjective": f"Chief complaint: {chief_complaint}",
+            "soap_objective":  "Localised tenderness or generalised discomfort. Vitals recorded.",
+            "soap_assessment": "Acute pain — aetiology under investigation.",
+            "soap_plan":       "Analgesic ladder, hot fomentation, reassess in 24h. Rule out serious pathology.",
+            "allopathic_rx": [
+                {"name": "Ibuprofen 400mg",   "dosage": "TDS after food × 3 days", "type": "allopathic"},
+                {"name": "Pantoprazole 40mg", "dosage": "OD before breakfast × 3 days (gastroprotection)", "type": "allopathic"},
+            ],
+            "ayush_rx": [
+                {"name": "Yograj Guggul 500mg", "dosage": "BD with warm water × 7 days", "type": "ayush"},
+            ],
+            "dosha": {"vata": 60, "pitta": 25, "kapha": 15, "dominant": "Vata Pradhana"},
+        }
+    # Generic fallback
+    return {
+        "icd_code": "MD81", "icd_title": "General Malaise / Unspecified",
+        "ayush_code": "AYU-AG-01", "ayush_title": "Agnimandya (Systemic Weakness)",
+        "differentials": ["General debility (most likely)", "Anaemia (rule out)", "Hypothyroidism (rule out)"],
+        "soap_subjective": f"Chief complaint: {chief_complaint}",
+        "soap_objective":  "General examination within normal limits. Vitals recorded.",
+        "soap_assessment": "General malaise — systemic aetiology to be investigated.",
+        "soap_plan":       "Supportive care, hydration, nutritional supplementation. Baseline blood work.",
+        "allopathic_rx": [
+            {"name": "Vitamin B-Complex",  "dosage": "OD × 30 days",        "type": "allopathic"},
+            {"name": "Iron + Folic Acid",  "dosage": "OD after food × 30 days", "type": "allopathic"},
+        ],
+        "ayush_rx": [
+            {"name": "Ashwagandha Churna 3g", "dosage": "BD with warm milk × 30 days", "type": "ayush"},
+        ],
+        "dosha": {"vata": 40, "pitta": 30, "kapha": 30, "dominant": "Sama Dosha"},
+    }
+
+
 @router.get("/doctor-cockpit/{token_id}")
 def doctor_cockpit(
     token_id: str,
@@ -401,59 +545,140 @@ def doctor_cockpit(
             vitals = {}
         pain_vas = vitals.get("pain_vas", 3)
 
-    # Fill missing vitals with safe defaults
-    vitals.setdefault("bp_systolic",  124)
-    vitals.setdefault("bp_diastolic", 82)
-    vitals.setdefault("pulse",        76)
-    vitals.setdefault("spo2",         98)
-    vitals.setdefault("temp",         98.4)
+    # ── 5. Fill missing vitals with safe clinical defaults ────────────────────
+    bp      = vitals.get("bp_systolic")  or vitals.get("systolic")  or 120
+    dia     = vitals.get("bp_diastolic") or vitals.get("diastolic") or 80
+    pulse   = vitals.get("pulse")  or 74
+    spo2    = vitals.get("spo2")   or 98
+    temp    = vitals.get("temp")   or 98.6
+    vitals.setdefault("bp_systolic",  bp)
+    vitals.setdefault("bp_diastolic", dia)
+    vitals.setdefault("pulse",        pulse)
+    vitals.setdefault("spo2",         spo2)
+    vitals.setdefault("temp",         temp)
 
-    # ── 5. ICD-11 / NAMASTE AYUSH mapping ────────────────────────────────────
-    chief_lower  = chief.lower()
-    is_cough     = "cough" in chief_lower or "cold" in chief_lower
-    is_fever     = "fever" in chief_lower or "pyrexia" in chief_lower
-    is_bp        = "hypertension" in chief_lower or "bp" in chief_lower or "blood pressure" in chief_lower
+    # ── 6. Groq CDSS — dynamic ICD-11 + NAMASTE + Rx synthesis ──────────────
+    groq_api_key = os.getenv("GROQ_API_KEY", "")
+    ai_res: Dict[str, Any] = {}
 
-    if is_cough:
-        icd_code    = "CA23"
-        icd_title   = "Acute bronchitis / Productive cough"
-        ayush_code  = "AYU-RS-02"
-        ayush_title = "Kasa Roga (Bronchial Disorder)"
-    elif is_fever:
-        icd_code    = "1D00"
-        icd_title   = "Dengue-like febrile illness"
-        ayush_code  = "AYU-JW-01"
-        ayush_title = "Jwara Roga (Febrile Disorder)"
-    elif is_bp:
-        icd_code    = "BA00"
-        icd_title   = "Essential hypertension"
-        ayush_code  = "AYU-CS-01"
-        ayush_title = "Vata-Vyadhi / Shonita Dushti"
+    if groq_api_key:
+        try:
+            from groq import Groq  # type: ignore[import]
+            groq_client = Groq(api_key=groq_api_key)
+            prompt = (
+                "You are an Indian Public Health Clinical Decision Support Engine following "
+                "WHO ICD-11, AYUSH NAMASTE, and IBM Granite-3.0 Clinical Spec.\n"
+                f"Patient Profile:\n"
+                f"- Name: {patient_name}, Age: {age}, Gender: {gender}\n"
+                f"- Chief Complaint: {chief}\n"
+                f"- Vitals: BP {bp}/{dia} mmHg, Pulse {pulse} bpm, SpO2 {spo2}%, Temp {temp}°F\n\n"
+                "Generate clinically accurate, mutually safe allopathic & AYUSH treatment "
+                "in strict JSON:\n"
+                '{\n'
+                '  "icd_code": "WHO ICD-11 code (e.g. 1D00, CA23, MG45)",\n'
+                '  "icd_title": "ICD Condition title",\n'
+                '  "ayush_code": "NAMASTE code (e.g. AYU-JW-01, AYU-RS-02, AYU-PA-01)",\n'
+                '  "ayush_title": "Ayurvedic classical name (e.g. Jwara Roga, Kasa Roga)",\n'
+                '  "differentials": ["Diagnosis 1", "Diagnosis 2", "Diagnosis 3"],\n'
+                f'  "soap_subjective": "{patient_name} · {age}y · {gender} · Chief: {chief}",\n'
+                f'  "soap_objective": "Vitals: BP {bp}/{dia}, Pulse {pulse} bpm, SpO2 {spo2}%, Temp {temp}°F",\n'
+                '  "soap_assessment": "Accurate 1-sentence clinical appraisal matching the complaint.",\n'
+                '  "soap_plan": "Accurate management plan matching the complaint and treatment.",\n'
+                '  "allopathic_rx": [\n'
+                '    {"name": "Appropriate Drug 1", "dosage": "TDS x 3 days", "type": "allopathic"},\n'
+                '    {"name": "Appropriate Drug 2", "dosage": "OD as needed", "type": "allopathic"}\n'
+                '  ],\n'
+                '  "ayush_rx": [\n'
+                '    {"name": "Appropriate AYUSH formulation", "dosage": "BD with warm water", "type": "ayush"}\n'
+                '  ],\n'
+                '  "dosha": {"vata": 40, "pitta": 45, "kapha": 15, "dominant": "Pitta Pradhana"}\n'
+                '}\n'
+                "Return ONLY the valid JSON object. No conversational filler."
+            )
+            chat_completion = groq_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile",
+                response_format={"type": "json_object"},
+                temperature=0.2,
+            )
+            ai_res = json.loads(chat_completion.choices[0].message.content)
+            print(f"[GROQ CDSS] Synthesised plan for '{chief}': "
+                  f"{ai_res.get('icd_code')} / {ai_res.get('ayush_code')}", flush=True)
+        except Exception as groq_err:
+            print(f"[GROQ CDSS] Call failed — using context-aware fallback: {groq_err}", flush=True)
+            ai_res = get_context_aware_fallback(chief)
     else:
-        icd_code    = "MD81"
-        icd_title   = "Essential Hypertension / Triage"
-        ayush_code  = "AYU-CS-01"
-        ayush_title = "Vata-Vyadhi / Shonita Dushti"
+        print("[GROQ CDSS] GROQ_API_KEY not set — using context-aware fallback.", flush=True)
+        ai_res = get_context_aware_fallback(chief)
 
-    # ── 6. Return rich Bento Grid clinical payload ────────────────────────────
+    # ── 7. Unpack AI result with safe defaults ────────────────────────────────
+    icd_code    = ai_res.get("icd_code",    "MD81")
+    icd_title   = ai_res.get("icd_title",   "Unspecified condition")
+    ayush_code  = ai_res.get("ayush_code",  "AYU-AG-01")
+    ayush_title = ai_res.get("ayush_title", "Agnimandya")
+    differentials = ai_res.get("differentials", [
+        f"{chief} — primary (most likely)",
+        "Secondary cause (rule out)",
+        "Incidental finding (rule out)",
+    ])
+    soap_subj   = ai_res.get("soap_subjective",
+                             f"{patient_name} · {age}y · {gender}\nChief: {chief}")
+    soap_obj    = ai_res.get("soap_objective",
+                             f"Vitals: BP {bp}/{dia} mmHg, Pulse {pulse} bpm, SpO2 {spo2}%, Temp {temp}°F")
+    soap_assess = ai_res.get("soap_assessment", "Acute presentation. Hemodynamics stable.")
+    soap_plan   = ai_res.get("soap_plan",   "Symptomatic management as per standard protocol.")
+
+    raw_allo_rx: List[Dict[str, Any]] = ai_res.get("allopathic_rx", [])
+    raw_ayush_rx: List[Dict[str, Any]] = ai_res.get("ayush_rx",     [])
+
+    dosha_raw   = ai_res.get("dosha", {})
+    dosha_vata  = int(dosha_raw.get("vata",  40))
+    dosha_pitta = int(dosha_raw.get("pitta", 35))
+    dosha_kapha = int(dosha_raw.get("kapha", 25))
+    dosha_dom   = dosha_raw.get("dominant", "Sama Dosha")
+
+    red_flag_alert  = bool(getattr(token, "red_flag", False) if token else
+                           getattr(asha_case, "red_flag_alert", False))
+    red_flag_reason = getattr(token, "red_flag_reason", None) if token else None
+
+    # Normalise Rx to flat strings for legacy consumers
+    rx_allo_flat = [
+        f"{r.get('name', '')} {r.get('dosage', '')}".strip()
+        for r in raw_allo_rx
+    ]
+    rx_ayush_flat = [
+        f"{r.get('name', '')} {r.get('dosage', '')}".strip()
+        for r in raw_ayush_rx
+    ]
+
+    # Normalise Rx to treatment-block format
+    treatment_allo = [
+        {"drug": r.get("name", ""), "dose": r.get("dosage", ""), "duration": ""}
+        for r in raw_allo_rx
+    ]
+    treatment_ayush = [
+        {"formulation": r.get("name", ""), "dose": r.get("dosage", ""), "vehicle": ""}
+        for r in raw_ayush_rx
+    ]
+
+    # ── 8. Return rich Bento Grid clinical payload ────────────────────────────
     return {
         "token_id":        token_id,
         "patient_name":    patient_name,
         "age":             age,
         "gender":          gender,
         "chief_complaint": chief,
-        # Legacy key aliases so old frontend consumers still work
         "chief_complaint_key": chief.lower().replace(" ", "_"),
         "raw_symptoms":    [chief],
         "pain_scale":      pain_vas,
         "status":          status,
         "assigned_cabin":  assigned_cabin,
         "vitals": {
-            "bp_systolic":  vitals.get("bp_systolic",  124),
-            "bp_diastolic": vitals.get("bp_diastolic", 82),
-            "pulse":        vitals.get("pulse",        76),
-            "spo2":         vitals.get("spo2",         98),
-            "temp":         vitals.get("temp",         98.4),
+            "bp_systolic":  bp,
+            "bp_diastolic": dia,
+            "pulse":        pulse,
+            "spo2":         spo2,
+            "temp":         temp,
         },
         "pain_vas": pain_vas,
         "dashavidha": {
@@ -461,53 +686,41 @@ def doctor_cockpit(
             "koshtha": "Madhyama",
         },
         "dosha": {
-            "vata":     45,
-            "pitta":    15,
-            "kapha":    40,
-            "dominant": "Vata-Kapha Pradhana",
+            "vata":     dosha_vata,
+            "pitta":    dosha_pitta,
+            "kapha":    dosha_kapha,
+            "dominant": dosha_dom,
         },
-        # Legacy ontology key so DoctorCockpit.tsx (old interface) still renders
+        # Legacy ontology key consumed by DoctorCockpit.tsx
         "ontology": {
             "icd11_code":          icd_code,
             "icd11_title":         icd_title,
             "namaste_code":        ayush_code,
             "namaste_title":       ayush_title,
-            "tridosha_vector":     {"vata": 45, "pitta": 15, "kapha": 40},
+            "tridosha_vector":     {"vata": dosha_vata, "pitta": dosha_pitta, "kapha": dosha_kapha},
             "agni_type":           "Vishamagni",
             "koshtha_type":        "Madhyama",
-            "vikriti_description": "Vata-Kapha aggravation with Ama accumulation.",
-            "red_flag_alert":      bool(getattr(token, "red_flag", False) if token else getattr(asha_case, "red_flag_alert", False)),
-            "red_flag_reason":     getattr(token, "red_flag_reason", None) if token else None,
+            "vikriti_description": f"{dosha_dom} aggravation — see SOAP assessment.",
+            "red_flag_alert":      red_flag_alert,
+            "red_flag_reason":     red_flag_reason,
         },
         "diagnosis": {
             "icd11":   {"code": icd_code, "title": icd_title},
             "namaste": {"code": ayush_code, "title": ayush_title},
-            "differentials": [
-                "Viral Acute Bronchitis (most likely)" if is_cough else "Primary hypertension (most likely)",
-                "Allergic / Post-nasal Drip Cough" if is_cough else "Secondary hypertension (rule out)",
-                "Early Pulmonary Infection (rule out)" if is_cough else "White-coat hypertension (rule out)",
-            ],
+            "differentials": differentials,
             "granite_soap": {
-                "subjective": f"{patient_name} · {age}y · {gender}\nChief: {chief}",
-                "objective":  (
-                    f"ICD-11 {icd_code} {icd_title} · NAMASTE {ayush_code} {ayush_title}\n"
-                    f"Vitals: BP {vitals.get('bp_systolic', 124)}/{vitals.get('bp_diastolic', 82)}, "
-                    f"Pulse {vitals.get('pulse', 76)}, SpO2 {vitals.get('spo2', 98)}%"
-                ),
-                "assessment": "Acute presentation. Hemodynamics stable. No immediate red flags.",
-                "plan":       "Conventional symptomatic therapy coupled with AYUSH bronchodilatory support.",
+                "subjective": soap_subj,
+                "objective":  soap_obj,
+                "assessment": soap_assess,
+                "plan":       soap_plan,
             },
         },
         # Legacy key consumed by StaffPortal CockpitDrawer
         "granite_triage_summary": {
-            "subjective": f"{patient_name} · {age}y · {gender}\nChief: {chief}",
-            "objective":  (
-                f"ICD-11 {icd_code} {icd_title} · NAMASTE {ayush_code} {ayush_title}\n"
-                f"Vitals: BP {vitals.get('bp_systolic', 124)}/{vitals.get('bp_diastolic', 82)}, "
-                f"Pulse {vitals.get('pulse', 76)}, SpO2 {vitals.get('spo2', 98)}%"
-            ),
-            "assessment": "Acute presentation. Hemodynamics stable. No immediate red flags.",
-            "plan":       "Conventional symptomatic therapy coupled with AYUSH bronchodilatory support.",
+            "subjective": soap_subj,
+            "objective":  soap_obj,
+            "assessment": soap_assess,
+            "plan":       soap_plan,
         },
         "treatment": {
             "herb_drug_safety": {
@@ -515,30 +728,16 @@ def doctor_cockpit(
                 "status_text":     "No Herb-Drug Interactions Detected",
                 "badge_color":     "green",
             },
-            "allopathic_rx": [
-                {"drug": "Ambroxol HCl Syrup",   "dose": "30 mg TDS",      "duration": "5 days"},
-                {"drug": "Levocetirizine",         "dose": "5 mg OD at night", "duration": "5 days"},
-            ],
-            "ayush_rx": [
-                {"formulation": "Sitopaladi Churna", "dose": "3 g with honey BD", "vehicle": "Madhu"},
-                {"formulation": "Vasavaleha",         "dose": "10 g BD",           "duration": "7 days"},
-            ],
+            "allopathic_rx": treatment_allo,
+            "ayush_rx":      treatment_ayush,
         },
-        # Legacy flat Rx arrays consumed by StaffPortal print / copy functions
         "interaction_warnings": [],
-        "differentials": [
-            "Viral Acute Bronchitis (most likely)" if is_cough else "Primary hypertension (most likely)",
-            "Allergic / Post-nasal Drip Cough" if is_cough else "Secondary hypertension (rule out)",
-            "Early Pulmonary Infection (rule out)" if is_cough else "White-coat hypertension (rule out)",
-        ],
-        "rx_allopathic": [
-            f"Ambroxol HCl Syrup 30 mg TDS × 5 days",
-            f"Levocetirizine 5 mg OD at night × 5 days",
-        ],
-        "rx_ayush": [
-            "Sitopaladi Churna 3 g with honey BD (Madhu anupana)",
-            "Vasavaleha 10 g BD × 7 days",
-        ],
+        "differentials":  differentials,
+        "rx_allopathic":  rx_allo_flat,
+        "rx_ayush":       rx_ayush_flat,
+        # Expose raw AI Rx arrays so the frontend can pre-seed the prescription pad
+        "ai_allopathic_rx": raw_allo_rx,
+        "ai_ayush_rx":      raw_ayush_rx,
         "fhir_bundle": {
             "resourceType": "Bundle",
             "type":         "collection",
@@ -558,7 +757,11 @@ def doctor_cockpit(
                         "id":           f"{token_id}-dx",
                         "code": {
                             "coding": [
-                                {"system": "http://id.who.int/icd/release/11/mms", "code": icd_code, "display": icd_title}
+                                {
+                                    "system":  "http://id.who.int/icd/release/11/mms",
+                                    "code":    icd_code,
+                                    "display": icd_title,
+                                }
                             ]
                         },
                         "clinicalStatus": {"coding": [{"code": "active"}]},
@@ -566,8 +769,8 @@ def doctor_cockpit(
                 },
             ],
         },
-        "intake_language":  "en-IN",
-        "vernacular_text":  "",
+        "intake_language": "en-IN",
+        "vernacular_text": "",
     }
 
 

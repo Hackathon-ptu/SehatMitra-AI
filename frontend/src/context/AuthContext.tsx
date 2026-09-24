@@ -50,6 +50,10 @@ export interface UserPayload {
   emergency_contact_phone?: string;
   chronic_conditions?: string[];
   allergies?: string[];
+  // ABHA / ABDM digital health identity
+  is_abha_verified?: boolean;
+  abha_number?: string;
+  abha_address?: string;
 }
 
 interface AuthContextType {

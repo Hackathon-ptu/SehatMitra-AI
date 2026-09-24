@@ -14,8 +14,11 @@ import {
   RefreshCw,
   MapPin,
   Phone,
+  LinkIcon,
+  Link2Off,
 } from 'lucide-react';
 import { Button } from '../common/Button';
+import { AbhaLinkModal } from './AbhaLinkModal';
 
 export const ProfilePage: React.FC = () => {
   const { user: ctxUser, logout, updateUser, refreshUser, loading } = useAuth();
@@ -39,6 +42,8 @@ export const ProfilePage: React.FC = () => {
   // Mode States
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
+  const [showAbhaModal, setShowAbhaModal] = useState(false);
+  const [unlinkingAbha, setUnlinkingAbha] = useState(false);
 
   // Edit States
   const [age, setAge] = useState<number | ''>(user?.age || '');
@@ -97,6 +102,25 @@ export const ProfilePage: React.FC = () => {
     setList(list.filter(t => t !== tag));
   };
 
+  const handleUnlinkAbha = async () => {
+    if (!window.confirm('Are you sure you want to unlink your ABHA ID?')) return;
+    setUnlinkingAbha(true);
+    try {
+      const res = await authService.unlinkAbha();
+      if (res?.user) {
+        updateUser(res.user);
+        localStorage.setItem('user', JSON.stringify(res.user));
+        localStorage.setItem('sehat_user', JSON.stringify(res.user));
+        window.dispatchEvent(new Event('auth_state_changed'));
+      }
+    } catch (err) {
+      console.error('Failed to unlink ABHA:', err);
+      alert('Failed to unlink ABHA. Please try again.');
+    } finally {
+      setUnlinkingAbha(false);
+    }
+  };
+
   const handleSaveChanges = async () => {
     setIsSaving(true);
     setSaveSuccess(false);
@@ -142,8 +166,11 @@ export const ProfilePage: React.FC = () => {
   const displayName = user?.full_name
     || (user?.email ? user.email.split('@')[0] : null)
     || 'Verified Patient';
-  const abhaId = user?.abha_id || user?.patient_id
-    || (user?.id ? `SM-2026-${String(user.id).padStart(4, '0')}` : `SM-2026-${user?.email ? user.email.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase() : 'USER'}`);
+  // Only use the real ABHA number when the account is actually verified;
+  // never synthesise a fake SM-2026-… string for the card face.
+  const abhaId = user?.is_abha_verified
+    ? (user?.abha_number || user?.abha_id || user?.patient_id || '')
+    : (user?.patient_id || '');
 
   // Comprehensive clinical QR payload — auto-fills Charak-Kiosk on scan
   const qrPayload = JSON.stringify({
@@ -185,6 +212,7 @@ export const ProfilePage: React.FC = () => {
   }
 
   return (
+    <>
     <div className="w-full max-w-4xl mx-auto flex flex-col gap-8 text-left animate-fade-in">
       
       {/* Header */}
@@ -210,7 +238,7 @@ export const ProfilePage: React.FC = () => {
           </button>
         </div>
 
-        {/* 3D card container */}
+        {/* 3D card container — height is driven by the front face min-h so nothing clips */}
         <div style={{ perspective: '1000px' }}>
           <div
             style={{
@@ -218,13 +246,13 @@ export const ProfilePage: React.FC = () => {
               transition: 'transform 0.6s ease',
               transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
               position: 'relative',
-              height: '220px',
             }}
+            className="min-h-[250px]"
           >
             {/* ── FRONT FACE ── */}
             <div
               style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
-              className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-blue-700 text-white rounded-3xl shadow-elevated overflow-hidden p-5 flex flex-col gap-4 border border-teal-800"
+              className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-blue-700 text-white rounded-2xl shadow-xl overflow-hidden border border-teal-800"
             >
               {/* Tricolor accent stripe */}
               <div className="absolute top-0 left-0 right-0 h-1.5 flex">
@@ -232,46 +260,82 @@ export const ProfilePage: React.FC = () => {
                 <div className="flex-1 bg-white" />
                 <div className="flex-1 bg-green-500" />
               </div>
-              {/* Card Header */}
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-2">
-                  <Heart className="w-4 h-4 fill-red-400 text-red-400 animate-pulse" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">
-                    ABDM Digital Health Card
+
+              {/* Inner flex column — fills the card height cleanly */}
+              <div className="relative flex flex-col justify-between h-full p-5 pt-6">
+
+                {/* ── Row 1: Header ── */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Heart className="w-4 h-4 fill-red-400 text-red-400 animate-pulse shrink-0" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">
+                      ABDM Digital Health Card
+                    </span>
+                  </div>
+                  {user?.is_abha_verified ? (
+                    <span className="bg-emerald-500/20 text-emerald-200 border border-emerald-400/30 px-2.5 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1 shrink-0">
+                      <ShieldCheck className="w-3 h-3" /> ABDM VERIFIED
+                    </span>
+                  ) : (
+                    <span className="bg-slate-700/50 text-slate-300 border border-slate-600 px-2.5 py-0.5 rounded-full text-[11px] font-semibold shrink-0">
+                      ⚪ UNLINKED
+                    </span>
+                  )}
+                </div>
+
+                {/* ── Row 2: Body (left details + right QR) ── */}
+                <div className="flex items-start justify-between gap-4 flex-1 py-3">
+                  {/* Left column */}
+                  <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                    {/* Patient Name */}
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-emerald-200/80">Patient Name</span>
+                      <p className="text-lg font-bold text-white tracking-wide truncate leading-tight">{displayName}</p>
+                    </div>
+
+                    {/* ABHA Number */}
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider text-emerald-200/80">ABHA Number</span>
+                      {user?.is_abha_verified ? (
+                        <p className="text-xs font-mono font-semibold text-white truncate">{abhaId}</p>
+                      ) : (
+                        <p className="text-[10px] font-semibold text-slate-300 italic leading-snug">
+                          Not Linked (Click Link Button Below)
+                        </p>
+                      )}
+                    </div>
+
+                    {/* ABHA Address — only when verified */}
+                    {user?.is_abha_verified && user?.abha_address && (
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-emerald-200/80">ABHA Address</span>
+                        <p className="text-xs font-mono text-emerald-100 truncate">{user.abha_address}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right column — QR */}
+                  <div className="p-1.5 bg-white rounded-xl shrink-0 border border-white/30 shadow-sm self-center">
+                    <QRCodeSVG value={qrPayload} size={68} bgColor="#ffffff" fgColor="#064e3b" level="M" />
+                  </div>
+                </div>
+
+                {/* ── Row 3: Bottom badges ── */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-xs font-medium text-white/90">
+                    {user?.gender || 'N/A'} • {user?.age ? `${user.age} Yrs` : 'N/A'}
                   </span>
+                  {user?.blood_group && (
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/30 border border-emerald-400/40 text-[11px] font-bold text-white">
+                      {user.blood_group}
+                    </span>
+                  )}
                 </div>
-                <span className="text-[9px] font-bold bg-emerald-500/60 px-2 py-0.5 rounded uppercase tracking-wider border border-emerald-400/40 flex items-center gap-1">
-                  <ShieldCheck className="w-3 h-3" /> ABDM Verified
-                </span>
-              </div>
-              {/* Card Body */}
-              <div className="flex justify-between items-start gap-4 flex-1">
-                <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  <div>
-                    <span className="text-[8px] uppercase tracking-wider text-teal-200">Patient Name</span>
-                    <p className="text-sm font-extrabold truncate">{displayName}</p>
-                  </div>
-                  <div>
-                    <span className="text-[8px] uppercase tracking-wider text-teal-200">ABHA Number</span>
-                    <p className="text-[11px] font-mono font-bold text-emerald-200 tracking-wider truncate">{abhaId}</p>
-                  </div>
-                  <div className="flex gap-3 text-[10px] font-semibold text-teal-100">
-                    <span>{user?.gender || 'Not Set'}</span>
-                    <span>•</span>
-                    <span>{user?.age ? `${user.age} Yrs` : 'Age N/A'}</span>
-                  </div>
-                  <span className="inline-flex self-start bg-emerald-500 text-white font-extrabold uppercase px-2 py-0.5 rounded-full text-[9px] tracking-wider border border-emerald-400">
-                    Blood: {user?.blood_group || 'Not Set'}
-                  </span>
+
+                {/* Watermark */}
+                <div className="absolute bottom-2 right-3 opacity-10 pointer-events-none">
+                  <ShieldCheck className="w-24 h-24 text-white" />
                 </div>
-                {/* QR code on front — compact */}
-                <div className="p-1.5 bg-white rounded-xl shrink-0 border border-white/30 shadow-sm">
-                  <QRCodeSVG value={qrPayload} size={62} bgColor="#ffffff" fgColor="#064e3b" level="M" />
-                </div>
-              </div>
-              {/* Watermark */}
-              <div className="absolute bottom-2 right-3 opacity-10">
-                <ShieldCheck className="w-24 h-24 text-white" />
               </div>
             </div>
 
@@ -282,43 +346,130 @@ export const ProfilePage: React.FC = () => {
                 WebkitBackfaceVisibility: 'hidden',
                 transform: 'rotateY(180deg)',
               }}
-              className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white rounded-3xl shadow-elevated overflow-hidden p-5 flex flex-col gap-3 border border-slate-700"
+              className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white rounded-2xl shadow-xl overflow-hidden border border-slate-700"
             >
-              {/* Back header */}
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                  Patient QR — Scan at Kiosk
-                </span>
-                <span className="text-[9px] font-mono text-slate-500">{abhaId}</span>
-              </div>
-              {/* Back body: info + large QR */}
-              <div className="flex gap-4 flex-1 items-center">
-                {/* Large QR */}
-                <div className="p-2 bg-white rounded-2xl shrink-0 shadow-lg">
-                  <QRCodeSVG value={qrPayload} size={110} bgColor="#ffffff" fgColor="#1e293b" level="H" />
+              <div className="flex flex-col justify-between h-full p-5">
+
+                {/* Back header — ABHA stamp top-right */}
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Patient QR — Scan at Kiosk
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-500 truncate max-w-[140px]">
+                    {user?.abha_number || 'ABDM-NOT-LINKED'}
+                  </span>
                 </div>
-                {/* Info block */}
-                <div className="flex flex-col gap-1.5 text-xs min-w-0 flex-1">
-                  {user?.state && (
-                    <div className="flex items-center gap-1.5 text-slate-300">
-                      <MapPin className="w-3 h-3 text-teal-400 shrink-0" />
-                      <span className="truncate">{[user.district, user.state].filter(Boolean).join(', ')}</span>
+
+                {/* Back body: large QR + live info */}
+                <div className="flex gap-4 flex-1 items-center py-2">
+                  {/* Large QR */}
+                  <div className="p-2 bg-white rounded-2xl shrink-0 shadow-lg">
+                    <QRCodeSVG value={qrPayload} size={110} bgColor="#ffffff" fgColor="#1e293b" level="H" />
+                  </div>
+
+                  {/* Live info block */}
+                  <div className="flex flex-col gap-2 text-xs min-w-0 flex-1">
+
+                    {/* Location — always shown, falls back gracefully */}
+                    <div className="flex items-start gap-1.5 text-slate-300">
+                      <MapPin className="w-3 h-3 text-teal-400 shrink-0 mt-0.5" />
+                      <span className="truncate">
+                        {user?.village_town || user?.district
+                          ? [user?.village_town, user?.district, user?.state].filter(Boolean).join(', ')
+                          : user?.state
+                            ? user.state
+                            : 'Location Not Set'}
+                      </span>
                     </div>
-                  )}
-                  {user?.emergency_contact_name && (
-                    <div className="flex items-center gap-1.5 text-slate-300">
-                      <Phone className="w-3 h-3 text-emerald-400 shrink-0" />
-                      <span className="truncate">{user.emergency_contact_name} · {user.emergency_contact_phone || 'N/A'}</span>
+
+                    {/* Emergency / primary contact — always shown */}
+                    <div className="flex items-start gap-1.5 text-slate-300">
+                      <Phone className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
+                      <span className="truncate">
+                        {user?.emergency_contact_name || user?.full_name || 'Contact'}
+                        {' · '}
+                        {user?.emergency_contact_phone || (user as any)?.phone_number || user?.phone || 'No phone added'}
+                      </span>
                     </div>
-                  )}
-                  <div className="mt-1 text-[9px] text-slate-500 leading-tight">
-                    Scan this QR at any Charak-Kiosk to auto-fill patient demographics, blood group, chronic conditions & current medications.
+
+                    <p className="text-[9px] text-slate-500 leading-tight mt-1">
+                      Scan at any Charak-Kiosk to auto-fill demographics, blood group, chronic conditions &amp; medications.
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── ABHA Status Block ───────────────────────────────────────────── */}
+      <div className="p-5 bg-surface-card border border-surface-border rounded-3xl shadow-elevated flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {/* Status pill */}
+          {user?.is_abha_verified ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-200 dark:border-emerald-800">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                🟢 ABDM VERIFIED
+              </span>
+            </div>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-xs font-bold border border-slate-200 dark:border-slate-700">
+              <span className="w-2 h-2 rounded-full bg-slate-400" />
+              ⚪ ABHA Not Linked
+            </span>
+          )}
+
+          {/* Action button */}
+          {user?.is_abha_verified ? (
+            <button
+              onClick={handleUnlinkAbha}
+              disabled={unlinkingAbha}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors disabled:opacity-50"
+            >
+              {unlinkingAbha ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Link2Off className="w-3.5 h-3.5" />
+              )}
+              Unlink ABHA
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowAbhaModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm"
+            >
+              <LinkIcon className="w-3.5 h-3.5" />
+              📷 Link Existing ABHA Card / QR
+            </button>
+          )}
+        </div>
+
+        {/* Verified details */}
+        {user?.is_abha_verified && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs mt-1">
+            {user.abha_number && (
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">ABHA Number</span>
+                <p className="font-mono font-bold text-content-primary mt-0.5">{user.abha_number}</p>
+              </div>
+            )}
+            {user.abha_address && (
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">ABHA Address</span>
+                <p className="font-bold text-content-primary mt-0.5">{user.abha_address}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Helper text for unlinked users */}
+        {!user?.is_abha_verified && (
+          <p className="text-[11px] text-content-muted leading-relaxed">
+            Linking your ABHA is optional. You can still use all SehatMitra AI features without it.
+          </p>
+        )}
       </div>
 
       {/* Grid: Personal & Medical Info */}
@@ -674,5 +825,11 @@ export const ProfilePage: React.FC = () => {
       </div>
 
     </div>
+
+    {/* ABHA Linking Modal — rendered as a portal-like overlay */}
+    {showAbhaModal && (
+      <AbhaLinkModal onClose={() => setShowAbhaModal(false)} />
+    )}
+    </>
   );
 };

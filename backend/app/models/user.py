@@ -38,3 +38,9 @@ class User(Base):
     emergency_contact_phone = Column(String, nullable=True)
     chronic_conditions = Column(JSON, default=list, nullable=True)
     allergies = Column(JSON, default=list, nullable=True)
+
+    # ABHA / ABDM Digital Health Identity (purely additive, all nullable)
+    is_abha_verified = Column(Boolean, default=False, nullable=True)
+    abha_number = Column(String(50), nullable=True)
+    abha_address = Column(String(100), nullable=True)
+    abha_meta = Column(JSON, nullable=True)
