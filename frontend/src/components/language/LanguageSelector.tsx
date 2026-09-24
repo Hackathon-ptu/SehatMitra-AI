@@ -73,13 +73,13 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-elevated border border-surface-border rounded-lg hover:bg-surface-border text-content-primary transition-all duration-200 text-xs font-bold shadow-sm focus:outline-none"
+        className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-surface-elevated border border-surface-border rounded-lg hover:bg-surface-border text-content-primary transition-all duration-200 text-xs font-bold shadow-sm focus:outline-none"
         aria-expanded={isOpen}
         aria-haspopup="true"
       >
         <Globe className="w-3.5 h-3.5 text-brand-600 shrink-0" />
         <span>{currentLanguage.nativeName}</span>
-        <ChevronDown className={`w-3 h-3 text-content-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`hidden min-[360px]:block w-3 h-3 text-content-muted transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (

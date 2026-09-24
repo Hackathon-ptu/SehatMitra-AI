@@ -216,13 +216,13 @@ export const HospitalLocator = () => {
   });
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-6 text-left animate-fade-in">
+    <div className="w-full max-w-7xl mx-auto px-0 lg:px-8 py-0 sm:py-4 flex flex-col gap-4 sm:gap-6 text-left animate-fade-in">
       
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-surface-border pb-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shadow-md">
+            <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shadow-md shrink-0">
               <HospitalIcon className="w-5 h-5" />
             </div>
             <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-content-primary">
@@ -250,7 +250,7 @@ export const HospitalLocator = () => {
       </div>
 
       {/* Location Input & Search Card */}
-      <div className="bg-surface-card border border-surface-border rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+      <div className="bg-surface-card border border-surface-border rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row gap-3 items-stretch">
           {/* GPS Detect Button */}
           <button
@@ -264,8 +264,8 @@ export const HospitalLocator = () => {
           </button>
 
           {/* Search Input Form */}
-          <form onSubmit={handleManualSearch} className="flex flex-1 gap-2">
-            <div className="relative flex-1">
+          <form onSubmit={handleManualSearch} className="flex flex-1 min-w-0 gap-2">
+            <div className="relative flex-1 min-w-0">
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-content-muted" />
               <input
                 type="text"
@@ -277,7 +277,7 @@ export const HospitalLocator = () => {
             </div>
             <button
               type="submit"
-              className="px-4 py-2.5 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+              className="px-3 sm:px-4 py-2.5 bg-surface-elevated hover:bg-surface-border border border-surface-border text-content-primary text-xs sm:text-sm font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
             >
               <Search className="w-4 h-4 text-teal-600" />
               <span>{langCode === 'hi' ? 'खोजें' : 'Search'}</span>
@@ -320,7 +320,7 @@ export const HospitalLocator = () => {
       {/* Conditionally Render Content Based on Location Status */}
       {!hasLocation || !coords ? (
         /* Empty / Location Required Prompt State */
-        <div className="py-16 px-6 bg-surface-card border border-surface-border rounded-2xl flex flex-col items-center justify-center text-center gap-4 shadow-sm animate-fade-in">
+        <div className="py-10 sm:py-16 px-4 sm:px-6 bg-surface-card border border-surface-border rounded-2xl flex flex-col items-center justify-center text-center gap-4 shadow-sm animate-fade-in">
           <div className="w-16 h-16 rounded-2xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 text-teal-600 flex items-center justify-center shadow-inner">
             <LocateFixed className="w-8 h-8 animate-pulse" />
           </div>
@@ -334,7 +334,7 @@ export const HospitalLocator = () => {
                 : 'Please detect your live GPS location, search for your city/pincode, or select a region preset above to discover verified healthcare facilities.'}
             </p>
           </div>
-          <div className="flex flex-wrap gap-3 mt-2">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 mt-2">
             <button
               onClick={handleDetectGPS}
               className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer"
@@ -384,7 +384,7 @@ export const HospitalLocator = () => {
             </div>
 
             {/* Risk Selector */}
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-content-muted">Triage Priority:</span>
               <div className="flex gap-1 bg-surface-elevated p-1 rounded-lg border border-surface-border">
                 {['low', 'moderate', 'high', 'emergency'].map(lvl => (
@@ -408,8 +408,8 @@ export const HospitalLocator = () => {
           </div>
 
           {/* Location Context Bar */}
-          <div className="p-3 bg-surface-card border border-surface-border rounded-xl flex items-center justify-between text-xs text-content-secondary">
-            <div className="flex items-center gap-2">
+          <div className="p-3 bg-surface-card border border-surface-border rounded-xl flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 text-xs text-content-secondary">
+            <div className="flex items-center gap-2 min-w-0">
               <MapPin className="w-4 h-4 text-teal-600 shrink-0" />
               <span>Active Location: <strong>{locationName}</strong></span>
             </div>
@@ -421,7 +421,7 @@ export const HospitalLocator = () => {
           {/* Main Grid: Interactive Map + Hospital Cards */}
           {loading ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-6 h-[450px] bg-surface-card border border-surface-border rounded-2xl animate-pulse" />
+              <div className="lg:col-span-6 h-[300px] sm:h-[450px] bg-surface-card border border-surface-border rounded-2xl animate-pulse" />
               <div className="lg:col-span-6 space-y-4">
                 {[1, 2, 3].map(i => (
                   <div key={i} className="h-36 bg-surface-card border border-surface-border rounded-2xl animate-pulse" />
@@ -432,7 +432,7 @@ export const HospitalLocator = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
               {/* Left Column: Interactive Map */}
-              <div className="lg:col-span-6 h-[400px] lg:h-[600px] w-full rounded-2xl overflow-hidden border border-surface-border shadow-md sticky top-24">
+              <div className="lg:col-span-6 h-[300px] sm:h-[400px] lg:h-[600px] w-full rounded-2xl overflow-hidden border border-surface-border shadow-md relative z-0 lg:sticky lg:top-24">
                 <MapContainer
                   center={[coords.lat, coords.lon]}
                   zoom={12}
@@ -480,11 +480,11 @@ export const HospitalLocator = () => {
               </div>
 
               {/* Right Column: Cards Listing */}
-              <div className="lg:col-span-6 flex flex-col gap-4 max-h-[600px] overflow-y-auto pr-1">
+              <div className="lg:col-span-6 flex flex-col gap-4 lg:max-h-[600px] lg:overflow-y-auto lg:pr-1">
                 {filteredHospitals.map((hosp) => (
                   <div
                     key={hosp.id}
-                    className={`bg-surface-card border rounded-2xl p-5 transition-all hover:shadow-md flex flex-col gap-3.5 ${
+                    className={`bg-surface-card border rounded-2xl p-4 sm:p-5 transition-all hover:shadow-md flex flex-col gap-3.5 ${
                       hosp.recommendedReason ? 'border-teal-500 ring-2 ring-teal-600/10' : 'border-surface-border'
                     }`}
                   >
@@ -600,11 +600,11 @@ export const HospitalLocator = () => {
       {/* ASHA Referral & Appointment Token Modal */}
       {selectedHospitalForToken && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-lg shadow-2xl animate-scale-in overflow-hidden text-left flex flex-col">
+          <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-lg max-h-[calc(100dvh-2rem)] shadow-2xl animate-scale-in overflow-hidden text-left flex flex-col">
             <div className="p-4 border-b border-surface-border flex justify-between items-center bg-teal-600 text-white">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                <h3 className="font-bold text-base">Digital ASHA OPD Referral Token</h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <Sparkles className="w-5 h-5 shrink-0" />
+                <h3 className="font-bold text-sm sm:text-base">Digital ASHA OPD Referral Token</h3>
               </div>
               <button
                 onClick={() => setSelectedHospitalForToken(null)}
@@ -614,7 +614,7 @@ export const HospitalLocator = () => {
               </button>
             </div>
 
-            <div className="p-6 flex flex-col gap-4">
+            <div className="p-4 sm:p-6 flex flex-col gap-4 overflow-y-auto">
               {!tokenConfirmed ? (
                 <>
                   <div className="p-3 bg-surface-elevated border border-surface-border rounded-xl flex flex-col gap-1">

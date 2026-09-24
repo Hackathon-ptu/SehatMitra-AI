@@ -10,10 +10,21 @@ export const apiClient = axios.create({
   },
 });
 
+// Resolve the active citizen JWT from any of the known storage locations.
+// Priority: localStorage 'token' → 'access_token' → 'sehat_token' → sessionStorage 'token'
+// ASHA tokens (sessionStorage 'asha_token') are intentionally excluded — they
+// belong to a separate auth context and must never be sent as a citizen token.
+const getCitizenToken = (): string | null =>
+  localStorage.getItem('token') ||
+  localStorage.getItem('access_token') ||
+  localStorage.getItem('sehat_token') ||
+  sessionStorage.getItem('token') ||
+  null;
+
 // Request interceptor to attach JWT token to ALL requests
 apiClient.interceptors.request.use(
   (config: any) => {
-    const token = localStorage.getItem('token') || localStorage.getItem('access_token');
+    const token = getCitizenToken();
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -24,15 +35,25 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle 401 globally and clear auth data
+// Response interceptor — only clear auth state on 401s from auth endpoints.
+// Wiping tokens on every 401 (e.g. from optional/gated endpoints) races with
+// concurrent requests and causes the citizen session to be destroyed while
+// the user is still logged in.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('user');
-      window.dispatchEvent(new Event('auth_state_changed'));
+      const url: string = error.config?.url ?? '';
+      const isAuthEndpoint =
+        url.includes('/auth/login') ||
+        url.includes('/auth/me') ||
+        url.includes('/auth/verify');
+      if (isAuthEndpoint) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new Event('auth_state_changed'));
+      }
     }
     return Promise.reject(error);
   }

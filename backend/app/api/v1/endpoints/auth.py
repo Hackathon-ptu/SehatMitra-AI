@@ -796,3 +796,45 @@ def unlink_abha(
     db.refresh(current_user)
 
     return {"success": True, "message": "ABHA ID unlinked.", "user": _build_user_payload(current_user)}
+ 
+
+# ── ASHA Worker Login ─────────────────────────────────────────────────────────
+
+_ASHA_VALID_IDS = {"ASHA-101", "ASHA-PB-042", "9876543210"}
+_ASHA_VALID_MPIN = "1234"
+
+_ASHA_WORKER_PROFILES = {
+    "ASHA-101":     {"name": "Sunita Devi",   "sub_center": "Raipur Sub-Center",  "village_code": "PB-JAL-04"},
+    "ASHA-PB-042":  {"name": "Sunita Devi",   "sub_center": "Raipur Sub-Center",  "village_code": "PB-JAL-04"},
+    "9876543210":   {"name": "Sunita Devi",   "sub_center": "Raipur Sub-Center",  "village_code": "PB-JAL-04"},
+}
+
+
+@router.post("/asha-login")
+def asha_login(payload: dict = Body(...)):
+    """
+    Dedicated login endpoint for ASHA health workers.
+    Returns a real, signed JWT with role='asha' on successful credential match.
+    """
+    worker_id = str(payload.get("worker_id", "")).strip().upper()
+    mpin      = str(payload.get("mpin",      "")).strip()
+
+    if worker_id not in _ASHA_VALID_IDS or mpin != _ASHA_VALID_MPIN:
+        raise HTTPException(status_code=401, detail="Invalid ASHA Worker ID or M-PIN")
+
+    profile = _ASHA_WORKER_PROFILES.get(worker_id, _ASHA_WORKER_PROFILES["ASHA-101"])
+
+    access_token = create_access_token(
+        data={"sub": f"asha_{worker_id}", "role": "asha", "worker_id": worker_id}
+    )
+    return {
+        "access_token": access_token,
+        "token_type":   "bearer",
+        "worker": {
+            "worker_id":    worker_id,
+            "name":         profile["name"],
+            "sub_center":   profile["sub_center"],
+            "village_code": profile["village_code"],
+            "role":         "asha",
+        },
+    }

@@ -390,12 +390,12 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
   const riskStyles = riskData ? getRiskStyles(riskData.risk_level) : null;
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 animate-fade-in">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+    <div className="w-full max-w-7xl mx-auto px-0 lg:px-8 py-0 sm:py-4 animate-fade-in">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
         {/* Left Column: Chat Area */}
-        <div className="lg:col-span-7 flex flex-col h-[calc(100vh-210px)] min-h-[600px] bg-surface-card border border-surface-border rounded-2xl shadow-xl overflow-hidden">
+        <div className="lg:col-span-7 flex flex-col h-[calc(100dvh-180px)] min-h-[460px] lg:h-[calc(100vh-210px)] lg:min-h-[600px] bg-surface-card border border-surface-border rounded-2xl shadow-xl overflow-hidden">
         {/* Chat Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-surface-border bg-gradient-to-r from-brand-600 to-brand-700 text-white">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-surface-border bg-gradient-to-r from-brand-600 to-brand-700 text-white">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-bold text-lg">
               SM
@@ -420,7 +420,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
         </div>
 
         {/* Messages Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-surface-bg/40">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-surface-bg/40">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -429,11 +429,11 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
               <div
                 className={`text-sm shadow-sm leading-relaxed relative group ${
                   msg.sender === 'user'
-                    ? 'max-w-[75%] mr-1 sm:mr-2 rounded-2xl rounded-tr-none px-4 py-3 bg-teal-700 text-white'
-                    : 'max-w-[80%] bg-surface-card text-content-primary border border-surface-border rounded-2xl rounded-tl-none px-4.5 py-3'
+                    ? 'max-w-[85%] sm:max-w-[75%] mr-1 sm:mr-2 rounded-2xl rounded-tr-none px-4 py-3 bg-teal-700 text-white'
+                    : 'max-w-[88%] sm:max-w-[80%] bg-surface-card text-content-primary border border-surface-border rounded-2xl rounded-tl-none px-4.5 py-3'
                 }`}
               >
-                <p className="text-left whitespace-pre-wrap">{msg.text}</p>
+                <p className="text-left whitespace-pre-wrap break-words">{msg.text}</p>
                 <div className="flex items-center justify-between gap-4 mt-1.5 border-t border-surface-border/20 pt-1">
                   {msg.sender === 'bot' ? (
                     <button
@@ -479,7 +479,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
         </div>
 
         {/* Input Bar */}
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-surface-border bg-surface-card flex flex-col gap-2">
+        <form onSubmit={handleSendMessage} className="p-3 sm:p-4 border-t border-surface-border bg-surface-card flex flex-col gap-2">
 
           {/* Image preview strip */}
           {selectedImage && (
@@ -504,7 +504,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
             </div>
           )}
 
-          <div className="flex items-center gap-2 bg-surface-bg border border-surface-border rounded-xl p-2 transition-colors focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-600/20">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-surface-bg border border-surface-border rounded-xl p-1.5 sm:p-2 transition-colors focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-600/20">
             {/* Hidden file input for camera/gallery */}
             <input
               ref={imageInputRef}
@@ -519,7 +519,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
               type="button"
               onClick={() => imageInputRef.current?.click()}
               disabled={loading || isCompleted}
-              className="p-2.5 rounded-lg transition-all flex items-center justify-center bg-surface-elevated text-content-secondary hover:text-teal-600 hover:bg-teal-50 border border-surface-border"
+              className="p-2.5 rounded-lg transition-all flex items-center justify-center shrink-0 bg-surface-elevated text-content-secondary hover:text-teal-600 hover:bg-teal-50 border border-surface-border"
               title="Attach skin/wound photo for AI visual analysis"
             >
               <ImagePlus className="w-5 h-5" />
@@ -528,7 +528,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
             <button
               type="button"
               onClick={toggleSpeech}
-              className={`p-2.5 rounded-lg transition-all flex items-center justify-center ${
+              className={`p-2.5 rounded-lg transition-all flex items-center justify-center shrink-0 ${
                 isListening
                   ? 'bg-red-500 text-white animate-pulse'
                   : 'bg-surface-elevated text-content-secondary hover:text-brand-600 hover:bg-brand-50 border border-surface-border'
@@ -547,12 +547,12 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
                   ? t('listening') || 'Listening...'
                   : 'Describe your symptoms in detail...'
               }
-              className="flex-1 bg-transparent border-0 text-sm text-content-primary placeholder:text-content-disabled focus:outline-none py-2 px-1"
+              className="flex-1 min-w-0 bg-transparent border-0 text-sm text-content-primary placeholder:text-content-disabled focus:outline-none py-2 px-1"
             />
             <button
               type="submit"
               disabled={(!userInput.trim() && !selectedImage) || loading}
-              className={`p-2.5 rounded-lg transition-all flex items-center justify-center ${
+              className={`p-2.5 rounded-lg transition-all flex items-center justify-center shrink-0 ${
                 (userInput.trim() || selectedImage) && !loading
                   ? 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800'
                   : 'bg-surface-elevated text-content-disabled cursor-not-allowed border border-surface-border'
@@ -585,7 +585,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
       {/* Right Column: Triage Result Card or Placeholder */}
       {!isCompleted ? (
         (collectedPoints.length === 0 && (!riskData || !riskData.reasons || riskData.reasons.length === 0)) ? (
-          <div className="w-full lg:col-span-5 border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-center justify-center items-center shadow-lg h-[calc(100vh-210px)] min-h-[600px] animate-fade-in">
+          <div className="w-full lg:col-span-5 border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-center justify-center items-center shadow-lg min-h-[180px] lg:h-[calc(100vh-210px)] lg:min-h-[600px] animate-fade-in">
             <Sparkles className="w-8 h-8 text-content-muted animate-pulse" />
             <h3 className="text-base font-bold">No Symptoms Evaluated Yet</h3>
             <p className="text-xs text-content-secondary leading-relaxed px-4">
@@ -593,7 +593,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
             </p>
           </div>
         ) : (
-          <div className="w-full lg:col-span-5 border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg h-[calc(100vh-210px)] min-h-[600px] overflow-y-auto animate-fade-in">
+          <div className="w-full lg:col-span-5 border border-surface-border bg-surface-card rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-left shadow-lg lg:h-[calc(100vh-210px)] lg:min-h-[600px] lg:overflow-y-auto animate-fade-in">
             <div className="flex items-center gap-2">
               <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
               <span className="text-xs font-bold uppercase tracking-wider text-blue-500">
@@ -643,7 +643,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
         )
       ) : (
         riskData && riskStyles && (
-          <div className={`w-full lg:col-span-5 border-2 rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg} h-[calc(100vh-210px)] min-h-[600px] overflow-y-auto animate-fade-in`}>
+          <div className={`w-full lg:col-span-5 border-2 rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg} lg:h-[calc(100vh-210px)] lg:min-h-[600px] lg:overflow-y-auto animate-fade-in`}>
             <div className="flex items-center justify-between">
               <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${riskStyles.badge}`}>
                 {riskStyles.label}

@@ -35,7 +35,7 @@ export const StandaloneKioskPage: React.FC = () => {
     <div className="min-h-screen flex flex-col">
       {/* ── Emergency Red-Flag Banner ─────────────────────────────────────── */}
       {redFlagActive && !redFlagDismissed && (
-        <div className="shrink-0 bg-red-700 border-b-2 border-red-400 px-5 py-2.5 flex items-center justify-between gap-3 animate-pulse z-50">
+        <div className="shrink-0 bg-red-700 border-b-2 border-red-400 px-3 sm:px-5 py-2.5 flex items-center justify-between gap-3 animate-pulse z-50">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-5 h-5 text-white shrink-0 animate-bounce" />
             <span className="font-extrabold text-sm text-white">
@@ -73,14 +73,14 @@ export const DoctorCockpitPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-900">
       {/* Slim breadcrumb back-link */}
-      <div className="px-4 py-2 bg-slate-900 border-b border-slate-700/40 flex items-center justify-between">
+      <div className="px-4 py-2 bg-slate-900 border-b border-slate-700/40 flex items-center justify-between gap-3">
         <Link
           to="/kiosk"
           className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
         >
           ← Patient Kiosk
         </Link>
-        <span className="text-[10px] text-slate-600 font-mono">Doctor Cockpit · Charak-Kiosk · AIIA PS-26047</span>
+        <span className="text-[10px] text-slate-600 font-mono truncate">Doctor Cockpit · Charak-Kiosk · AIIA PS-26047</span>
       </div>
       <DoctorCockpit tokenId={decodeURIComponent(token_id)} />
     </div>
@@ -101,14 +101,14 @@ const DoctorCockpitTokenEntry: React.FC = () => {
   if (submitted) {
     return (
       <div className="min-h-screen bg-slate-900">
-        <div className="px-4 py-2 bg-slate-900 border-b border-slate-700/40 flex items-center justify-between">
+        <div className="px-4 py-2 bg-slate-900 border-b border-slate-700/40 flex items-center justify-between gap-3">
           <button
             onClick={() => setSubmitted('')}
             className="text-[11px] text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
           >
             ← Search Another Token
           </button>
-          <span className="text-[10px] text-slate-600 font-mono">Doctor Cockpit · Charak-Kiosk</span>
+          <span className="text-[10px] text-slate-600 font-mono truncate">Doctor Cockpit · Charak-Kiosk</span>
         </div>
         <DoctorCockpit tokenId={submitted} />
       </div>
@@ -116,7 +116,7 @@ const DoctorCockpitTokenEntry: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-sm space-y-6 text-center">
         {/* Header */}
         <div className="flex flex-col items-center gap-3">

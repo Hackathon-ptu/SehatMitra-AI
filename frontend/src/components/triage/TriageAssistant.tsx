@@ -476,18 +476,18 @@ export const TriageAssistant: React.FC = () => {
   const isComplete = triageResult?.is_interview_complete === true;
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col lg:flex-row gap-6">
+    <div className="w-full max-w-7xl mx-auto px-0 lg:px-8 py-0 sm:py-4 flex flex-col lg:flex-row gap-4 sm:gap-6">
       
       {/* Left Column: Interactive Dialogue Interface */}
-      <div className="flex-1 flex flex-col gap-6">
+      <div className="flex-1 min-w-0 flex flex-col gap-4 sm:gap-6">
         {/* Title */}
         <div className="flex flex-col text-left gap-1">
           {/* IBM Granite Engine Indicator */}
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 mb-1 w-fit rounded-md border border-blue-500/20 bg-blue-950/20 text-[11px] font-medium text-blue-300 tracking-wide">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 mb-1 w-fit max-w-full rounded-md border border-blue-500/20 bg-blue-950/20 text-[11px] font-medium text-blue-300 tracking-wide">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" />
             <span>Engine: IBM Granite 3.0 (Hybrid LPU Fallback)</span>
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-content-primary">
               {t('triage_title') || 'Voice Symptom Triage'}
             </h2>
@@ -508,7 +508,7 @@ export const TriageAssistant: React.FC = () => {
         </div>
 
         {/* Input panel card */}
-        <div className="p-6 bg-surface-card border border-surface-border rounded-2xl shadow-elevated flex flex-col gap-5 text-left">
+        <div className="p-4 sm:p-6 bg-surface-card border border-surface-border rounded-2xl shadow-elevated flex flex-col gap-5 text-left">
           
           {/* Toggle Language & Status */}
           <div className="flex flex-col gap-3">
@@ -530,7 +530,7 @@ export const TriageAssistant: React.FC = () => {
               ))}
             </div>
 
-            <div className="flex items-center justify-between mt-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 mt-1">
               <span className="text-xs text-content-muted">
                 Current Locale: <span className="font-mono bg-surface-elevated px-1.5 py-0.5 rounded text-[11px] font-bold">{getLocale(language)}</span>
               </span>
@@ -544,8 +544,8 @@ export const TriageAssistant: React.FC = () => {
           {!isComplete ? (
             <>
               {/* Bot Voice Question Area */}
-              <div className="p-4 bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900 rounded-xl flex items-center justify-between gap-3 text-left">
-                <div className="flex flex-col gap-1">
+              <div className="p-4 bg-brand-50 dark:bg-brand-950/40 border border-brand-200 dark:border-brand-900 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-left">
+                <div className="flex flex-col gap-1 min-w-0">
                   <span className="text-[10px] uppercase font-bold text-brand-600 dark:text-brand-400 tracking-wider">
                     {triageResult 
                       ? (language.split('-')[0] === 'hi' ? `सक्रिय चरण #${currentStep}` : language.split('-')[0] === 'pa' ? `ਸਰਗਰਮ ਪੜਾਅ #${currentStep}` : `Active Turn #${currentStep}`)
@@ -681,7 +681,7 @@ export const TriageAssistant: React.FC = () => {
       <div className="w-full lg:w-[380px] shrink-0">
         {!isComplete ? (
           (collectedPoints.length === 0 && (!triageResult || !triageResult.reasons || triageResult.reasons.length === 0)) ? (
-            <div className="w-full border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 justify-center items-center shadow-lg h-[250px] animate-fade-in text-center">
+            <div className="w-full border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 justify-center items-center shadow-lg min-h-[180px] lg:h-[250px] animate-fade-in text-center">
               <Sparkles className="w-8 h-8 text-content-muted animate-pulse" />
               <h3 className="text-base font-bold">{t('no_symptoms_evaluated') || 'No Symptoms Evaluated'}</h3>
               <p className="text-xs text-content-secondary leading-relaxed px-4 text-center">
@@ -689,7 +689,7 @@ export const TriageAssistant: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="w-full border border-surface-border bg-surface-card rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg h-fit animate-fade-in">
+            <div className="w-full border border-surface-border bg-surface-card rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-left shadow-lg h-fit animate-fade-in">
               <div className="flex items-center gap-2">
                 <div className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-500">
@@ -740,7 +740,7 @@ export const TriageAssistant: React.FC = () => {
           triageResult && (() => {
             const riskStyles = getRiskStyles(triageResult.risk_level);
             return (
-              <div className={`w-full border-2 rounded-2xl p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg} animate-fade-in`}>
+              <div className={`w-full border-2 rounded-2xl p-5 sm:p-6 flex flex-col gap-4 text-left shadow-lg ${riskStyles.bg} animate-fade-in`}>
                 <div className="flex items-center justify-between">
                   <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${riskStyles.badge}`}>
                     {getRiskLabel(triageResult.risk_level)}

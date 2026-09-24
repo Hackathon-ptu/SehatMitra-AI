@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { HealthChat } from './components/HealthChat';
 import { LabReportAnalyzer } from './components/reports/LabReportAnalyzer';
 import { HospitalLocator } from './components/HospitalLocator';
@@ -145,17 +145,44 @@ export const App = () => {
     }] : [])
   ];
 
+  // Sliding tab indicator: measure the active tab and glide a single shared
+  // highlight to it, so switching sections animates instead of jumping.
+  const tabNavRef = useRef<HTMLElement | null>(null);
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = tabRefs.current[activeTab];
+      if (!el) return;
+      setIndicator({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    measure();
+    // Keep the active tab visible when the tab row scrolls horizontally on phones
+    const scroller = tabNavRef.current?.parentElement;
+    const activeEl = tabRefs.current[activeTab];
+    if (scroller && activeEl && scroller.scrollWidth > scroller.clientWidth) {
+      const target = activeEl.offsetLeft - (scroller.clientWidth - activeEl.offsetWidth) / 2;
+      scroller.scrollTo({ left: Math.max(0, target), behavior: 'smooth' });
+    }
+    const observer = new ResizeObserver(measure);
+    if (tabNavRef.current) observer.observe(tabNavRef.current);
+    document.fonts?.ready.then(measure);
+    return () => observer.disconnect();
+  }, [activeTab, tabs.length, selectedLanguage]);
+
+
   return (
     <div className="min-h-screen bg-surface-bg text-content-primary flex flex-col antialiased">
       {/* Premium Header */}
       <header className="sticky top-0 z-40 bg-surface-card/90 backdrop-blur border-b border-surface-border transition-colors">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-md shadow-brand-600/10">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-md shadow-brand-600/10 shrink-0">
               <Heart className="w-5 h-5 fill-white/10" />
             </div>
-            <div className="flex flex-col text-left">
-              <h1 className="font-extrabold text-lg tracking-tight leading-none text-content-primary">
+            <div className="flex flex-col text-left min-w-0">
+              <h1 className="font-extrabold text-base sm:text-lg tracking-tight leading-none text-content-primary truncate">
                 SehatMitra <span className="text-brand-600">AI</span>
               </h1>
               <span className="text-[10px] text-content-muted leading-tight font-medium hidden sm:block">
@@ -165,7 +192,7 @@ export const App = () => {
           </div>
 
           {/* Right Header Panel: Lang Dropdown + Auth triggers */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <LanguageSelector />
 
             {/* Desktop-only Panel (lg and above) */}
@@ -383,22 +410,35 @@ export const App = () => {
         <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-card to-transparent pointer-events-none z-10 lg:hidden" />
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 overflow-x-auto no-scrollbar scroll-smooth touch-pan-x">
-          <nav className="flex justify-start lg:justify-center -mb-px space-x-2 sm:space-x-4 px-4 min-w-max lg:min-w-0" aria-label="Tabs">
+          <nav ref={tabNavRef} className="relative flex justify-start lg:justify-center gap-1 sm:gap-2 px-4 min-w-max lg:min-w-0" aria-label="Tabs" role="tablist">
+            {/* Shared sliding indicator: soft pill + underline that glide to the active tab */}
+            <span
+              aria-hidden="true"
+              className="tab-indicator absolute top-1.5 bottom-0 rounded-t-lg bg-brand-50/70 dark:bg-brand-950/30 pointer-events-none"
+              style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width, opacity: indicator.width ? 1 : 0 }}
+            >
+              <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-brand-600" />
+            </span>
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
+                  ref={(el) => { tabRefs.current[tab.id] = el; }}
+                  role="tab"
+                  aria-selected={isActive}
                   onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 py-3.5 px-4 border-b-2 text-xs sm:text-sm transition-all duration-150 focus:outline-none shrink-0 ${
-                  isActive
-                    ? 'border-brand-600 text-brand-700 font-semibold bg-brand-50/60 dark:bg-brand-950/20 rounded-t-lg'
-                    : 'border-transparent text-content-secondary hover:text-content-primary hover:border-surface-border'
-                }`}
-              >
-                <span className={`${isActive ? 'text-brand-600' : 'text-content-muted'}`}>{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
+                  className={`relative z-[1] flex items-center gap-2 py-3.5 px-4 text-xs sm:text-sm transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 rounded-t-lg shrink-0 ${
+                    isActive ? 'text-brand-700 dark:text-brand-400' : 'text-content-secondary hover:text-content-primary'
+                  }`}
+                >
+                  <span className={`transition-colors duration-200 ${isActive ? 'text-brand-600' : 'text-content-muted'}`}>{tab.icon}</span>
+                  {/* Invisible bold copy reserves the semibold width so tabs never resize when activated */}
+                  <span className="grid">
+                    <span aria-hidden="true" className="col-start-1 row-start-1 font-semibold invisible">{tab.label}</span>
+                    <span className={`col-start-1 row-start-1 text-center ${isActive ? 'font-semibold' : 'font-normal'}`}>{tab.label}</span>
+                  </span>
+                </button>
               );
             })}
           </nav>
@@ -406,8 +446,8 @@ export const App = () => {
       </div>
 
       {/* Tab Render Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="transition-all duration-300">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+        <div key={activeTab} className="tab-panel-enter">
           {activeTab === 'chat' && <HealthChat languageCode={selectedLanguage} />}
           {activeTab === 'triage' && <TriageAssistant />}
           {activeTab === 'report' && <LabReportAnalyzer languageCode={selectedLanguage} />}
@@ -428,7 +468,7 @@ export const App = () => {
       {activeTab !== 'chat' && (
         <button
           onClick={() => setActiveTab('chat')}
-          className="lg:hidden fixed bottom-6 right-6 z-50 p-4 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-lg shadow-brand-600/30 flex items-center justify-center transition-all hover:scale-105 active:scale-95 border border-white/10"
+          className="lg:hidden fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-4 sm:bottom-6 sm:right-6 z-50 p-4 bg-brand-600 hover:bg-brand-700 text-white rounded-full shadow-lg shadow-brand-600/30 flex items-center justify-center transition-all hover:scale-105 active:scale-95 border border-white/10"
           aria-label="Launch AI Triage Chat"
           title="Launch AI Triage Chat"
         >

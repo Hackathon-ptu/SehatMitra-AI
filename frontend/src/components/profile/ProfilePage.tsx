@@ -187,7 +187,7 @@ export const ProfilePage: React.FC = () => {
   // While auth state is being resolved, show a skeleton — never render "Guest" state
   if (loading) {
     return (
-      <div className="w-full max-w-4xl mx-auto flex flex-col gap-8 text-left animate-fade-in">
+      <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 sm:gap-8 text-left animate-fade-in">
         <div className="flex flex-col gap-1">
           <div className="h-7 w-48 rounded-lg bg-surface-elevated animate-pulse" />
           <div className="h-4 w-80 rounded-md bg-surface-elevated animate-pulse mt-1" />
@@ -213,7 +213,7 @@ export const ProfilePage: React.FC = () => {
 
   return (
     <>
-    <div className="w-full max-w-4xl mx-auto flex flex-col gap-8 text-left animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 sm:gap-8 text-left animate-fade-in">
       
       {/* Header */}
       <div className="flex flex-col gap-1">
@@ -262,11 +262,11 @@ export const ProfilePage: React.FC = () => {
               </div>
 
               {/* Inner flex column — fills the card height cleanly */}
-              <div className="relative flex flex-col justify-between h-full p-5 pt-6">
+              <div className="relative flex flex-col justify-between h-full p-4 pt-5 sm:p-5 sm:pt-6">
 
                 {/* ── Row 1: Header ── */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Heart className="w-4 h-4 fill-red-400 text-red-400 animate-pulse shrink-0" />
                     <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-100">
                       ABDM Digital Health Card
@@ -348,11 +348,11 @@ export const ProfilePage: React.FC = () => {
               }}
               className="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-950 text-white rounded-2xl shadow-xl overflow-hidden border border-slate-700"
             >
-              <div className="flex flex-col justify-between h-full p-5">
+              <div className="flex flex-col justify-between h-full p-4 sm:p-5">
 
                 {/* Back header — ABHA stamp top-right */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 truncate">
                     Patient QR — Scan at Kiosk
                   </span>
                   <span className="text-[9px] font-mono text-slate-500 truncate max-w-[140px]">
@@ -361,7 +361,7 @@ export const ProfilePage: React.FC = () => {
                 </div>
 
                 {/* Back body: large QR + live info */}
-                <div className="flex gap-4 flex-1 items-center py-2">
+                <div className="flex gap-3 sm:gap-4 flex-1 items-center py-2">
                   {/* Large QR */}
                   <div className="p-2 bg-white rounded-2xl shrink-0 shadow-lg">
                     <QRCodeSVG value={qrPayload} size={110} bgColor="#ffffff" fgColor="#1e293b" level="H" />
@@ -404,7 +404,7 @@ export const ProfilePage: React.FC = () => {
       </div>
 
       {/* ── ABHA Status Block ───────────────────────────────────────────── */}
-      <div className="p-5 bg-surface-card border border-surface-border rounded-3xl shadow-elevated flex flex-col gap-3">
+      <div className="p-4 sm:p-5 bg-surface-card border border-surface-border rounded-3xl shadow-elevated flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           {/* Status pill */}
           {user?.is_abha_verified ? (
@@ -473,7 +473,7 @@ export const ProfilePage: React.FC = () => {
       </div>
 
       {/* Grid: Personal & Medical Info */}
-      <div className="p-6 bg-surface-card border border-surface-border rounded-3xl shadow-elevated flex flex-col gap-6">
+      <div className="p-4 sm:p-6 bg-surface-card border border-surface-border rounded-3xl shadow-elevated flex flex-col gap-5 sm:gap-6">
         
         {/* Toggle Controls */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-surface-border pb-4">
@@ -521,7 +521,7 @@ export const ProfilePage: React.FC = () => {
         {/* Read-Only mode vs Unlocked Edit mode */}
         {!isUnlocked ? (
           /* READ ONLY VIEW (Dashboard) */
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-surface-bg/50 p-6 rounded-2xl border border-surface-border/50 text-xs sm:text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 bg-surface-bg/50 p-4 sm:p-6 rounded-2xl border border-surface-border/50 text-xs sm:text-sm">
             <div>
               <span className="text-[10px] uppercase font-bold tracking-wider text-content-muted">{t('name')}</span>
               <p className="font-bold text-content-primary mt-1 text-sm">{displayName}</p>
@@ -759,7 +759,7 @@ export const ProfilePage: React.FC = () => {
                   onChange={(e) => setAllergiesInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(allergiesInput, allergiesList, setAllergiesList, setAllergiesInput); } }}
                   placeholder="e.g. Penicillin, Sulfa, Dust (comma-separated)"
-                  className="flex-1 px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none text-sm"
+                  className="flex-1 min-w-0 px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none text-sm"
                 />
                 <button
                   type="button"
@@ -789,7 +789,7 @@ export const ProfilePage: React.FC = () => {
                   onChange={(e) => setChronicInput(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag(chronicInput, chronicList, setChronicList, setChronicInput); } }}
                   placeholder="e.g. Type-2 Diabetes, Hypertension (comma-separated)"
-                  className="flex-1 px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none text-sm"
+                  className="flex-1 min-w-0 px-3 py-2 border border-brand-600 bg-surface-elevated text-content-primary focus:border-brand-700 rounded-lg focus:outline-none text-sm"
                 />
                 <button
                   type="button"

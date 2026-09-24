@@ -351,7 +351,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
-            <div className="bg-emerald-700 text-white px-6 py-4 rounded-t-2xl">
+            <div className="bg-emerald-700 text-white px-4 sm:px-6 py-4 rounded-t-2xl">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-black tracking-wide">GOVERNMENT CIVIL HOSPITAL, JALANDHAR</h2>
@@ -367,13 +367,13 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
             </div>
 
             {/* Token banner */}
-            <div className="bg-emerald-900 text-emerald-200 px-6 py-2 flex justify-between items-center text-xs font-bold">
+            <div className="bg-emerald-900 text-emerald-200 px-4 sm:px-6 py-2 flex flex-wrap justify-between items-center gap-x-3 gap-y-1 text-xs font-bold">
               <span>TOKEN</span>
               <span className="text-2xl font-black font-mono text-emerald-300">{record.token_id}</span>
               <span>{new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
             </div>
 
-            <div className="p-6 space-y-4 print:p-4">
+            <div className="p-4 sm:p-6 space-y-4 print:p-4">
               {/* Patient Info */}
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-1 mb-2">Patient Information</p>
@@ -398,7 +398,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
               {/* Vitals */}
               <div>
                 <p className="text-[10px] font-extrabold uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-1 mb-2">Measured Vitals</p>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { label: 'BP', value: record.vitals.bp_systolic ? `${record.vitals.bp_systolic}/${record.vitals.bp_diastolic} mmHg` : '—' },
                     { label: 'Pulse', value: record.vitals.pulse ? `${record.vitals.pulse} bpm` : '—' },
@@ -491,7 +491,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
       )}
 
       {/* ── Top Bar ── */}
-      <div className={`sticky top-0 z-20 px-4 py-3 flex flex-wrap items-center gap-3 border-b ${
+      <div className={`sticky top-0 z-20 px-3 sm:px-4 py-3 flex flex-wrap items-center gap-2 sm:gap-3 border-b ${
         isRed ? 'bg-red-950/80 border-red-700' : 'bg-slate-800/90 border-slate-700'
       } backdrop-blur`}>
         <div className="flex items-center gap-3">
@@ -514,22 +514,22 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
         </div>
 
         {/* Vitals badge */}
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 rounded-xl">
-          <Activity className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-slate-300 text-xs font-mono">{vitalsStr}</span>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-700 rounded-xl max-w-full">
+          <Activity className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <span className="text-slate-300 text-xs font-mono break-words min-w-0">{vitalsStr}</span>
         </div>
 
         {/* Red-flag intercept strip */}
         {isRed && (
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-red-800 rounded-xl border border-red-600 ml-auto">
-            <ShieldAlert className="w-4 h-4 text-red-300 animate-pulse" />
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-red-800 rounded-xl border border-red-600 sm:ml-auto max-w-full">
+            <ShieldAlert className="w-4 h-4 text-red-300 animate-pulse shrink-0" />
             <span className="text-red-200 text-xs font-bold">EMERGENCY INTERCEPT — {ont.red_flag_reason || 'Red-flag triggered'}</span>
           </div>
         )}
       </div>
 
       {/* ── Tab toggle ── */}
-      <div className="flex gap-2 p-4 pb-0">
+      <div className="flex gap-2 p-3 sm:p-4 pb-0 sm:pb-0">
         {(['cockpit', 'fhir'] as const).map((t) => (
           <button
             key={t}
@@ -548,7 +548,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
 
       {/* ── Cockpit Tab ── */}
       {tab === 'cockpit' && (
-        <div className="p-4 grid grid-cols-12 gap-4">
+        <div className="p-3 sm:p-4 grid grid-cols-12 gap-3 sm:gap-4">
 
           {/* LEFT COL — 4 wide */}
           <div className="col-span-12 lg:col-span-4 space-y-4">
@@ -884,10 +884,10 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
             </div>
 
             {/* Triage action buttons */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
               <button
                 disabled={actionLoading === 'approve'}
-                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/40 border border-emerald-600"
+                className="flex items-center justify-center gap-2 py-3.5 sm:py-4 px-2 text-center rounded-xl bg-emerald-700 hover:bg-emerald-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm transition-all shadow-lg shadow-emerald-900/40 border border-emerald-600"
                 onClick={handleApprove}
               >
                 {actionLoading === 'approve'
@@ -896,7 +896,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
                 Approve &amp; E-Prescription
               </button>
               <button
-                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-blue-700 hover:bg-blue-600 text-white font-bold text-sm transition-all shadow-lg shadow-blue-900/40 border border-blue-600"
+                className="flex items-center justify-center gap-2 py-3.5 sm:py-4 px-2 text-center rounded-xl bg-blue-700 hover:bg-blue-600 text-white font-bold text-sm transition-all shadow-lg shadow-blue-900/40 border border-blue-600"
                 onClick={() => setShowPrintModal(true)}
               >
                 <Printer className="w-5 h-5" />
@@ -904,7 +904,7 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
               </button>
               <button
                 disabled={actionLoading === 'escalate'}
-                className="flex items-center justify-center gap-2 py-4 rounded-xl bg-red-700 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 border border-red-600"
+                className="flex items-center justify-center gap-2 py-3.5 sm:py-4 px-2 text-center rounded-xl bg-red-700 hover:bg-red-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold text-sm transition-all shadow-lg shadow-red-900/40 border border-red-600"
                 onClick={handleEscalate}
               >
                 {actionLoading === 'escalate'
@@ -919,9 +919,9 @@ export const DoctorCockpit: React.FC<DoctorCockpitProps> = ({ tokenId, onBack })
 
       {/* ── FHIR Tab ── */}
       {tab === 'fhir' && (
-        <div className="p-4 max-w-4xl mx-auto">
+        <div className="p-3 sm:p-4 max-w-4xl mx-auto">
           <div className="bg-slate-800 rounded-2xl border border-slate-700 p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div>
                 <p className="text-white font-bold">ABDM FHIR R4 Bundle</p>
                 <p className="text-slate-400 text-xs">DocumentBundle · NRCES PHR Profile · ICD-11 + NAMASTE + Vikriti</p>

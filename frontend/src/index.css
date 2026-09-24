@@ -39,6 +39,21 @@ body,
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* iOS Safari zooms the page when a focused field renders below 16px.
+   Bump small form controls to 16px on phones only; desktop sizing is unchanged. */
+@media (max-width: 639px) {
+  input.text-xs,
+  input.text-sm,
+  textarea.text-xs,
+  textarea.text-sm,
+  select.text-xs,
+  select.text-sm {
+    font-size: 16px;
+  }
 }
 
 body {
@@ -161,4 +176,38 @@ body.dark {
 
 .animate-spin-slow {
   animation: spinSlow 12s linear infinite;
+}
+
+/* Top navigation: sliding active-tab indicator + section fade-in */
+.tab-indicator {
+  left: 0;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), width 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  will-change: transform, width;
+}
+
+@keyframes tabPanelEnter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-panel-enter {
+  /* 'backwards' so no transform lingers (it would trap position:fixed modals) */
+  animation: tabPanelEnter 0.3s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-indicator {
+    transition: none;
+  }
+
+  .tab-panel-enter {
+    animation: none;
+  }
 }

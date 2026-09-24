@@ -18,19 +18,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react';
-
-// ── Demo credential table (no citizen AuthContext is involved) ────────────────
-
-const VALID_IDS = new Set(['ASHA-101', 'ASHA-PB-042', '9876543210']);
-const VALID_MPIN = '1234';
-
-const DEMO_WORKER = {
-  worker_id: '',       // filled at login time
-  name: 'Sunita Devi',
-  sub_center: 'Raipur Sub-Center',
-  village_code: 'VIL-04',
-  role: 'asha',
-} as const;
+import API_BASE_URL from '../config/api';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -50,11 +38,11 @@ export const AshaLoginPage: React.FC = () => {
     }
   }, [navigate]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const id = workerId.trim().toUpperCase();
+    const id  = workerId.trim().toUpperCase();
     const pin = mpin.trim();
 
     // Client-side field validation
@@ -68,49 +56,44 @@ export const AshaLoginPage: React.FC = () => {
     }
 
     setLoading(true);
-
-    // Simulate an async credential check (replace with real API call in prod)
-    setTimeout(() => {
-      const idNorm = workerId.trim(); // preserve original casing for display
-      const idUpper = idNorm.toUpperCase();
-
-      // Accept ASHA-101 or ASHA-PB-042 case-insensitively; mobile as-is
-      const idMatched =
-        VALID_IDS.has(idUpper) ||
-        VALID_IDS.has(idNorm) ||
-        VALID_IDS.has(workerId.trim());
-
-      if (!idMatched || pin !== VALID_MPIN) {
-        setError('Invalid ASHA Worker ID or M-PIN. Please verify credentials.');
-        setLoading(false);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/asha-login`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ worker_id: id, mpin: pin }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.detail ?? 'Invalid ASHA Worker ID or M-PIN. Please verify credentials.');
         return;
       }
 
-      // ── Isolated session write — citizen localStorage untouched ─────────────
-      sessionStorage.setItem('asha_token', 'mock_asha_jwt_token_2026');
-      sessionStorage.setItem(
-        'asha_worker',
-        JSON.stringify({ ...DEMO_WORKER, worker_id: idNorm })
-      );
+      // ── Isolated session write — citizen localStorage untouched ──────────────
+      sessionStorage.setItem('asha_token',  data.access_token);
+      sessionStorage.setItem('asha_worker', JSON.stringify(data.worker));
 
       navigate('/asha/dashboard', { replace: true });
-    }, 400);
+    } catch {
+      setError('Network error — please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center px-4 py-16">
 
       {/* ── Top-left: return to citizen portal ─────────────────────────────── */}
       <Link
         to="/"
-        className="absolute top-5 left-5 flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+        className="absolute top-4 left-4 sm:top-5 sm:left-5 flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
         ← Return to SehatMitra Citizen AI
       </Link>
 
       <div className="w-full max-w-sm">
-        <div className="bg-slate-900 border border-slate-700/70 rounded-2xl shadow-2xl p-8">
+        <div className="bg-slate-900 border border-slate-700/70 rounded-2xl shadow-2xl p-6 sm:p-8">
 
           {/* ── Header ────────────────────────────────────────────────────── */}
           <div className="flex flex-col items-center gap-3 mb-7">

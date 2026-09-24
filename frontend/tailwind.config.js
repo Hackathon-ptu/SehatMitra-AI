@@ -97,6 +97,9 @@ export default {
       maxWidth: {
         'content': '1280px',
       },
+      spacing: {
+        '4.5': '1.125rem',
+      },
       borderRadius: {
         'sm': '0.25rem',
         'md': '0.375rem',

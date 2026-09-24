@@ -7,9 +7,9 @@ export const LanguageSelectorModal = ({ isOpen, onClose, onSelectLanguage }) => 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-2xl bg-surface-card border border-surface-border rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="relative w-full max-w-2xl bg-surface-card border border-surface-border rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[85dvh]">
         {/* Header */}
-        <div className="p-5 border-b border-surface-border flex items-center justify-between bg-gradient-to-r from-brand-600 to-brand-700 text-white">
+        <div className="p-4 sm:p-5 border-b border-surface-border flex items-center justify-between gap-3 bg-gradient-to-r from-brand-600 to-brand-700 text-white">
           <div className="flex items-center gap-2">
             <Globe className="w-5 h-5" />
             <h2 className="text-lg font-bold">अपनी भाषा चुनें (Choose Your Language)</h2>
@@ -23,7 +23,7 @@ export const LanguageSelectorModal = ({ isOpen, onClose, onSelectLanguage }) => 
         </div>
 
         {/* Content Body: Grid of Languages */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           <p className="text-xs sm:text-sm text-content-muted mb-4 font-semibold">
             सेहतमित्र ऐप का उपयोग करने के लिए अपनी पसंदीदा भाषा का चयन करें (Select language to continue):
           </p>

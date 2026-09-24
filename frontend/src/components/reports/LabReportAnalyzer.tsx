@@ -421,8 +421,8 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 animate-fade-in text-left">
-      <div className="flex flex-col gap-2 mb-6">
+    <div className="max-w-4xl mx-auto p-0 sm:p-4 animate-fade-in text-left">
+      <div className="flex flex-col gap-2 mb-4 sm:mb-6">
         <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-content-primary">
           {trans.title}
         </h2>
@@ -449,7 +449,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               onClick={() => inputRef.current?.click()}
-              className={`flex-1 p-8 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 select-none ${
+              className={`flex-1 p-6 sm:p-8 rounded-2xl border-2 border-dashed text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 select-none ${
                 dragOver
                   ? 'border-brand-600 bg-brand-50/80 shadow-lg scale-[1.01]'
                   : 'border-surface-border bg-surface-card hover:bg-surface-elevated'
@@ -474,7 +474,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
             {/* Camera Capture Box */}
             <div
               onClick={() => cameraInputRef.current?.click()}
-              className="flex-1 p-8 rounded-2xl border-2 border-dashed border-surface-border bg-surface-card hover:bg-surface-elevated text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 select-none"
+              className="flex-1 p-6 sm:p-8 rounded-2xl border-2 border-dashed border-surface-border bg-surface-card hover:bg-surface-elevated text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-3 select-none"
             >
               <input
                 type="file"
@@ -495,11 +495,11 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
           </div>
 
           {file && (
-            <div className="w-full max-w-xl bg-surface-card border border-surface-border rounded-xl p-4 flex items-center justify-between shadow-subtle animate-fade-in">
-              <div className="flex items-center gap-3">
+            <div className="w-full max-w-xl bg-surface-card border border-surface-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-subtle animate-fade-in">
+              <div className="flex items-center gap-3 min-w-0">
                 <FileText className="w-8 h-8 text-brand-600 shrink-0" />
-                <div className="flex flex-col overflow-hidden">
-                  <span className="text-sm font-bold text-content-primary truncate max-w-[200px] sm:max-w-[300px]">
+                <div className="flex flex-col overflow-hidden min-w-0">
+                  <span className="text-sm font-bold text-content-primary truncate sm:max-w-[300px]">
                     {file.name}
                   </span>
                   <span className="text-xs text-content-muted">
@@ -507,7 +507,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
                   </span>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center justify-end gap-2 shrink-0">
                 <button
                   onClick={handleReset}
                   className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-surface-border text-content-secondary transition-colors"
@@ -556,8 +556,8 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
         <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 animate-fade-in">
           
           {/* Summary Banner */}
-          <div className="bg-surface-card border border-surface-border rounded-2xl p-6 shadow-md flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-2 text-brand-600 font-bold text-sm">
+          <div className="bg-surface-card border border-surface-border rounded-2xl p-4 sm:p-6 shadow-md flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-brand-600 font-bold text-sm">
               <div className="flex items-center gap-2">
                 <FileCheck2 className="w-5 h-5" />
                 <span>{trans.summary_title}</span>
@@ -629,7 +629,7 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
           </div>
 
           {/* Doctor Discussion card */}
-          <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6 flex gap-4">
+          <div className="bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-4 sm:p-6 flex gap-3 sm:gap-4">
             <HelpCircle className="w-6 h-6 text-blue-600 shrink-0" />
             <div className="flex flex-col gap-2">
               <h4 className="font-bold text-sm text-blue-950 dark:text-blue-200">
@@ -644,16 +644,16 @@ export const LabReportAnalyzer: React.FC<LabReportAnalyzerProps> = ({ languageCo
           </div>
 
           {/* Actions */}
-          <div className="flex justify-center gap-4 pt-4 border-t border-surface-border">
+          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pt-4 border-t border-surface-border">
             <button
               onClick={handleDownloadSlip}
-              className="px-6 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-md transition-all flex items-center gap-2"
+              className="px-6 py-2.5 sm:py-2 justify-center bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-md transition-all flex items-center gap-2"
             >
               📄 <span>{isHindi ? 'परामर्श पर्ची डाउनलोड करें' : 'Download Consultation Slip'}</span>
             </button>
             <button
               onClick={handleReset}
-              className="px-6 py-2 border border-surface-border rounded-xl text-xs font-bold hover:bg-surface-elevated text-content-secondary shadow-sm transition-colors flex items-center gap-2"
+              className="px-6 py-2.5 sm:py-2 justify-center border border-surface-border rounded-xl text-xs font-bold hover:bg-surface-elevated text-content-secondary shadow-sm transition-colors flex items-center gap-2"
             >
               <UploadCloud className="w-4 h-4 text-brand-600" />
               <span>{isHindi ? 'दूसरा रिपोर्ट अपलोड करें' : 'Upload Another Report'}</span>

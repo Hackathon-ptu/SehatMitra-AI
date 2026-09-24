@@ -88,16 +88,16 @@ export const EmergencySOSModal = ({ isOpen, onClose, selectedLanguage = 'hi-IN' 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fade-in">
-      <div className="w-full max-w-xl bg-surface-card border-2 border-red-500 rounded-3xl overflow-hidden shadow-2xl animate-scale-in">
+      <div className="w-full max-w-xl max-h-[calc(100dvh-2rem)] flex flex-col bg-surface-card border-2 border-red-500 rounded-3xl overflow-hidden shadow-2xl animate-scale-in">
         {/* Urgent Header */}
-        <div className="bg-gradient-to-r from-red-600 to-red-700 px-6 py-4 flex items-center justify-between text-white">
-          <div className="flex items-center gap-3">
+        <div className="bg-gradient-to-r from-red-600 to-red-700 px-4 sm:px-6 py-4 flex items-center justify-between gap-2 text-white shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <span className="flex h-3 w-3 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
             </span>
             <AlertTriangle className="w-5 h-5 text-white animate-bounce" />
-            <h2 className="font-extrabold text-base tracking-wide uppercase">
+            <h2 className="font-extrabold text-sm sm:text-base tracking-wide uppercase">
               {t.sosTitle || "Emergency SOS Help"}
             </h2>
           </div>
@@ -110,13 +110,13 @@ export const EmergencySOSModal = ({ isOpen, onClose, selectedLanguage = 'hi-IN' 
         </div>
 
         {/* Modal Content */}
-        <div className="p-6 space-y-5 overflow-y-auto max-h-[500px] text-left">
+        <div className="p-4 sm:p-6 space-y-5 overflow-y-auto sm:max-h-[500px] text-left">
           
           {/* Quick Dial Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <a
               href="tel:108"
-              className="col-span-2 py-4 bg-red-600 hover:bg-red-700 text-white font-extrabold text-lg rounded-2xl shadow-lg hover:shadow-red-500/20 transition-all flex items-center justify-center gap-3 active:scale-[0.99]"
+              className="col-span-2 py-4 bg-red-600 hover:bg-red-700 text-white font-extrabold text-base sm:text-lg rounded-2xl shadow-lg hover:shadow-red-500/20 transition-all flex items-center justify-center gap-3 active:scale-[0.99]"
             >
               <Phone className="w-6 h-6 fill-white" />
               <span>{t.callAmbulance || "CALL 108 AMBULANCE"}</span>

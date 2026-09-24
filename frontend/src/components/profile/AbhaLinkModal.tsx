@@ -247,10 +247,10 @@ export const AbhaLinkModal: React.FC<Props> = ({ onClose }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="relative w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-700">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-emerald-600 to-teal-600">
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-emerald-600 to-teal-600">
           <div>
             <h2 className="text-base font-bold text-white">Link Existing ABHA ID</h2>
             <p className="text-[11px] text-emerald-100 mt-0.5">
@@ -274,7 +274,7 @@ export const AbhaLinkModal: React.FC<Props> = ({ onClose }) => {
             <p className="text-sm text-slate-500">Your profile now shows ABDM Verified status.</p>
           </div>
         ) : (
-          <div className="p-6 flex flex-col gap-5">
+          <div className="p-4 sm:p-6 flex flex-col gap-5">
 
             {/* Tabs */}
             {!preview && (
@@ -308,7 +308,7 @@ export const AbhaLinkModal: React.FC<Props> = ({ onClose }) => {
             {activeTab === 'qr' && !preview && (
               <div className="flex flex-col gap-4">
                 {/* Drop zone */}
-                <label className="flex flex-col items-center gap-3 p-8 border-2 border-dashed border-emerald-400 dark:border-emerald-700 rounded-2xl cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors text-center">
+                <label className="flex flex-col items-center gap-3 p-6 sm:p-8 border-2 border-dashed border-emerald-400 dark:border-emerald-700 rounded-2xl cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-950/20 transition-colors text-center">
                   <Upload className="w-8 h-8 text-emerald-500" />
                   <div>
                     <p className="font-semibold text-sm text-slate-700 dark:text-slate-200">

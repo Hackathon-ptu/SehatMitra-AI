@@ -28,6 +28,22 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except Exception:
         pass
 
+    # ── ASHA virtual-user fast path ─────────────────────────────────────────
+    # Tokens issued by /auth/asha-login carry sub="asha_<WORKER_ID>" and
+    # role="asha".  There is no corresponding row in the users table, so we
+    # materialise a transient User object instead of hitting the DB.
+    role_claim: str = payload.get("role", "")
+    if sub.startswith("asha_") or role_claim == "asha":
+        worker_id: str = payload.get("worker_id", sub.replace("asha_", ""))
+        return User(
+            id=0,
+            email=f"{worker_id.lower()}@asha.nhm.gov.in",
+            full_name=payload.get("name", "Sunita Devi"),
+            role="asha",
+            patient_id=f"ASHA-{worker_id}",
+            is_active=True,
+        )
+
     user = None
     try:
         if "@" in sub:

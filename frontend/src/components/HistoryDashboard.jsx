@@ -231,13 +231,13 @@ export const HistoryDashboard = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-4 animate-fade-in text-left flex flex-col gap-6">
+    <div className="max-w-5xl mx-auto p-0 sm:p-4 animate-fade-in text-left flex flex-col gap-4 sm:gap-6">
       
       {/* Header & Title */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-surface-border pb-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shadow-md">
+            <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shadow-md shrink-0">
               <Activity className="w-5 h-5" />
             </div>
             <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-content-primary">
@@ -304,10 +304,10 @@ export const HistoryDashboard = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-surface-border">
+      <div className="flex border-b border-surface-border overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('consultations')}
-          className={`flex items-center gap-2 py-3 px-4 border-b-2 font-bold text-xs sm:text-sm transition-all focus:outline-none ${
+          className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 py-3 px-2.5 sm:px-4 border-b-2 font-bold text-xs sm:text-sm whitespace-nowrap transition-all focus:outline-none ${
             activeTab === 'consultations'
               ? 'border-teal-600 text-teal-700 font-extrabold bg-teal-50/60 dark:bg-teal-950/20 rounded-t-lg'
               : 'border-transparent text-content-secondary hover:text-content-primary'
@@ -318,7 +318,7 @@ export const HistoryDashboard = () => {
         </button>
         <button
           onClick={() => setActiveTab('reports')}
-          className={`flex items-center gap-2 py-3 px-4 border-b-2 font-bold text-xs sm:text-sm transition-all focus:outline-none ${
+          className={`flex flex-1 sm:flex-none items-center justify-center sm:justify-start gap-1.5 sm:gap-2 py-3 px-2.5 sm:px-4 border-b-2 font-bold text-xs sm:text-sm whitespace-nowrap transition-all focus:outline-none ${
             activeTab === 'reports'
               ? 'border-teal-600 text-teal-700 font-extrabold bg-teal-50/60 dark:bg-teal-950/20 rounded-t-lg'
               : 'border-transparent text-content-secondary hover:text-content-primary'
@@ -342,11 +342,11 @@ export const HistoryDashboard = () => {
             {consultations.map((item, idx) => (
               <div
                 key={item.id || item.session_id || idx}
-                className="bg-surface-card border border-surface-border rounded-2xl p-5 hover:shadow-md transition-all flex flex-col gap-4"
+                className="bg-surface-card border border-surface-border rounded-2xl p-4 sm:p-5 hover:shadow-md transition-all flex flex-col gap-4"
               >
                 {/* Header info */}
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border/50 pb-3">
-                  <div className="flex items-center gap-2 text-xs font-bold text-content-muted">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold text-content-muted">
                     <Calendar className="w-4 h-4 text-teal-600" />
                     <span>{new Date(item.created_at || Date.now()).toLocaleDateString([], { year: 'numeric', month: 'long', day: 'numeric' })}</span>
                     <Clock className="w-4 h-4 text-teal-600 ml-2" />
@@ -392,7 +392,7 @@ export const HistoryDashboard = () => {
                 </div>
 
                 {/* Card Actions */}
-                <div className="flex items-center gap-2.5 justify-end border-t border-surface-border/40 pt-3">
+                <div className="flex flex-wrap items-center gap-2.5 justify-end border-t border-surface-border/40 pt-3">
                   <button
                     onClick={() => setSelectedConsultation(item)}
                     className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-surface-border text-xs font-bold text-content-secondary hover:bg-surface-elevated hover:text-content-primary transition-all cursor-pointer"
@@ -429,10 +429,10 @@ export const HistoryDashboard = () => {
           {reports.map((item, idx) => (
             <div
               key={item.id || idx}
-              className="bg-surface-card border border-surface-border rounded-2xl p-5 hover:shadow-md transition-all flex flex-col gap-4"
+              className="bg-surface-card border border-surface-border rounded-2xl p-4 sm:p-5 hover:shadow-md transition-all flex flex-col gap-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-surface-border/50 pb-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-content-muted">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold text-content-muted min-w-0">
                   <FileText className="w-4 h-4 text-teal-600" />
                   <span className="font-extrabold text-content-primary truncate max-w-[200px] sm:max-w-[300px]">
                     {item.filename || 'Lab_Report_Scan.jpg'}
@@ -459,7 +459,7 @@ export const HistoryDashboard = () => {
                   <span className="text-[11px] font-bold text-content-muted uppercase tracking-wider block mb-2">
                     {langCode === 'hi' ? 'मुख्य बायोमार्कर मान:' : 'Extracted Biomarkers:'}
                   </span>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
                     {Array.isArray(item.extracted_data) ? (
                       item.extracted_data.map((bio, bIdx) => (
                         <div key={bIdx} className="bg-surface-bg border border-surface-border rounded-xl p-3 flex flex-col gap-1">
@@ -520,7 +520,7 @@ export const HistoryDashboard = () => {
       {/* Conversation Transcript Modal */}
       {selectedConsultation && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl animate-scale-in overflow-hidden">
+          <div className="bg-surface-card border border-surface-border rounded-2xl w-full max-w-2xl max-h-[85dvh] flex flex-col shadow-2xl animate-scale-in overflow-hidden">
             <div className="p-4 border-b border-surface-border flex justify-between items-center bg-teal-600 text-white">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4" />
@@ -536,7 +536,7 @@ export const HistoryDashboard = () => {
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-surface-bg/30">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-surface-bg/30">
               {selectedConsultation.conversation_history && selectedConsultation.conversation_history.length > 0 ? (
                 selectedConsultation.conversation_history.map((msg, i) => {
                   const isUser = msg.role === 'user' || msg.sender === 'user';
