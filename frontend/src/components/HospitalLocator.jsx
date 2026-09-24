@@ -437,7 +437,7 @@ export const HospitalLocator = () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
               {/* Left Column: Interactive Map */}
-              <div className="lg:col-span-6 h-[300px] sm:h-[400px] lg:h-[600px] w-full rounded-2xl overflow-hidden border border-surface-border shadow-md relative z-0 lg:sticky lg:top-24">
+              <div className="lg:col-span-6 h-[300px] sm:h-[400px] lg:h-[600px] w-full rounded-2xl overflow-hidden border border-surface-border shadow-md relative z-0 lg:sticky lg:top-[130px]">
                 <MapContainer
                   center={[coords.lat, coords.lon]}
                   zoom={12}

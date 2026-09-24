@@ -410,7 +410,7 @@ export const App = () => {
       <OfflineBanner />
 
       {/* Navigation tabs */}
-      <div className="relative border-b border-surface-border bg-surface-card">
+      <div className="relative lg:sticky lg:top-[65px] lg:z-30 border-b border-surface-border bg-surface-card">
         {/* Left and Right fade gradient indicator masks to denote overflow scrolling on mobile */}
         <div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-surface-card to-transparent pointer-events-none z-10 lg:hidden" />
         <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-card to-transparent pointer-events-none z-10 lg:hidden" />

@@ -77,7 +77,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
   const [selectedImage, setSelectedImage] = useState(null); // { file, base64, previewUrl }
   const imageInputRef = useRef(null);
 
-  const messagesEndRef = useRef(null);
+  const messagesBoxRef = useRef(null);
 
   // Synchronize initial greeting based on the selected languageCode
   useEffect(() => {
@@ -153,9 +153,11 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
     }
   };
 
-  // Auto scroll to bottom of chat
+  // Keep the newest message in view by scrolling only the message list.
+  // (scrollIntoView would also scroll the page, making it jump on load.)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const box = messagesBoxRef.current;
+    if (box) box.scrollTo({ top: box.scrollHeight, behavior: 'smooth' });
   }, [messages, loading]);
 
   const toggleSpeech = () => {
@@ -420,7 +422,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
         </div>
 
         {/* Messages Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-surface-bg/40">
+        <div ref={messagesBoxRef} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-surface-bg/40">
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -478,7 +480,7 @@ export const HealthChat = ({ languageCode = 'hi-IN' }) => {
             </div>
           )}
 
-          <div ref={messagesEndRef} />
+
         </div>
 
         {/* Input Bar */}

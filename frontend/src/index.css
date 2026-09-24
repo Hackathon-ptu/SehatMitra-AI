@@ -34,7 +34,11 @@ body,
 #root {
   width: 100%;
   max-width: 100vw;
+  /* 'clip' (not 'hidden') blocks sideways scroll without creating a scroll
+     container, so position: sticky headers keep working. 'hidden' is the
+     fallback for browsers that don't support 'clip'. */
   overflow-x: hidden;
+  overflow-x: clip;
 }
 
 html {
