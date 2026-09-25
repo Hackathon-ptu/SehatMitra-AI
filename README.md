@@ -39,7 +39,7 @@
 
 Rural healthcare systems in low-resource environments face severe operational strains: acute primary doctor shortages, illiterate patient bases struggling with text interfaces, unreadable paper lab reports, and intermittent 2G/3G network drops.
 
-**SehatMitra-AI** is an ultra-resilient, voice-driven clinical triage platform engineered for India's 700M+ rural population. Powered by **Groq LPUs**, **Google Gemini Vision**, **edge-tts**, and **Turso LibSQL edge caching**, it enables hands-free consultations in 12+ Indic languages, converts photographed lab reports into regional clinical advice, and generates ABDM-compliant digital ABHA QR cards for zero record loss.
+**SehatMitra-AI** is an ultra-resilient, voice-driven clinical triage platform engineered for India's 700M+ rural population. Powered by **Groq LPUs**, **Google Gemini Vision**, **edge-tts**, and a **Turso (libSQL) cloud database**, it enables hands-free consultations in 12+ Indic languages, converts photographed lab reports into regional clinical advice, and generates ABDM-compliant digital ABHA QR cards for zero record loss.
 
 ---
 
@@ -51,7 +51,7 @@ Rural healthcare systems in low-resource environments face severe operational st
 | **PHC Doctor Shortages** | 1 doctor per thousands of villagers leads to delayed emergency detection. | **Sub-Second SOCRATES Protocol Triage (Groq LPU)** delivering Tri-Color Risk Badges and doctor preparation checklists. |
 | **Lab Report Jargon** | Patients cannot comprehend blood tests (CBC, HbA1c, Lipids), leading to dangerous inaction. | **Multimodal Vision OCR (Gemini Vision)** extracting biomarkers with auto-flagged out-of-range indicators. |
 | **Lost Paper Records** | Prescriptions and histories get destroyed between visits; zero longitudinal data. | **ABDM-Compliant Digital ABHA QR Cards** synced over **Turso LibSQL Edge Databases**. |
-| **2G/3G Network Drops** | Connection drops trigger 401 token errors, logging users out mid-consultation. | **Centralized Axios Interceptor + Edge Caching** ensuring consultations resume without data loss. |
+| **2G/3G Network Drops** | Connection drops trigger 401 token errors, logging users out mid-consultation. | **PWA app-shell caching + offline banner** in the citizen app; the **ASHA portal** keeps last-seen data readable offline and queues visits/vaccines in an outbox that syncs automatically (idempotent `client_ref`, no duplicates). |
 
 ---
 
@@ -62,7 +62,7 @@ flowchart TD
     subgraph Client ["📱 Client Layer (React 19 PWA)"]
         A["🎙️ Real-time Web Audio Stream"]
         B["🪪 ABDM Digital ABHA QR Canvas"]
-        C["🔄 Axios Network Interceptor"]
+        C["🔄 Axios Client (JWT + 401 handling)"]
         K["👩‍⚕️ ASHA Portal (/asha)"]
     end
 
@@ -80,7 +80,7 @@ flowchart TD
 
     subgraph Data ["💾 Edge Persistence & Resilience"]
         I[("📡 Turso LibSQL Edge Database")]
-        J["🛡️ Offline-Cached Fallback State"]
+        J["🛡️ ASHA Offline Cache + Sync Outbox"]
     end
 
     Client -->|Encrypted HTTPS / Audio Chunks| Gateway
@@ -99,15 +99,16 @@ flowchart TD
 
 ### 2. Clinical Protocol Enforcement (SOCRATES via Groq)
 - Implements the strict clinical **SOCRATES** method (*Site, Onset, Character, Radiation, Associations, Time, Exacerbating factors, Severity*).
-- Formats outputs with rigid Pydantic JSON schemas to deliver Tri-Color risk classifications (*Mild / Moderate / Severe*) with **zero medical hallucinations**.
+- Forces JSON-mode output validated against a fixed schema, delivering risk levels (*Low / Medium / High / Emergency*).
+- Reduces (does not eliminate) hallucination risk through **structured JSON output, a rule-based safety net** (keyword triage that still catches emergencies if the LLMs are down) **and human review** — every result is decision support for a clinician, with a disclaimer.
 
 ### 3. Multimodal Biomarker Extraction (Gemini Vision OCR)
-- Preprocesses photographed reports using Pillow/NumPy to eliminate shadows, wrinkles, and low lighting.
-- Scans CBC, Lipid, Liver Function, and Blood Sugar records, flagging critical thresholds and translating them into simple regional advice.
+- Normalises uploads with Pillow before analysis: fixes phone-camera orientation (EXIF), converts to RGB, opens HEIC photos and converts DICOM scans; PDFs are sent to Gemini directly.
+- Scans CBC, Lipid, Liver Function, and Blood Sugar records, flagging out-of-range values, enriching them with curated clinical reference notes, and translating them into simple regional advice.
 
-### 4. ABDM Digital Health Identity (Turso Edge Replication)
+### 4. ABDM Digital Health Identity (Turso Cloud Database)
 - Issues an Ayushman Bharat Digital Mission (ABDM) compliant digital ABHA Card with an embedded dynamic QR code.
-- Syncs patient timelines across Turso edge replicas so records remain instantly retrievable even during server latency spikes.
+- Stores patient profiles, ABHA details and consultation/report history in Turso (libSQL) via SQLAlchemy, so records persist across visits and devices.
 
 ---
 
@@ -169,9 +170,9 @@ flowchart LR
 ## 🛠️ Tech Stack & Toolchain
 Frontend:       React 19, Tailwind CSS, Lucide Icons, Axios, Web Audio API
 Backend:        FastAPI, Python 3.11, Pydantic v2, SQLAlchemy ORM
-AI / ML:        Groq LPU (Llama 3.3 70B, Qwen 2.5), Google Gemini Vision
+AI / ML:        Groq LPU (gpt-oss-120b/20b, Qwen, Llama 3.3 70B — pre-trained, not fine-tuned), Google Gemini Vision
 Speech:         edge-tts (Microsoft Neural Voice Pipeline)
-Database:       Turso (LibSQL distributed edge), SQLite / PostgreSQL
+Database:       Turso (libSQL cloud), SQLite / PostgreSQL
 Authentication: Firebase Authentication, PyJWT
 Deployment:     Vercel (Frontend Client), Render (API Gateway)
 
@@ -183,11 +184,11 @@ This project references the **IBM Bob** concept (a modular, scalable medical kno
 
 | Bob Component | Implemented Pattern in SehatMitra-AI | Technical Pattern |
 | :--- | :--- | :--- |
-| **Standardized Medical Ontology** | Groq's **Qwen 2.5** model fine-tuned on medical knowledge; schema enforcement via Pydantic v2. | *Generative Reasoning Engine*
+| **Standardized Medical Ontology** | **WHO ICD-11 + AYUSH NAMASTE** dual coding in a curated ontology engine (`ayush_ontology.py`); LLM output constrained to JSON schemas. No model is fine-tuned. | *Curated Ontology + Constrained Generation* |
 | **Clinical Protocols** | **SOCRATES** structured reasoning applied strictly over symptoms input. | *Protocol-Driven Logic* |
-| **Clinical Knowledge Base** | Large Language Model (LLM) weights (Llama 3.3 70B / Qwen 2.5) serving as the source of truth for medical rules. | *Embedded Knowledge* |
+| **Clinical Knowledge Base** | Curated, auditable rules are the source of truth for safety decisions (herb–drug interaction graph, ASHA risk thresholds, NHM care schedules); pre-trained LLMs (via Groq/Gemini) handle language — conversation, summaries and parsing. | *Embedded Knowledge* |
 | **Natural Language Processing Layer** | **edge-tts** frontend integration for Indic languages; real-time symptom translation. | *Voice UI* |
-| **Data Storage & Integration** | **Turso LibSQL Edge Database** for syncing user histories and ABDM records. | *Distributed Ledger* |
+| **Data Storage & Integration** | **Turso (libSQL) cloud database** for user histories and ABDM records; ASHA offline outbox with idempotent sync. | *Persistence & Sync* |
 
 ---
 

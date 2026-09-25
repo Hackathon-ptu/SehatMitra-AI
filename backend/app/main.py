@@ -74,8 +74,11 @@ def init_db():
 
     # ── ASHA portal demo village ──────────────────────────────────────────────
     # Seeds the demo ASHA worker (ASHA-101 / 1234) and her households the first
-    # time the app starts against an empty ASHA workforce table.
-    _seed_asha_demo()
+    # time the app starts against an empty ASHA workforce table. It runs in a
+    # background thread: against a remote DB (Turso) the ~500 inserts take a
+    # while, and uvicorn doesn't open its port until startup returns.
+    import threading
+    threading.Thread(target=_seed_asha_demo, name="asha-demo-seed", daemon=True).start()
 
     print("[CORS] allowed origins: Universal (* via regex)")
 

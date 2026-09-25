@@ -20,11 +20,11 @@ IBM Bob was embedded throughout the full-stack development lifecycle to accelera
 ## 2. Core Workflows & Engineering Contributions
 
 ### A. Clinical Protocol Validation & Backend Scaffolding
-* **Deterministic SOCRATES Data Modeling:** Generated strict Pydantic models enforcing the clinical SOCRATES triage protocol (Site, Onset, Character, Radiation, Associations, Time, Exacerbating factors, Severity), eliminating unstructured LLM hallucinations.
+* **Deterministic SOCRATES Data Modeling:** Generated strict Pydantic models enforcing the clinical SOCRATES triage protocol (Site, Onset, Character, Radiation, Associations, Time, Exacerbating factors, Severity), reducing unstructured LLM output (backed by a rule-based fallback and clinician review).
 * **FastAPI Microservices Architecture:** Scaffolding asynchronous routes for:
   * Multimodal lab report parsing via Gemini Vision OCR.
   * Low-latency streaming endpoints for Indic voice synthesis via `edge-tts`.
-  * Dynamic Groq LPU inference with fallback routing to Qwen 2.5.
+  * Dynamic Groq LPU inference (runtime model discovery across gpt-oss / Qwen / Llama) with fallback routing to Gemini, then a rule-based engine.
 * **Edge Persistence Configuration:** Drafted resilient SQLAlchemy session management with automated connection retry mechanisms (`pool_pre_ping=True`) for Turso (LibSQL) edge databases.
 
 ### B. Frontend Audio & Identity UI Engineering
@@ -33,7 +33,7 @@ IBM Bob was embedded throughout the full-stack development lifecycle to accelera
 
 ### C. Dependency Diagnostics & Environment Synchronization
 * **Cross-Platform Compatibility:** Diagnosed and resolved build conflicts between asynchronous event loops, `psycopg2-binary`, and `libsql-client` across Linux and Windows environments.
-* **Network Interceptor Logic:** Architected a centralized Axios request/response interceptor that intercepts 401 token drops on degraded 2G/3G connections, falling back to Turso local-edge replicas without forcing user logouts.
+* **Network Interceptor Logic:** Architected a centralized Axios request/response interceptor that attaches the JWT to every call and clears the session only when an auth endpoint returns 401, so a 401 from an optional endpoint doesn't log the user out.
 
 ### D. Quality Assurance & Synthetic Health Testing
 * **Clinical Triage Test Generation:** Created synthetic patient conversation transcripts and noisy scanned lab test reports (CBC, HbA1c, Lipid profiles) to benchmark the diagnostic risk classifier.
@@ -46,10 +46,10 @@ IBM Bob was embedded throughout the full-stack development lifecycle to accelera
 | Project Layer | Core Technology | IBM Bob Role |
 | :--- | :--- | :--- |
 | **API Gateway** | FastAPI, Python 3.11 | Scaffolding asynchronous endpoints and dependency injection (`deps.py`) |
-| **Clinical Triage** | Groq LPU (Llama 3.3 / Qwen 2.5) | Pydantic JSON schema generation and prompt optimization |
-| **Multimodal Vision** | Google Gemini Vision, Pillow | Image preprocessing and OCR biomarker extraction logic |
+| **Clinical Triage** | Groq LPU (gpt-oss / Qwen / Llama 3.3, pre-trained — not fine-tuned) | Pydantic JSON schema generation and prompt optimization |
+| **Multimodal Vision** | Google Gemini Vision, Pillow | Image normalisation (EXIF orientation, RGB, HEIC/DICOM conversion) and biomarker extraction logic |
 | **Voice Streaming** | `edge-tts` (Indic models) | Asynchronous buffer streaming and locale mappings |
-| **Edge Storage** | Turso (LibSQL), SQLAlchemy | Failover configurations and edge-replication schemas |
+| **Storage** | Turso (libSQL), SQLAlchemy | Engine configuration and schema/migration setup |
 | **Frontend UI** | React 19, Tailwind CSS | Voice hook design, responsive grid layouts, and ABHA card canvas |
 | **Network Resilience**| Axios Interceptors, PyJWT | Offline state caching and session recovery architecture |
 
@@ -58,5 +58,5 @@ IBM Bob was embedded throughout the full-stack development lifecycle to accelera
 ## 4. Impact on Project Delivery
 
 * **60%+ Reduction in Scaffolding Time:** Automated repetitive boilerplate generation for schemas, APIs, and UI components.
-* **Zero Clinical Schema Violations:** Enforced strict Pydantic structures for all triage responses.
-* **Robust Edge Reliability:** Enabled seamless offline-first capability and rapid recovery from rural network dropouts.
+* **Structured Clinical Output:** JSON-mode responses validated against fixed schemas, with a rule-based safety net and human review.
+* **Low-Connectivity Support:** PWA caching in the citizen app; offline cache and sync outbox in the ASHA portal.

@@ -13,6 +13,10 @@ const getBaseUrl = (): string => {
   if (import.meta.env.VITE_BACKEND_URL) return import.meta.env.VITE_BACKEND_URL as string;
   if (import.meta.env.VITE_API_BASE_URL) return import.meta.env.VITE_API_BASE_URL as string;
 
+  // Dev server: go through Vite's /api proxy to the local backend, so the app
+  // also works when opened from a phone or via the LAN address (192.168.x.x:5173).
+  if (import.meta.env.DEV) return '/api/v1';
+
   // Runtime hostname check (safe in browser; skipped during SSR/test)
   if (typeof window !== 'undefined') {
     const { hostname } = window.location;
